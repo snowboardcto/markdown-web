@@ -44,3 +44,15 @@ Core thesis confirmed by naethyn: HTML couples content + presentation; markdown 
 **[Vision #1]: Zero Shared Pixels**
 _Concept_: A `.md` URL has no canonical appearance. Two people opening the exact same link see entirely different renderings — a CLI user gets a terminal readout, a casual visitor gets warm photo-rich scrollytelling — because each person's own agent renders the source to fit them. Author publishes meaning; consumer's agent owns presentation.
 _Novelty_: Goes beyond responsive design/theming — there is no "master" look the author controls. Presentation is fully delegated to the consumer side. Validated as exciting by everyone naethyn has shared it with.
+
+**[Principle #2]: Total Client Sovereignty (No Limit)**
+_Concept_: The consumer's agent has unlimited license to restructure, reorder, summarize, omit, and even add to a markdown page. No author-imposed ceiling. "It gives the client all the power."
+_Novelty_: Inverts the entire authority model of the web. Today the server/author controls presentation and the browser obeys. Here the client is sovereign and the author's file is raw material, not a finished product.
+
+**[Use Case #3]: Personal Markdown Vault — "View & Enjoy My Markdowns"**
+_Concept_: The grounded, real job-to-be-done: naethyn has a pile of existing markdown files. He wants effortless storage, beautiful viewing, and genuine enjoyment of them — without converting to HTML or fighting a CMS. The file stays markdown; the experience becomes a pleasure.
+_Novelty_: Reframes the grand "replace HTML" vision as a personal tool first. The wedge is selfish-useful: it has to delight a single user (the author) before it ever needs a network.
+
+**[Direction #4]: Sharing Layer (expansion focus — to be developed)**
+_Concept_: Turning the personal vault outward — how a stored/viewed markdown becomes a shareable artifact whose presentation adapts to whoever opens it.
+_Novelty_: Sharing is where personal vault meets the Zero Shared Pixels thesis — the same link delights both sender and recipient, differently.
