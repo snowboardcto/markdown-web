@@ -56,3 +56,23 @@ _Novelty_: Reframes the grand "replace HTML" vision as a personal tool first. Th
 **[Direction #4]: Sharing Layer (expansion focus — to be developed)**
 _Concept_: Turning the personal vault outward — how a stored/viewed markdown becomes a shareable artifact whose presentation adapts to whoever opens it.
 _Novelty_: Sharing is where personal vault meets the Zero Shared Pixels thesis — the same link delights both sender and recipient, differently.
+
+**[Endorsed]:** naethyn likes sharing ideas #5–#9 (Living Link, Drop-a-Folder, Markdown-as-Send-the-Doc, Markdown Feed, Portable & Sovereign) — all accepted into the concept pool.
+
+**[Principle #10]: Born Compatible — Adoption via Regular HTML**
+_Concept_: The Markdown Web cannot require an agent to be useful. Every `.md` URL must also serve a perfectly good plain-HTML rendering for today's browsers, crawlers, link-unfurlers, and agent-less humans — and then *progressively enhance* into the personalized agent-rendered experience when an agent is present. Compatibility is the on-ramp to adoption, not a compromise.
+_Novelty_: Treats HTML as the *fallback/distribution layer* rather than the authoring layer. Flips progressive enhancement: markdown is the source of truth, HTML is the lowest-common-denominator projection, agent-rendering is the top tier.
+
+### Phase 1 (cont.) — HTML Bridge angles
+
+**[#11]: Content Negotiation at the URL**
+_Concept_: One `.md` URL, many responses. A normal browser's request gets server-rendered HTML; an agent (signaling via Accept header / capability flag) gets the raw markdown to render itself. Same address, audience-appropriate payload.
+_Novelty_: Reuses 30-year-old HTTP content negotiation to make the markdown web invisible-by-default and powerful-when-equipped — no new browser required to start.
+
+**[#12]: Crawlable & Unfurlable by Default**
+_Concept_: Because there's always a clean HTML projection, markdown pages are natively SEO-friendly and produce rich link previews in Slack/iMessage/social. The new web is discoverable on the old web's terms.
+_Novelty_: Solves the chicken-and-egg distribution problem — the content spreads through existing channels while the agent layer grows underneath.
+
+**[#13]: The Upgrade Moment**
+_Concept_: An agentless visitor sees a tasteful default HTML page with a subtle "open this with your agent for a personalized view" affordance — the moment that converts a normal web user into a Markdown Web user.
+_Novelty_: Builds the adoption funnel *into the artifact itself*; every shared page is a recruiting surface for the paradigm.
