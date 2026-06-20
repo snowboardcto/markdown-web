@@ -76,3 +76,7 @@ _Novelty_: Solves the chicken-and-egg distribution problem — the content sprea
 **[#13]: The Upgrade Moment**
 _Concept_: An agentless visitor sees a tasteful default HTML page with a subtle "open this with your agent for a personalized view" affordance — the moment that converts a normal web user into a Markdown Web user.
 _Novelty_: Builds the adoption funnel *into the artifact itself*; every shared page is a recruiting surface for the paradigm.
+
+**[Decision #14]: Dual-Path Architecture — Server HTML for Browsers, Dedicated Client for Agents**
+_Concept_: Settled direction. If someone hits an `.md` URL from a normal browser, the server renders clean HTML (Path A — maximum compatibility, crawlers, no JS dependency). For the personalized experience, "we provide a client" that the user runs to render the markdown with their own agent. Two clearly separated rendering paths off the same `.md` source.
+_Novelty_: Author controls nothing about the agent path; the server's HTML is just the universal fallback. The personalization lives entirely in a purpose-built client, keeping the "client has all the power" principle intact without sacrificing day-one compatibility.
