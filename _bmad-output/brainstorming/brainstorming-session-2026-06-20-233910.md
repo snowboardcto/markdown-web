@@ -80,3 +80,15 @@ _Novelty_: Builds the adoption funnel *into the artifact itself*; every shared p
 **[Decision #14]: Dual-Path Architecture — Server HTML for Browsers, Dedicated Client for Agents**
 _Concept_: Settled direction. If someone hits an `.md` URL from a normal browser, the server renders clean HTML (Path A — maximum compatibility, crawlers, no JS dependency). For the personalized experience, "we provide a client" that the user runs to render the markdown with their own agent. Two clearly separated rendering paths off the same `.md` source.
 _Novelty_: Author controls nothing about the agent path; the server's HTML is just the universal fallback. The personalization lives entirely in a purpose-built client, keeping the "client has all the power" principle intact without sacrificing day-one compatibility.
+
+**[#15]: The Handoff — HTML Pages Advertise the Client**
+_Concept_: When a visitor lands on the server-rendered HTML version, the page needs a built-in, standardized way to show them how to open the same content in our client for the personalized agent experience. Every fallback HTML page is a doorway/recruiting surface that teaches the upgrade path (e.g. a standard banner, a "open in client" affordance, the raw `.md` URL always one step away).
+_Novelty_: Makes onboarding a property of the artifact, not a marketing funnel — the content distributes itself on the old web and carries its own instructions for entering the new one.
+
+**[Constraint #16]: "Works Everywhere" Is the Client's Defining Requirement**
+_Concept_: The client's form factor is still open (extension / app / OS-agent / CLI / web app), but the non-negotiable requirement is ubiquity — it must work everywhere, on any device/platform. "Works everywhere" is the criterion that will ultimately decide the client's shape.
+_Novelty_: Prioritizes reach over richness for the v1 client decision — the paradigm only spreads if the reader side has near-zero friction across all environments.
+
+**[Principle #17]: Trust = Your Own Local Agent**
+_Concept_: The trust model for "no limit / client has all the power" is resolved by locality and ownership: the agent that rewrites, reorders, omits, or augments the page is the *reader's own AI agent, running locally from their own client, acting on their behalf*. There is no third party between author and reader doing the manipulation — the reader's agent is an extension of the reader.
+_Novelty_: Sidesteps the censorship/distortion fear entirely. You're not trusting the author or a platform to render honestly; you're trusting your own agent the same way you trust your own note-taking. Distortion becomes self-service, not imposed.
