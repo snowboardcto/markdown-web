@@ -36,3 +36,11 @@ Core thesis confirmed by naethyn: HTML couples content + presentation; markdown 
 - **Phase 4 — Action Planning:** Dream Fusion Laboratory — reverse-engineer concrete first moves from the full vision back to a shippable wedge on snowboardcto.com.
 
 **Journey Rationale:** Mirrors how a paradigm matures — break assumptions, find structure, harden the design, land it in reality. The snowboardcto.com seed (every .md = a page) is the real-world launchpad for Phase 4.
+
+## Ideas Generated
+
+### Phase 1 — What If Scenarios
+
+**[Vision #1]: Zero Shared Pixels**
+_Concept_: A `.md` URL has no canonical appearance. Two people opening the exact same link see entirely different renderings — a CLI user gets a terminal readout, a casual visitor gets warm photo-rich scrollytelling — because each person's own agent renders the source to fit them. Author publishes meaning; consumer's agent owns presentation.
+_Novelty_: Goes beyond responsive design/theming — there is no "master" look the author controls. Presentation is fully delegated to the consumer side. Validated as exciting by everyone naethyn has shared it with.
