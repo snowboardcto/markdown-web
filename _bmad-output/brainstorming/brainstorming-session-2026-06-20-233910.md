@@ -1,10 +1,10 @@
 ---
-stepsCompleted: [1]
+stepsCompleted: [1, 2]
 inputDocuments: []
 session_topic: 'The Markdown Web — URLs to .md files where each user''s AI agent renders a personalized front-end'
 session_goals: 'Broad divergence across vision/concept, architecture/how, and adoption wedge (option D). Origin: snowboardcto.com where every .md file is a page.'
-selected_approach: ''
-techniques_used: []
+selected_approach: 'progressive-flow'
+techniques_used: ['What If Scenarios','Mind Mapping','SCAMPER','Dream Fusion Laboratory']
 ideas_generated: []
 context_file: ''
 ---
@@ -23,3 +23,16 @@ context_file: ''
 ### Session Setup
 
 Core thesis confirmed by naethyn: HTML couples content + presentation; markdown + agents decouples them and hands the presentation layer to the *consumer's* AI rather than the author. Agents already prefer markdown — so stop translating to HTML and let each human's agent be the renderer.
+
+## Technique Selection
+
+**Approach:** Progressive Technique Flow (broad → focused)
+
+**Progressive Techniques:**
+
+- **Phase 1 — Expansive Exploration:** What If Scenarios — break every assumption baked into "the web"; generate wide.
+- **Phase 2 — Pattern Recognition:** Mind Mapping — cluster ideas around the central concept; surface territories.
+- **Phase 3 — Idea Development:** SCAMPER — refine top concepts through seven lenses.
+- **Phase 4 — Action Planning:** Dream Fusion Laboratory — reverse-engineer concrete first moves from the full vision back to a shippable wedge on snowboardcto.com.
+
+**Journey Rationale:** Mirrors how a paradigm matures — break assumptions, find structure, harden the design, land it in reality. The snowboardcto.com seed (every .md = a page) is the real-world launchpad for Phase 4.
