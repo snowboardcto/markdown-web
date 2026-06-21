@@ -1,11 +1,14 @@
 ---
-stepsCompleted: [1, 2, 3, 4, 5, 6]
+stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8]
 inputDocuments:
   - _bmad-output/planning-artifacts/prds/prd-the-markdown-web-2026-06-21/prd.md
   - _bmad-output/planning-artifacts/prds/prd-the-markdown-web-2026-06-21/addendum.md
   - _bmad-output/planning-artifacts/briefs/brief-the-markdown-web-2026-06-21/brief.md
   - _bmad-output/planning-artifacts/research/market-markdown-web-competitive-landscape-research-2026-06-21.md
 workflowType: 'architecture'
+lastStep: 8
+status: 'complete'
+completedAt: '2026-06-21'
 project_name: 'The Markdown Web'
 user_name: 'naethyn'
 date: '2026-06-21'
@@ -149,3 +152,30 @@ themarkdownweb/
 | 9–13 Native client | `clients/windows/` (App + Rendering + Agent) |
 | 14 Content negotiation | `api/` |
 | 17–18 Publish/host | `.github/workflows/` + `infra/` + Azure SWA |
+
+## Validation
+
+### Coherence ✅ (one watch-item)
+- Stack compatible: Node/TS (`web/` Astro + `api/` Functions) and C#/.NET 10 (`clients/windows/` WPF) communicate over HTTP; GFM is the shared contract. Versions current (Astro 5, .NET 10, Markdig 1.3.1).
+- ⚠️ Coherence risk: GFM parsed in two engines (remark for web, Markdig for client). Both conform to CommonMark 0.31.2 + GFM; mitigate by holding both to the same spec. Acceptable Windows-first.
+
+### Requirements coverage
+- FR-1–4 Vault ✅; FR-5–8 HTML client ✅; FR-9 ✅; FR-12 ✅; FR-14 ✅; FR-17–18 ✅.
+- FR-10–11 (per-reader rendering, accessibility/translation): ⚠️ provisioned (seam `AST → [Agent] → FlowDocument`), internals deferred — needs the agent-integration decision.
+- FR-13 works-everywhere: ⚠️ partial by design (Windows-first; other platforms roadmap + shared-parser fork).
+- FR-15–16 Sharing: out of MVP.
+
+### NFRs ✅
+No-Chromium ✅ (WPF native, no webview); beauty/perf ✅ (Astro zero-JS + native WPF); born-compat/SEO ✅ (Astro static); don't-reinvent-plumbing ✅. WPF provides baseline screen-reader accessibility via UI Automation.
+
+### Verdict
+MVP **bedrock is coherent and implementation-ready**. Two intentional, named gaps:
+1. **AI-personality layer (FR-10/11)** — seam defined; internals deferred pending the **agent-integration decision (bundled model vs BYO-API-key vs local model)**. The clear next architecture session.
+2. **Works-everywhere (FR-13)** — Windows-first by choice; other platforms + shared-parser consistency are roadmap.
+No silent gaps: everything the bedrock needs is specified; everything deferred is named.
+
+## Open Architecture Decisions (next session)
+1. **Agent-integration model** for the AI-personality layer: bundled model / BYO-API-key / local model — drives FR-10/11, "works everywhere," cost, and the local-trust story (FR-12).
+2. **Cross-platform parser consistency** when iOS/Android/other-desktop clients arrive: shared `cmark-gfm` core via FFI vs per-client GFM conformance.
+3. **Code-highlighting upgrade path:** ColorCode (bedrock) → TextMateSharp (broader grammars).
+4. **Markdown frontmatter handling** (GFM default confirmed; frontmatter-as-metadata to confirm in impl).
