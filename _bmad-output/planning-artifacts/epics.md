@@ -1,5 +1,5 @@
 ---
-stepsCompleted: [1]
+stepsCompleted: [1, 2]
 inputDocuments:
   - _bmad-output/planning-artifacts/prds/prd-the-markdown-web-2026-06-21/prd.md
   - _bmad-output/planning-artifacts/architecture.md
@@ -56,6 +56,7 @@ NFR-7: Don't reinvent commodity plumbing — use standard Astro / Azure SWA / co
 - **Rendering boundary:** `clients/windows/Rendering` is pure (no networking, no AI), independently testable; `App`/`Agent` depend on it, never reverse.
 - **Foundational constraint:** native client renders native UI, no webview; AI personality (Agent/) emits a declarative UI structure (later), never HTML.
 - **CI/CD:** GitHub Actions — `deploy-web.yml` (Astro → Azure SWA), `build-windows.yml` (build/test WPF).
+- **Infrastructure as Code (IaC):** Azure resources (hosting, custom domain themarkdownweb.com, TLS) provisioned via IaC — **Bicep** (Azure-native default; Terraform alternative). Established in the walking-skeleton epic.
 - **Hosting:** Azure Static Web Apps + custom domain themarkdownweb.com + free SSL.
 
 ### UX Design Requirements
@@ -73,8 +74,43 @@ UX-DR10: Voice/microcopy — pitch headline/body, `.md only` hint, "Your persona
 
 ### FR Coverage Map
 
-{{requirements_coverage_map}}
+FR-1: Epic 2 — file-as-page (web vault)
+FR-2: Epic 2 + Epic 3 — inter-file linking (web render + client render)
+FR-3: Epic 2 + Epic 3 — media embedding (web + client)
+FR-4: Epic 2 — browsable space / index
+FR-5: Epic 2 — server-rendered HTML
+FR-6: Epic 2 + Epic 3 — beautiful default presentation (web + client)
+FR-7: Epic 2 — crawlable / SEO / born-compatible
+FR-8: Epic 2 + Epic 3 — navigation (web + client)
+FR-9: Epic 3 — open in native client
+FR-10: Epic 4 — per-reader rendering
+FR-11: Epic 4 — accessibility & translation as outcomes
+FR-12: Epic 4 — local agent
+FR-13: Epic 3 — works everywhere (Windows first) / no-Chromium
+FR-14: Epic 2 — content negotiation
+FR-15: Epic 5 (post-MVP) — Living Link
+FR-16: Epic 5 (post-MVP) — Follow / Feed
+FR-17: Epic 1 (proven end-to-end) + Epic 2 (real content build) — publish on push
+FR-18: Epic 1 — custom domain over HTTPS
 
 ## Epic List
 
-{{epics_list}}
+### Epic 1: Walking Skeleton — IaC + CI/CD live on Azure
+A minimal placeholder page is provisioned and deployed end-to-end: GitHub Actions builds, IaC (Bicep) provisions Azure hosting + custom domain + TLS, and the site is live at themarkdownweb.com over HTTPS, auto-deployed on push. Validates the entire deployment spine; everything else depends on it.
+**FRs covered:** FR-17 (end-to-end), FR-18. Plus: monorepo scaffold, IaC, GitHub Actions, Azure hosting.
+
+### Epic 2: Publish & Read on the Web
+An author drops markdown into a vault and it goes live at themarkdownweb.com as a beautiful, browsable, crawlable site that also casts the vision and recruits to the client. Built on the Epic 1 skeleton.
+**FRs covered:** FR-1, FR-2, FR-3, FR-4, FR-5, FR-6, FR-7, FR-8, FR-14, FR-17 (content build).
+
+### Epic 3: Read Markdown in the Native Client (Windows)
+A reader opens a .md URL in the Windows "Markdown Web browser" and sees it rendered beautifully — GitHub-style, native, no Chromium. The rendering bedrock (Markdig AST -> WPF FlowDocument).
+**FRs covered:** FR-9, FR-13, and client-side FR-2, FR-3, FR-6, FR-8.
+
+### Epic 4: Personalized Rendering (AI Personalities)
+The reader picks an AI personality; their local agent re-renders the page their way — structural personalization plus accessibility/translation as outcomes. Builds on Epic 3 and the open agent-integration architecture decision.
+**FRs covered:** FR-10, FR-11, FR-12.
+
+### Epic 5 (post-MVP): Sharing & Feed
+Share a Living Link that renders for whoever opens it; follow a vault's Feed. Deferred per PRD MVP scope.
+**FRs covered:** FR-15, FR-16.
