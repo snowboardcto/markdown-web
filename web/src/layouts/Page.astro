@@ -6,9 +6,18 @@
 // Wraps rendered markdown in a valid <html lang> -> <head> -> <body> document
 // with the content inside a semantic <main>/<article>. The reading theme ships
 // as pure static CSS (no `client:*` island, no runtime JS for styling), so the
-// page stays server-rendered and survives JS-disabled (AC2). The site-header
-// and pitch-card chrome remain deferred to Story 2.6.
+// page stays server-rendered and survives JS-disabled (AC2).
+//
+// Story 2.6 — adds the site-header + pitch-card chrome here, in the SINGLE
+// shared layout, so all three surfaces (content [...slug], the index, and the
+// 404) inherit it with one edit. <SiteHeader/> renders BEFORE <main> (the
+// implicit `banner` landmark); <PitchCard/> renders AFTER </main> (the implicit
+// `contentinfo` landmark) — both direct children of <body>, so the content
+// <h1> inside <article> stays the page's SOLE <h1>. Both are static HTML + CSS
+// (no `client:*`, no <script>): JS-free and crawlable.
 import '../styles/github.css';
+import SiteHeader from '../components/SiteHeader.astro';
+import PitchCard from '../components/PitchCard.astro';
 
 interface Props {
   /** Deterministic, never-empty page title (H1 / front-matter title / slug). */
@@ -26,10 +35,12 @@ const { title } = Astro.props;
     <title>{title}</title>
   </head>
   <body>
+    <SiteHeader />
     <main>
       <article>
         <slot />
       </article>
     </main>
+    <PitchCard />
   </body>
 </html>

@@ -46,7 +46,8 @@ test.describe('AC3: well-formed crawlable document shell', () => {
     const count = (s: string, sub: string) => s.split(sub).length - 1;
     expect(count(html, '<html')).toBe(1);
     expect(count(html, '</html>')).toBe(1);
-    expect(count(html, '<head')).toBe(1);
+    // `<head>` exactly — `<head` would also match the Story 2.6 `<header>` chrome.
+    expect(count(html, '<head>')).toBe(1);
     expect(count(html, '</head>')).toBe(1);
     expect(count(html, '<body')).toBe(1);
     expect(count(html, '</body>')).toBe(1);

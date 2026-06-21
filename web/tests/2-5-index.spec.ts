@@ -66,7 +66,10 @@ function slugTitle(route: string): string {
 /** Collect every root-absolute content link on `/` (DOM order), excluding the
  *  bare `/` self-link if any leaks in (asserted-against separately). */
 async function indexContentHrefs(page: Page): Promise<string[]> {
-  const hrefs = await page.locator('a[href^="/"]').evaluateAll((els) =>
+  // Scope to the in-content listing (`<main>`). Story 2.6 adds site-header +
+  // pitch-card chrome OUTSIDE <main> with its own `/get` and `/vision` stub
+  // links, which must NOT be counted as vault-listing entries.
+  const hrefs = await page.locator('main a[href^="/"]').evaluateAll((els) =>
     els.map((e) => (e as HTMLAnchorElement).getAttribute('href') ?? ''),
   );
   // Keep only real route links (drop empty, hash, and any asset/stylesheet
@@ -284,7 +287,8 @@ test.describe('Story 2.5 AC6 — themed, JS-free, crawlable, semantic shell, lis
     const count = (s: string, sub: string) => s.split(sub).length - 1;
     expect(count(html, '<html')).toBe(1);
     expect(count(html, '</html>')).toBe(1);
-    expect(count(html, '<head')).toBe(1);
+    // `<head>` exactly — `<head` would also match the Story 2.6 `<header>` chrome.
+    expect(count(html, '<head>')).toBe(1);
     expect(count(html, '</head>')).toBe(1);
     expect(count(html, '<body')).toBe(1);
     expect(count(html, '</body>')).toBe(1);
@@ -320,10 +324,11 @@ test.describe('Story 2.5 AC6 — themed, JS-free, crawlable, semantic shell, lis
     await ctx.close();
   });
 
-  test('listing-only: no 2.6 site-header / pitch / get-client chrome yet', async ({ page }) => {
-    // 2.6 layers the wordmark / "the vision" / "Get the client" CTA onto all
-    // pages; 2.5 ships the listing ONLY. Assert none of that chrome is present.
-    await expect(page.getByText('Get the client', { exact: false })).toHaveCount(0);
-    await expect(page.locator('header')).toHaveCount(0);
+  test('2.6 chrome present: site-header + "Get the client" on the index', async ({ page }) => {
+    // RECONCILED in Story 2.6 (was the 2.5 "no chrome yet" guard). 2.6 layers the
+    // wordmark / "the vision" / "Get the client" CTA onto ALL pages via the shared
+    // Page.astro layout — so the index now carries the chrome too.
+    await expect(page.getByText('Get the client', { exact: false })).toHaveCount(1);
+    await expect(page.locator('header')).toHaveCount(1);
   });
 });

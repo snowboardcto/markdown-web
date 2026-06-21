@@ -1,0 +1,99 @@
+---
+// Story 2.6 — the end-of-page pitch-card chrome (AC2, AC4, AC6).
+//
+// The page's built-in "upgrade moment" (EXPERIENCE.md KF-1): an end-of-page
+// recruiting card rendered AFTER <main> as a direct child of <body>, so its
+// heading lives OUTSIDE <article> and never perturbs the in-content heading
+// outline. A <footer> that is a direct child of <body> exposes the implicit
+// `contentinfo` landmark — a NAMED end-of-page region.
+//
+// Static HTML + scoped CSS only (no `client:*`, no <script>): server-rendered,
+// crawlable, JS-free. Reuses the 2.2 --md-* tokens.
+//
+// Microcopy is verbatim per EXPERIENCE.md Voice and Tone (AC4): the headline
+// (curly apostrophes), the body tail with the em-dash (U+2014) before "your
+// layout", inline <code>.md</code>, and the "Same file. Your shape." cadence.
+//
+// Targets (Decisions A/B): CTA → /get ; "Why a markdown web?" → /vision.
+// The headline is an <h4> (NEVER an <h1>) so the page keeps its single <h1>.
+// Decorative `▣`/`→` glyphs are aria-hidden so accessible names stay exactly
+// "Get the Markdown Web client" and "Why a markdown web?".
+---
+
+<footer class="pitch-card">
+  <h4 class="pitch-headline">You're reading one fixed view. There's a better one.</h4>
+  <p class="pitch-body">
+    This page is plain markdown, rendered the same for everyone. In the
+    <strong>Markdown Web client</strong>, your own AI personality renders every
+    <code>.md</code> page <em>your</em> way — your layout, your language, your
+    reading level. Same file. Your shape.
+  </p>
+  <div class="row">
+    <a class="get" href="/get"><span aria-hidden="true">▣</span> Get the Markdown Web client</a>
+    <a class="why" href="/vision">Why a markdown web?<span aria-hidden="true"> →</span></a>
+  </div>
+</footer>
+
+<style>
+  .pitch-card {
+    margin: 24px 0 64px;
+    padding: 24px;
+    border: 1px solid var(--md-border);
+    border-radius: 14px; /* rounded.card */
+    background: linear-gradient(180deg, #fbfdff, #f3f7fc);
+  }
+
+  .pitch-headline {
+    margin: 0 0 6px;
+    font-size: 18px;
+    line-height: 1.3;
+    font-weight: 600;
+    color: var(--md-ink);
+  }
+
+  .pitch-body {
+    margin: 0 0 14px;
+    font-size: 14.5px;
+    color: var(--md-muted);
+  }
+
+  .pitch-body code {
+    font-family: var(--md-mono);
+    font-size: 85%;
+    background: var(--md-code-bg);
+    padding: 0.2em 0.4em;
+    border-radius: var(--md-radius-code);
+  }
+
+  .pitch-body strong {
+    color: var(--md-fg);
+    font-weight: 600;
+  }
+
+  .row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .get {
+    font-weight: 600;
+    font-size: 14px;
+    color: #ffffff;
+    background: var(--md-ink);
+    border-radius: 9px; /* rounded.button */
+    padding: 9px 14px;
+    text-decoration: none;
+  }
+
+  .why {
+    font-size: 13px;
+    color: var(--md-link);
+    text-decoration: none;
+  }
+
+  .why:hover {
+    text-decoration: underline;
+  }
+</style>

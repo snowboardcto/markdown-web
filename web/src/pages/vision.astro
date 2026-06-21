@@ -1,0 +1,22 @@
+---
+// Story 2.6 — the vision/manifesto stub route (Decision B: /vision).
+//
+// No vision/why/manifesto content page exists yet (future content), so the
+// header "the vision" link and the pitch-card "Why a markdown web?" link both
+// point at this minimal placeholder. It is a NON-collection Astro route (NOT a
+// content/*.md file), so it never enters the `pages` collection and never
+// appears in the 2.5 vault index listing. Rendered through `Page`, so it
+// inherits the theme + the 2.6 header/pitch chrome and carries its own single
+// <h1> (the chrome adds none).
+import Page from '../layouts/Page.astro';
+---
+
+<Page title="Why a markdown web?">
+  <h1>Why a markdown web?</h1>
+  <p>
+    The vision for the Markdown Web is coming soon. The full manifesto — why one
+    fixed view isn&rsquo;t enough, and what reading your own way looks like —
+    will live here.
+  </p>
+  <p><a href="/">Back to the web</a></p>
+</Page>

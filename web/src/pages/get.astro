@@ -1,0 +1,21 @@
+---
+// Story 2.6 — the client-download stub route (Decision A: /get).
+//
+// The native Markdown Web client ships in Epic 3 and does not exist yet, so the
+// header "Get the client" CTA and the pitch-card "Get the Markdown Web client"
+// CTA both point at this minimal placeholder. It is a NON-collection Astro route
+// (NOT a content/*.md file), so it never enters the `pages` collection and never
+// appears in the 2.5 vault index listing. Rendered through `Page`, so it
+// inherits the theme + the 2.6 header/pitch chrome and carries its own single
+// <h1> (the chrome adds none).
+import Page from '../layouts/Page.astro';
+---
+
+<Page title="Get the Markdown Web client">
+  <h1>Get the Markdown Web client</h1>
+  <p>
+    The native Markdown Web client is coming with Epic 3. When it ships, this
+    page will link you to the download.
+  </p>
+  <p><a href="/">Back to the web</a></p>
+</Page>

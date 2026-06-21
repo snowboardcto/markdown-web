@@ -1,0 +1,98 @@
+---
+// Story 2.6 — the sticky site-header chrome (AC1, AC4, AC6).
+//
+// PAGE content (a semantic <header>, the implicit `banner` landmark when a
+// direct child of <body>) — NOT fake browser chrome (DESIGN.md Don'ts). It is
+// static HTML + scoped CSS only: no `client:*` island, no runtime <script>, so
+// the page stays server-rendered, crawlable, and JS-free.
+//
+// Targets (Dev Agent Record, Decisions A/B):
+//   - "Get the client" CTA  → /get    (Epic-3 client-download stub route)
+//   - "the vision" ghost link → /vision (future vision/manifesto stub route)
+// The wordmark is a NON-LINK <span> (per the web-v2 mockup) so it adds NO
+// a[href="/"] — keeping the 404 page's single "Go back home" link intact.
+//
+// Accessibility: the decorative `▣` glyph is aria-hidden so the CTA accessible
+// name stays exactly "Get the client" (not "▣ Get the client"). The ink pill is
+// white on --md-ink (#0d1117 ≈ 18:1, AA-clear). Reuses the 2.2 --md-* tokens.
+---
+
+<header class="site-header">
+  <div class="in">
+    <span class="wm"><span class="mk">.md</span> the markdown web</span>
+    <span class="spacer"></span>
+    <a class="ghost" href="/vision">the vision</a>
+    <a class="cta" href="/get"><span aria-hidden="true">▣</span> Get the client</a>
+  </div>
+</header>
+
+<style>
+  /* Normal-flow sticky (never `fixed`): it stays in flow so a keyboard-focused
+     in-content element is never hidden beneath the bar. */
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    /* The bar bleeds to the edges of the centered body measure + page padding. */
+    margin: calc(-1 * var(--md-page-x));
+    margin-bottom: 0;
+    padding: 0 var(--md-page-x);
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: saturate(180%) blur(8px);
+    -webkit-backdrop-filter: saturate(180%) blur(8px);
+    border-bottom: 1px solid var(--md-border);
+  }
+
+  .in {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+  }
+
+  .wm {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-size: 15px;
+    color: var(--md-ink);
+  }
+
+  .wm .mk {
+    font-family: var(--md-mono);
+    background: var(--md-ink);
+    color: #ffffff;
+    border-radius: var(--md-radius-code);
+    padding: 2px 6px;
+    font-size: 12px;
+  }
+
+  .spacer {
+    flex: 1;
+  }
+
+  .ghost {
+    font-size: 13px;
+    color: var(--md-muted);
+    text-decoration: none;
+  }
+
+  .ghost:hover {
+    text-decoration: underline;
+  }
+
+  .cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #ffffff;
+    background: var(--md-ink);
+    border-radius: 9px; /* rounded.button */
+    padding: 7px 12px;
+    text-decoration: none;
+  }
+</style>
