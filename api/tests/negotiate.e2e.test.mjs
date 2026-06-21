@@ -11,14 +11,21 @@
 // so a plain `node --test` (RED phase / CI) never needs an emulator.
 //
 // Local run (documented, reproducible):
-//   1. cd api && npm install   # (once api deps land in Task 3)
-//   2. Run the Task-1 content-copy/manifest step so the Function can read .md.
+//   1. cd api && npm ci   # deterministic install from the committed lockfile
+//   2. Run the content-bundle step so the Function can read .md: cd api && npm run build
 //   3. Start ONE emulator:
 //        swa start ../web/dist --api-location .        # full SWA fidelity
 //        # or, function alone:
 //        func start
 //   4. In another shell:
 //        cd api && RUN_SWA_E2E=1 BASE_URL=http://localhost:4280 node --test tests/negotiate.e2e.test.mjs
+//
+// OPTION 2 (pragmatic / deferred true one-URL): raw markdown is exposed at the
+// FUNCTION endpoint `/api/negotiate/<slug>` — NOT at the page URL `/<slug>`. Azure
+// SWA route rules cannot branch on the request `Accept` header, so same-URL
+// negotiation (markdown at `/x`) is a KNOWN platform limitation, DEFERRED until the
+// native client (Epic 3) consumes the endpoint. The page URL `/<slug>` stays pure
+// static HTML (fast, untouched). These e2e cases therefore hit `/api/negotiate/x`.
 //
 // If the emulator is impractical in CI, this file STAYS skipped there with this
 // documented reason; the pure handler test is the always-green backstop.
@@ -39,8 +46,9 @@ const BASE_URL = process.env.BASE_URL || 'http://localhost:4280';
 // unless RUN_SWA_E2E is explicitly set.
 const gated = { skip: ENABLED ? false : 'gated: set RUN_SWA_E2E=1 + BASE_URL to run against func/swa emulator' };
 
-test('AC8b: GET /x with Accept: text/markdown -> 200 raw .md + Vary: Accept', gated, async () => {
-  const res = await fetch(`${BASE_URL}/x`, { headers: { Accept: 'text/markdown' } });
+// Option 2: markdown is served at the Function endpoint /api/negotiate/<slug>.
+test('AC8b: GET /api/negotiate/x with Accept: text/markdown -> 200 raw .md + Vary: Accept', gated, async () => {
+  const res = await fetch(`${BASE_URL}/api/negotiate/x`, { headers: { Accept: 'text/markdown' } });
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('content-type'), 'text/markdown; charset=utf-8');
   assert.equal(res.headers.get('vary'), 'Accept');
@@ -48,14 +56,14 @@ test('AC8b: GET /x with Accept: text/markdown -> 200 raw .md + Vary: Accept', ga
   assert.ok(body.equals(readFileSync(path.join(CONTENT_ROOT, 'x.md'))));
 });
 
-test('AC8b: GET /x with Accept: text/html -> HTML page (200, text/html, Vary: Accept)', gated, async () => {
+// The page URL /x stays pure static HTML (no negotiation at the page URL — Option 2).
+test('AC8b: GET /x (page URL) -> static HTML page (200, text/html)', gated, async () => {
   const res = await fetch(`${BASE_URL}/x`, { headers: { Accept: 'text/html' } });
   assert.equal(res.status, 200);
   assert.match(res.headers.get('content-type') || '', /text\/html/);
-  assert.equal(res.headers.get('vary'), 'Accept');
 });
 
-test('AC8b: GET /does-not-exist with Accept: text/markdown -> 404', gated, async () => {
-  const res = await fetch(`${BASE_URL}/does-not-exist`, { headers: { Accept: 'text/markdown' } });
+test('AC8b: GET /api/negotiate/does-not-exist with Accept: text/markdown -> 404', gated, async () => {
+  const res = await fetch(`${BASE_URL}/api/negotiate/does-not-exist`, { headers: { Accept: 'text/markdown' } });
   assert.equal(res.status, 404);
 });

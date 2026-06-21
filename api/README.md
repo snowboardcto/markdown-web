@@ -27,11 +27,18 @@ At runtime (`negotiate/vault.mjs`) the manifest + files load once into a **close
 `Map<slug, Buffer>`**. The request slug is a pure **lookup key** (`readMd(slug)`),
 never concatenated into a filesystem path → an unknown/hostile key is a clean
 404 by construction (AC5). The adapter (`negotiate/adapter.mjs`) additionally
-decodes the slug **exactly once** and rejects `..`/`%2F`/`%5C`/`%2E`/`%00`/
-double-encoded/absolute/UNC/drive-letter keys before the lookup.
+decodes the slug **exactly once**, rejects `..`/`%2F`/`%5C`/`%2E`/`%00`/
+double-encoded/absolute/UNC/drive-letter keys (and a post-decode literal `\0`),
+then **normalises the decoded key with the same shared `pathToSlug`** (lowercase/
+github-slug per segment) before the lookup — so a mixed-case URL like `/X`
+resolves to the same `x` key the map was built from (no case drift, AC4).
 
-Both build artifacts are git-ignored — they regenerate deterministically from
-`content/` via `npm run build`.
+The build also bundles a verbatim copy of `web/src/lib/slug.mjs` as
+`negotiate/slug.mjs` so the runtime can normalise with the SAME rule the manifest
+keys came from, without a `web/` dependency in the deployed package. All three
+build artifacts (`negotiate/content/`, `negotiate/manifest.json`,
+`negotiate/slug.mjs`) are git-ignored — they regenerate deterministically from
+`content/` + `web/src/lib/slug.mjs` via `npm run build`.
 
 ## Module layout
 
@@ -42,19 +49,32 @@ Both build artifacts are git-ignored — they regenerate deterministically from
 - `scripts/build-content.mjs` — the Decision-A bundle/manifest build step.
 - `host.json`, `package.json` — minimal Functions app scaffolding.
 
-## Routing (SWA)
+## Routing (SWA) — Option 2 (pragmatic; true same-URL deferred)
+
+Azure Static Web Apps route rules **cannot branch on the request `Accept` header**
+(a documented platform limitation — `rewrite`/`redirect` are path-only). So true
+same-URL negotiation (markdown at the page URL `/<slug>`) is **deferred** to the
+Epic 3 native-client consumer. Instead:
+
+- the page URL `/<slug>` stays **pure static HTML** (fast static host, untouched);
+- raw markdown is exposed **now** at the linked Function endpoint
+  `/api/negotiate/<slug>` (`Content-Type: text/markdown; charset=utf-8` +
+  `Vary: Accept`, byte-faithful). The native client (Story 3.2) fetches markdown
+  from there.
 
 `web/public/staticwebapp.config.json` (ships into `web/dist/`) advertises
-`Vary: Accept` on the page routes (so the **static host** never lets a CDN cache
-an HTML asset un-keyed and replay it for a `text/markdown` request) and wires the
-linked `/api/*`. The deploy workflow (`.github/workflows/deploy-web.yml`) sets
-`api_location: 'api'` so the Function is deployed alongside `web/dist`.
+`Vary: Accept` on the `/api/negotiate/*` route and carries only correct config (no
+misleading page-URL→Function rewrite). The deploy workflow
+(`.github/workflows/deploy-web.yml`) installs API deps with **`npm ci`** (committed
+`api/package-lock.json`) and sets `api_location: 'api'` so the Function is deployed
+alongside `web/dist`.
 
 ## Local development / running the tests
 
 ```bash
-# 1. Bundle the vault for the Function (Decision A) — generates the manifest + copy.
-cd api && npm install && npm run build
+# 1. Bundle the vault for the Function (Decision A) — generates the manifest + copy
+#    + a bundled copy of the shared slug.mjs.
+cd api && npm ci && npm run build
 
 # 2a. CI backstop — the pure-handler + runtime unit/integration tests (no emulator):
 cd api && npm test            # node --test → all green

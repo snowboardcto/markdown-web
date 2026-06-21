@@ -34,6 +34,14 @@ export function loadVaultMap() {
   try {
     manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
   } catch {
+    // Cold-start health signal (#6): a MISSING/unreadable manifest means the
+    // build step (`npm run build`, Decision A) did not run or was not packaged —
+    // every markdown request would 404. Warn loudly rather than degrade silently.
+    console.warn(
+      `[negotiate] WARNING: manifest not found/readable at ${MANIFEST_PATH}; ` +
+        'the content bundle is missing (build step did not run / was stripped from ' +
+        'the deploy package) — ALL markdown requests will 404. Run `npm run build`.',
+    );
     cachedMap = map; // no manifest -> empty closed map (all slugs miss -> 404).
     return cachedMap;
   }
@@ -49,6 +57,17 @@ export function loadVaultMap() {
     } catch {
       // A manifest entry whose file is absent is simply skipped (miss -> 404).
     }
+  }
+  // A manifest that parsed but yielded no usable entries (e.g. the bundled
+  // `content/**` was stripped from the package, Critical #2) is also a deploy
+  // footgun — surface it instead of silently serving an all-404 Function.
+  if (map.size === 0) {
+    console.warn(
+      `[negotiate] WARNING: manifest at ${MANIFEST_PATH} produced an EMPTY ` +
+        'slug->content map; the bundled content/**/*.md is missing from the package ' +
+        '(check `.funcignore` is not stripping negotiate/content) — ALL markdown ' +
+        'requests will 404.',
+    );
   }
   cachedMap = map;
   return cachedMap;

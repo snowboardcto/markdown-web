@@ -54,9 +54,12 @@ jobs:
       # slug->file manifest (Decision A). This MUST run before the API is packaged so the
       # Function can read the raw .md at runtime. Byte-exact copy (no read-as-text) keeps
       # AC6 fidelity. The web/dist upload is unchanged (still skip_app_build).
+      # Deterministic install from the committed api/package-lock.json (matches the
+      # web `npm ci` discipline — no cross-run transitive drift; the content-bundle
+      # step runs from these deps).
       - name: Install API dependencies
         working-directory: api
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Bundle content for the API (slug->.md manifest + verbatim copy)
         working-directory: api

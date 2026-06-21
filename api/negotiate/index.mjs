@@ -13,6 +13,7 @@ export async function negotiateHttp(request) {
   const result = handleNegotiate({
     acceptHeader: request.headers.get('accept'),
     rawSlug: rawSlugFromRequest(request),
+    method: request.method,
     readMd,
   });
   return { status: result.status, headers: result.headers, body: result.body };

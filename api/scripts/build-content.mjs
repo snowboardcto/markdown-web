@@ -32,6 +32,12 @@ const REPO_ROOT = path.resolve(__dirname, '../..');
 const CONTENT_ROOT = path.join(REPO_ROOT, 'content');
 const OUT_CONTENT = path.resolve(__dirname, '../negotiate/content');
 const OUT_MANIFEST = path.resolve(__dirname, '../negotiate/manifest.json');
+// The web build's slug source of truth, BUNDLED with the Function so the runtime
+// can normalise a request slug (lowercase/github-slug each segment) with the SAME
+// rule the map keys were built from — no drift (AC4), and no `web/` dependency in
+// the deployed package (only `api/` ships).
+const WEB_SLUG_SRC = path.resolve(__dirname, '../../web/src/lib/slug.mjs');
+const OUT_SLUG = path.resolve(__dirname, '../negotiate/slug.mjs');
 
 /** Recursively list every `.md` file under `dir` (absolute paths). */
 function listMarkdownFiles(dir) {
@@ -83,9 +89,14 @@ function main() {
 
   fs.writeFileSync(OUT_MANIFEST, JSON.stringify(manifest, null, 2) + '\n');
 
+  // Bundle the shared slug logic verbatim so the runtime adapter normalises a
+  // request slug with the SAME `pathToSlug` the manifest keys came from.
+  fs.copyFileSync(WEB_SLUG_SRC, OUT_SLUG);
+
   console.log(
-    `[build-content] Bundled ${files.length} .md file(s) -> api/negotiate/content/ ` +
-      `and wrote ${Object.keys(manifest).length} slug(s) -> api/negotiate/manifest.json.`,
+    `[build-content] Bundled ${files.length} .md file(s) -> api/negotiate/content/, ` +
+      `wrote ${Object.keys(manifest).length} slug(s) -> api/negotiate/manifest.json, ` +
+      `and bundled slug.mjs -> api/negotiate/slug.mjs.`,
   );
 }
 

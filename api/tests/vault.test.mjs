@@ -62,6 +62,36 @@ test('AC4: sanitizeSlug passes through legitimate nested slugs', () => {
   assert.equal(sanitizeSlug('my-notes'), 'my-notes');
 });
 
+test('HIGH #3: sanitizeSlug lowercases/github-slugs the decoded key (no case drift)', () => {
+  // Mixed-case URL must normalise to the SAME closed-map key the build emitted
+  // (`pathToSlug` lower-cases), so `/X` is NOT a false 404.
+  assert.equal(sanitizeSlug('X'), 'x');
+  assert.equal(sanitizeSlug('Gear-Guide'), 'gear-guide');
+  assert.equal(sanitizeSlug('My Notes'), 'my-notes');
+  assert.equal(sanitizeSlug('Sub/Page'), 'sub/page');
+});
+
+test('HIGH #3: /X resolves to the SAME markdown bytes as /x via the real readMd', gate, () => {
+  const lower = handleNegotiate({ acceptHeader: 'text/markdown', rawSlug: 'x', readMd });
+  const upper = handleNegotiate({ acceptHeader: 'text/markdown', rawSlug: 'X', readMd });
+  assert.equal(upper.status, 200, '/X must resolve (case-insensitive), not 404');
+  assert.equal(lower.status, 200);
+  assert.ok(upper.body.equals(lower.body), '/X and /x must serve identical bytes');
+  assert.ok(upper.body.equals(sourceBytes('x.md')));
+});
+
+test('MEDIUM #5: HEAD omits the Buffer body but keeps status/headers/Content-Length', gate, () => {
+  const get = handleNegotiate({ acceptHeader: 'text/markdown', rawSlug: 'x', readMd, method: 'GET' });
+  const head = handleNegotiate({ acceptHeader: 'text/markdown', rawSlug: 'x', readMd, method: 'HEAD' });
+  assert.equal(head.status, 200);
+  assert.equal(head.headers['Content-Type'], 'text/markdown; charset=utf-8');
+  assert.equal(head.headers['Vary'], 'Accept');
+  // Content-Length is preserved (advertised) even though the body is omitted.
+  assert.equal(head.headers['Content-Length'], get.headers['Content-Length']);
+  assert.equal(head.body, undefined, 'HEAD must NOT carry a Buffer body');
+  assert.ok(Buffer.isBuffer(get.body), 'GET still carries the body');
+});
+
 test('AC1/AC2/AC3: handleNegotiate end-to-end (markdown branch, HTML redirect, hostile 404)', gate, () => {
   // Markdown branch -> 200 + bytes.
   const md = handleNegotiate({ acceptHeader: 'text/markdown', rawSlug: 'x', readMd });

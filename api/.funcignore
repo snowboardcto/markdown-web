@@ -6,4 +6,10 @@ __queuestorage__
 local.settings.json
 tests
 scripts
-*.md
+# Exclude markdown ONLY at the package root (READMEs etc.), NOT the bundled vault.
+# An UNANCHORED `*.md` (.gitignore glob semantics) matches at EVERY depth, which
+# would strip negotiate/content/**/*.md — the verbatim vault the Function reads at
+# runtime — from the deploy package (empty map -> 404 for every markdown request,
+# Critical #2). Anchor to the root and explicitly KEEP the bundled vault.
+/*.md
+!negotiate/content/

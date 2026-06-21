@@ -5,19 +5,11 @@
       "route": "/api/negotiate/*",
       "methods": ["GET", "HEAD"],
       "headers": { "Vary": "Accept" }
-    },
-    {
-      "route": "/*",
-      "methods": ["GET", "HEAD"],
-      "headers": { "Vary": "Accept" }
     }
   ],
   "navigationFallback": {
     "rewrite": "/index.html",
     "exclude": ["/api/*", "/_astro/*", "/media/*", "/*.{css,js,png,jpg,jpeg,gif,svg,webp,ico,woff,woff2,txt,xml,json}"]
-  },
-  "globalHeaders": {
-    "Vary": "Accept"
   },
   "mimeTypes": {
     ".md": "text/markdown; charset=utf-8"
