@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-21
-last_updated: 2026-06-21 (2-2 code review — PASS WITH ITEMS, 5/5 ACs confirmed, 4 patch action items)
+last_updated: 2026-06-21 (2-2 marked done — 5/5 ACs covered + green, 39 tests passing, review resolved)
 project: The Markdown Web
 project_key: NOKEY
 tracking_system: file-system
@@ -53,7 +53,7 @@ development_status:
   # Epic 2: Publish & Read on the Web
   epic-2: in-progress
   2-1-render-a-md-file-to-an-html-page: done # 6/6 ACs covered + green (20/20 E2E), code review resolved (5 patches applied)
-  2-2-apply-the-github-style-default-theme: in-progress # code review PASS WITH ITEMS — 5/5 ACs confirmed, 38/38 green; 4 patch action items (1 HIGH override hardening + 3 test-quality)
+  2-2-apply-the-github-style-default-theme: done # 5/5 ACs covered + green (39/39 E2E), code review resolved (4 patches applied)
   2-3-inter-file-linking-and-navigation: backlog
   2-4-media-embedding: backlog
   2-5-browsable-vault-index: backlog
