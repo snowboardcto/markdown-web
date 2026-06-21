@@ -1,0 +1,342 @@
+# Story 3.3: Markdig AST → FlowDocument rendering
+
+Status: ready-for-dev
+
+<!-- VALIDATION (vs epics.md Story 3.3, lines 312–323; FR-6, GFM bedrock): RESULT = PASS.
+  - AC↔epic alignment: the epic "Then" is one compound render clause + an "And". Mapped exhaustively:
+      • "parses GFM with Markdig and produces a WPF FlowDocument" → AC1 (the `FlowDocumentRenderer.Render(string)` API + the Markdig GFM pipeline config + the FlowDocument root contract).
+      • "mapping headings, bold/italic/strikethrough, paragraphs, inline + fenced code, lists, task lists, blockquotes, GFM tables, and images per DESIGN.md" → AC2 (headings), AC3 (emphasis/strikethrough), AC4 (paragraphs + inline code), AC5 (fenced code, monospace, NO colors), AC6 (lists), AC7 (task lists), AC8 (blockquotes), AC9 (GFM tables), AC10 (images, pure/no-net). Every element family in the epic clause has its own provable AC.
+      • "And the Rendering library has no networking or AI dependencies" → AC11 (Rendering-stays-pure; inherited NoEmbeddedBrowserTests + DependencyBoundaryTests stay green; no System.Net.Http, no AI, no reverse reference).
+      • "and is covered by unit tests" → AC12 (windows-latest CI gate; STA + DisableTestParallelization; [Fact] vs [StaFact] discipline; every AC has a dotnet-test proof, none "render and look").
+    Every epic clause maps to an AC. AC11/AC12 are DERIVED-but-mandated (the epic's "no net/no AI" + "covered by unit tests") and labeled.
+  - Scope drift: NONE beyond the AST→FlowDocument element mapping. NO syntax-highlighting COLORS (3.4 — AC5 is explicitly monospace, no color runs). NO in-client link-click navigation / media playback / relative-link resolution (3.5 — AC10 emits an Image element bound to the source but does NOT fetch; links map to a Hyperlink with inert/non-navigating default). NO basic-faithful-render polish/theming pass (3.6 — exact GitHub spacing/hairline/zebra tokens are deferred; AC2/AC8/AC9 require only the structural+style markers, see "Minimum vs deferred"). NO personality rendering (Epic 4). NO wiring the FlowDocument into MainWindow.ContentHost for display (3.5/3.6 — OPTIONAL surface only; the AC is the Rendering API + unit tests, NOT on-screen display).
+  - Image-loading decision: RESOLVED — Rendering emits an `Image` (in an Inline/BlockUIContainer) whose `Source` is set to the absolute http(s) URI via a `BitmapImage` configured for ASYNC/on-demand download by WPF's imaging stack, OR (the chosen, pure-safe option) leaves `Source` unset and records the URI/alt on the element so a later story (3.5) resolves it — see "Resolved image-loading decision". Rendering itself opens NO socket and holds NO HttpClient. Provable by a [StaFact] that asserts the Image element + its recorded source URI WITHOUT any network call.
+  - Rendering-becomes-UseWPF: ALREADY DONE — Rendering.csproj is already `net10.0-windows` + `UseWPF=true` (verified). So this story does NOT retarget the framework; it CONFIRMS the WPF surface is present and uses it. The boundary guards stay green because PresentationFramework is a WPF UI ref (allowed), not App/Agent/networking/AI. Called out in AC11 + Dev Notes so the dev agent does not "helpfully" re-add UseWPF or change the TFM.
+  - Missing ACs: NONE for this story's scope. Horizontal rules and links appear in the architecture mapping table but are render NICETIES here (links = inert Hyperlink, no navigation — that's 3.5; horizontal rule = a styled separator Paragraph) — covered as minimum-coherent extras in AC4/Dev Notes, not promoted to their own epic-required AC since the epic clause does not enumerate them.
+  - Task completeness: Tasks 1–13 cover every AC; each element-family task carries a CI-runnable [Fact]/[StaFact] proof asserting the produced FlowDocument LOGICAL TREE (Blocks/Inlines/Table rows), never a pixel. Real checkboxes preserved.
+  - Action items (non-blocking): (1) Rendering.Tests needs `Xunit.StaFact` added + a `DisableTestParallelization` assembly attribute (WPF document objects are DispatcherObjects with STA affinity AND LoadComponent/packaging is not thread-safe — same discipline App.Tests adopted in 3.2 run #9→#11). (2) Keep the existing `Probe()`/`CountTopLevelBlocks()` API + their two tests green (no regression). (3) The new renderer is a SEPARATE type (`FlowDocumentRenderer`) so `MarkdownRenderer`'s probe contract is untouched.
+-->
+
+<!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
+
+## Story
+
+As a reader,
+I want markdown rendered faithfully to native UI,
+so that pages look like a clean, GitHub-style document.
+
+## Context note (this is the THIRD `clients/windows/` feature story — Epic 3, the CORE render bedrock)
+
+Story 3.1 shipped the **app shell** (WPF window + Back/Forward/Reload toolbar, inert `ShellViewModel`). Story 3.2 shipped the **`.md`-only address bar + fetch** (validator, `MarkdownFetcher`, decline+open-in-system-browser seam, `AddressBarState` machine) — it holds the fetched markdown as a **raw string** (`LastFetchedMarkdown`) and deliberately leaves `<Border x:Name="ContentHost"/>` **empty**. Both are `done` and green on `windows-latest` CI (3.2 run #11, 78/78).
+
+**Story 3.3 is the heart of Epic 3:** the pure `Rendering` library takes that markdown string and turns it into a WPF **`FlowDocument`** — parsing GFM with **Markdig** and **mapping the AST to FlowDocument elements**: headings, bold/italic/strikethrough, paragraphs, inline + fenced code, ordered/unordered lists, GFM task lists, blockquotes, GFM tables, and images, per the DESIGN.md GitHub-style mapping. This is the deterministic **bedrock render** — the faithful base on which syntax highlighting (3.4), in-client navigation/media (3.5), the basic-faithful polish (3.6), and AI personalities (Epic 4) all later build.
+
+**Story 3.3 does NOT:** add syntax-highlighting COLORS (Story 3.4 — fenced code here is plain **monospace**, no color runs); add in-client link-click navigation, media playback, or relative-link/image resolution (Story 3.5 — images emit an `Image` element + recorded source but Rendering does NOT fetch; links map to an inert `Hyperlink`); do the basic-faithful theming/spacing polish pass (Story 3.6 — exact GitHub hairlines/zebra-rows/measure are deferred; this story emits the structural + style markers that 3.6 refines); render personalities (Epic 4); or wire the `FlowDocument` onto the screen in `MainWindow.ContentHost` (that display integration is 3.5/3.6 — this story MAY optionally surface a render seam but the AC is the **Rendering API + unit tests**, not on-screen display).
+
+**What this story builds ON (do NOT recreate):**
+- `clients/windows/Rendering/MarkdownRenderer.cs` — currently `MarkdownRenderer` with only `Probe()` (returns the `ProbeValue` constant) and `CountTopLevelBlocks(string)` (Markdig `UseAdvancedExtensions` parse → top-level block count). **Keep this type + its two tests green.** Add the new render API as a **separate type** (`FlowDocumentRenderer`) so the probe contract is untouched.
+- `clients/windows/Rendering/TheMarkdownWeb.Rendering.csproj` — **ALREADY** `net10.0-windows`, **`UseWPF=true`**, `Nullable`/`ImplicitUsings` enabled, `PackageReference Markdig 1.3.1`. ⚠️ **The WPF/FlowDocument surface is ALREADY available — do NOT retarget the TFM, do NOT re-add `UseWPF`, do NOT touch `Markdig`'s version.** (See AC11 + Dev Notes "Rendering is already a UseWPF library.")
+- `clients/windows/Rendering.Tests/` — the existing xUnit test project (`net10.0-windows`, `UseWPF`, `IsTestProject`; `Microsoft.NET.Test.Sdk` 17.12.0, `xunit` 2.9.2, `xunit.runner.visualstudio` 2.8.2; references `Rendering`). It has `MarkdownRendererTests` (`Probe_ReturnsKnownConstant`, `CountTopLevelBlocks_ParsesGfm_ReturnsExpectedCount`). **It already exists and is already in `TheMarkdownWeb.sln` + covered by CI's `paths:` filter — add new test files + the `Xunit.StaFact` package + a `DisableTestParallelization` assembly attribute here; do NOT recreate the project or edit the `.sln`/CI.**
+- `clients/windows/App.Tests/NoEmbeddedBrowserTests.cs` + `DependencyBoundaryTests.cs` — the inherited HARD guards. `NoEmbeddedBrowserTests` globs **every** `clients/windows/**/*.csproj` (incl. `Rendering` and `Rendering.Tests`) for forbidden embedded-browser substrings; `DependencyBoundaryTests` asserts the `Rendering` assembly references neither `App` nor `Agent`. **Both MUST stay green** — this story adds Markdig→FlowDocument mapping (WPF UI types, allowed) and NOTHING networked/AI/webview to `Rendering`.
+- `.github/workflows/build-windows.yml` — windows-latest CI: `dotnet restore` → `build -c Release` → `test -c Release` on `TheMarkdownWeb.sln`. **This CI is the ONLY way this story is verified** (see Environment Constraint).
+
+### ⚠️ ENVIRONMENT CONSTRAINT — read before writing any code or test (drives AC12, Tasks 11–13)
+
+**This repo is developed on Linux with NO .NET SDK installed; WPF builds and runs ONLY on Windows.** The dev agent CANNOT build, run, or visually confirm anything locally. **Verification happens exclusively through the `build-windows.yml` GitHub Actions CI on `windows-latest`** (restore → build -c Release → test -c Release). Therefore:
+
+- Every acceptance bar that must be *checked* has to be checked **either by the compiler (build succeeds) or by an xUnit test that runs in `dotnet test` on `windows-latest`** — never by "render the FlowDocument and look at it."
+- **FlowDocument and every flow element it contains (`Paragraph`, `Run`, `Bold`, `Italic`, `Span`, `List`, `ListItem`, `Section`, `Table`, `TableRowGroup`, `TableRow`, `TableCell`, `BlockUIContainer`, `InlineUIContainer`, `Image`, `CheckBox`, `Hyperlink`) is a `System.Windows.Threading.DispatcherObject` with STA thread affinity.** Constructing or inspecting them off an STA thread throws `InvalidOperationException: The calling thread must be STA`. So **any test that calls `FlowDocumentRenderer.Render(...)` or walks the produced tree MUST run on an STA thread via `Xunit.StaFact`'s `[StaFact]`** (add the package to `Rendering.Tests`). **No `Window` is needed** (a `FlowDocument` is not a `Window`; do NOT `.Show()` anything, the runner is headless) — but STA is still mandatory because the document objects are DispatcherObjects.
+- **`LoadComponent`/WPF packaging and resource loading are NOT thread-safe.** xUnit runs test classes in parallel by default; concurrent WPF-object construction across STA threads can trip an intermittent `ArgumentOutOfRangeException` in `System.IO.Packaging` (exactly the race App.Tests hit at 3.2 run #9 and fixed at run #11). **Add `[assembly: CollectionBehavior(DisableTestParallelization = true)]` to `Rendering.Tests`** (e.g. an `AssemblyInfo.cs`) to serialize WPF-object construction. `[StaFact]` still gives each test its own STA thread; the attribute only stops them running *concurrently*.
+- **Pure AST-shape assertions that do NOT touch WPF types may be plain `[Fact]`.** E.g. asserting that the Markdig pipeline parses a GFM table into `N` rows at the `Markdig.Extensions.Tables.Table` AST level (Markdig AST objects are POCOs, not DispatcherObjects) is a `[Fact]`. The moment a test constructs/inspects a `System.Windows.Documents.*` element it becomes `[StaFact]`. Prefer the cheapest proof that is still meaningful, but **the element-mapping ACs are inherently about the FlowDocument tree, so most are `[StaFact]`.**
+- **Testability = assert on the produced FlowDocument's LOGICAL STRUCTURE, never pixels.** Walk `document.Blocks`, `Paragraph.Inlines`, `List.ListItems`, `Table.RowGroups[].Rows[].Cells[]`, `Section.Blocks`, `InlineUIContainer.Child`, `BlockUIContainer.Child`, and read properties (`FontSize`, `FontWeight`, `FontStyle`, `FontFamily`, `TextDecorations`, `Tag`, automation/name markers). No `Measure`/`Arrange`, no real fonts-on-screen, no rendered colors, no timing.
+
+## Acceptance Criteria
+
+1. **[the `Render` API + the Markdig GFM pipeline + the FlowDocument root]** **Given** the pure `Rendering` library, **When** a caller invokes the public render entry point, **Then** the library exposes a concrete, stable contract:
+
+   ```csharp
+   namespace TheMarkdownWeb.Rendering;
+
+   public sealed class FlowDocumentRenderer
+   {
+       public FlowDocumentRenderer();                                 // default GFM pipeline
+       public FlowDocumentRenderer(FlowDocumentRenderOptions options);// optional knobs (see below)
+       public System.Windows.Documents.FlowDocument Render(string markdown);
+   }
+
+   public sealed class FlowDocumentRenderOptions
+   {
+       public string MonospaceFontFamily { get; init; } // default "Consolas" (a mono family per DESIGN.md typography.mono)
+       public string BodyFontFamily { get; init; }      // default "Segoe UI"  (per DESIGN.md typography.sans)
+       // NOTE: this story sets element STRUCTURE + the markers the ACs assert; exact GitHub px/hairline/zebra
+       // theming is Story 3.6. Options are minimal seams, not a full theme.
+   }
+   ```
+
+   `Render(string markdown)`:
+   - is **pure and total**: `Render("")` returns an empty-but-valid `FlowDocument` (no blocks, no throw); `Render` throws `ArgumentNullException` only for a `null` argument (mirroring the existing `CountTopLevelBlocks` null-guard); it opens **NO socket** and performs **NO** AI call.
+   - parses GFM via a single shared **Markdig pipeline** built with `new MarkdownPipelineBuilder().UseAdvancedExtensions().Build()` (which turns on pipe tables, task lists, strikethrough, autolinks, and the rest of the GFM family) — equivalently the specific extensions (`UsePipeTables()`, `UseTaskLists()`, `UseEmphasisExtras()` for strikethrough, `UseAutoLinks()`) if the dev prefers an explicit set; either way **GFM tables, task lists, and strikethrough MUST be enabled** (asserted by AC3/AC7/AC9). The pipeline is built once (field/static), not per-call.
+   - returns a non-null `System.Windows.Documents.FlowDocument` whose `Blocks` are the mapped top-level elements in source order.
+
+   Proven by a `[StaFact]`: `Render("")` is a non-null empty `FlowDocument`; `Render(null!)` throws `ArgumentNullException`; a multi-block document yields `document.Blocks.Count` equal to the number of top-level GFM blocks in source order. *(AC1 — epics.md Story 3.3 line 322 "parses GFM with Markdig and produces a WPF FlowDocument"; architecture "Render path: Markdig AST → WPF FlowDocument", "Rendering Pipeline … raw .md → Markdig parse (GFM) → AST → FlowDocument".)*
+
+2. **[headings H1–H6 → styled `Paragraph`s]** **Given** ATX headings `#`…`######`, **When** rendered, **Then** each heading maps to a top-level `System.Windows.Documents.Paragraph` carrying a heading style that is **distinguishable and monotonic by level**: H1 has the largest `FontSize`, H6 the smallest, with `FontSize(H1) > FontSize(H2) > … > FontSize(H6)` and every heading `FontSize` strictly greater than the default body `FontSize`; headings are bold (`FontWeight == FontWeights.Bold`). The heading's text content is preserved (its inline `Run`s concatenate to the heading text). So a renderer can be asked "which level is this paragraph?" the `Paragraph` records its heading level in a stable marker (`Paragraph.Tag` set to e.g. `"h1"`…`"h6"`, OR a dedicated style — the test reads `Tag`). *(AC2 — architecture mapping "`#`–`######` headings → `Paragraph` with heading styles (size/weight)"; DESIGN.md typography.scale h1/h2/h3; exact GitHub bottom-hairline on h1/h2 is Story 3.6 polish, NOT required here — only the monotonic size + bold + level marker.)*
+
+   Proven by a `[StaFact]`: render `"# A\n\n## B\n\n###### F"`; assert three `Paragraph`s tagged `h1`/`h2`/`h6`, `FontWeights.Bold` on each, `FontSize` strictly decreasing h1>h2>h6 and each > body size, and the text round-trips.
+
+3. **[bold / italic / strikethrough → `Bold` / `Italic` / strikethrough decoration]** **Given** inline emphasis, **When** rendered, **Then** within a paragraph's `Inlines`: `**bold**`/`__bold__` maps to a `System.Windows.Documents.Bold` (or a `Run`/`Span` with `FontWeight == FontWeights.Bold`); `*italic*`/`_italic_` maps to an `Italic` (or `FontStyle == FontStyles.Italic`); `~~struck~~` (GFM strikethrough, requires the extension) maps to an inline whose `TextDecorations` contains `TextDecorations.Strikethrough` (i.e. a `Span`/`Run` with `Strikethrough`). Nested emphasis (`**_x_**`) composes (bold AND italic on the inner run). *(AC3 — architecture mapping "bold / italic / strikethrough → `Bold` / `Italic` / `Run` w/ strikethrough"; GFM strikethrough requires `UseAdvancedExtensions`/`UseEmphasisExtras`.)*
+
+   Proven by a `[StaFact]`: render `"**b** *i* ~~s~~"`; walk the paragraph's inlines and assert one bold inline, one italic inline, and one inline carrying `TextDecorations.Strikethrough` (assert the strikethrough decoration is present, proving the GFM extension is on).
+
+4. **[paragraphs + inline code]** **Given** a plain paragraph containing inline code, **When** rendered, **Then** the paragraph maps to a top-level `Paragraph` (body font, default weight/size — NOT tagged as a heading), and a `` `code span` `` inside it maps to an inline `Run` whose `FontFamily` is the configured **monospace** family (`options.MonospaceFontFamily`) — distinct from the body font. (DESIGN.md gives inline code a subtle background; the exact background fill is Story 3.6 polish — the REQUIRED marker here is the **monospace `FontFamily`** on the inline-code run, optionally a `Background`.) A bare paragraph of text round-trips its text into the paragraph's inlines. *(AC4 — architecture mapping "paragraph → `Paragraph`", "inline code → `Run` — mono font + subtle background".)*
+
+   Proven by a `[StaFact]`: render ``"Use the `dotnet` CLI."``; assert one top-level `Paragraph` not tagged as a heading, containing an inline `Run` whose `FontFamily.Source` equals the mono family and whose text is `dotnet`, plus body-font runs for the surrounding text.
+
+5. **[fenced code block → monospace block, NO syntax colors]** **Given** a fenced code block (```` ```lang ... ``` ````), **When** rendered, **Then** it maps to a top-level block (`Paragraph` or `Section`) whose text content is the code **verbatim** (preserving line breaks and not collapsing whitespace — use a `Paragraph` with `xml:space`-preserving runs / explicit `LineBreak`s, NOT HTML re-encoding), rendered in the configured **monospace `FontFamily`**. The block records the fence's **language info-string** (e.g. `"csharp"`) in a stable marker (`Tag`) so Story 3.4 can later colorize it. **NO syntax-highlight color runs are produced at this story** — all text in the block is a single foreground (highlighting colors are Story 3.4); an unknown/missing language still renders as plain monospace (never an error). *(AC5 — architecture mapping "fenced code block → `Section`/`Paragraph` — mono, background, syntax-highlighted, language preserved" with the syntax-highlight COLOR explicitly deferred to Story 3.4 per epics.md Story 3.4; DESIGN.md code-block.)*
+
+   Proven by a `[StaFact]`: render a fenced ```` ```csharp\nvar x = 1;\nif (x) {}\n``` ````; assert one top-level code block, mono `FontFamily`, `Tag == "csharp"` (language preserved), the code text preserved verbatim incl. the newline, and that the block contains a SINGLE foreground brush (no multi-color highlight runs — proves colors are NOT applied here). A fenced block with no language renders mono with a null/empty language tag and does not throw.
+
+6. **[unordered + ordered lists → `List` + `ListItem`]** **Given** GFM lists, **When** rendered, **Then** an unordered list (`- a`) maps to a `System.Windows.Documents.List` with `MarkerStyle` a bullet style (e.g. `TextMarkerStyle.Disc`) and one `ListItem` per item; an ordered list (`1. a`) maps to a `List` with a decimal marker style (e.g. `TextMarkerStyle.Decimal`) and the correct `StartIndex`/item count; each `ListItem` contains a `Paragraph` (or blocks) holding the item's inlines; nested lists nest as a `List` inside a `ListItem`'s blocks. *(AC6 — architecture mapping "lists (ordered/unordered) → `List` + `ListItem`".)*
+
+   Proven by a `[StaFact]`: render `"- a\n- b\n"`; assert a `List` with `ListItems.Count == 2`, disc marker; render `"1. x\n2. y\n3. z\n"`; assert a `List` with decimal marker and 3 items; render a nested `"- a\n  - a1\n"` and assert the inner `List` is reachable inside the first item's blocks.
+
+7. **[GFM task lists → `List` with a checkbox glyph/`CheckBox` per item]** **Given** a GFM task list (`- [ ] todo` / `- [x] done`, requires the task-list extension), **When** rendered, **Then** each task item is a `ListItem` that visibly carries a **checkbox** reflecting its checked state — either an inline `System.Windows.Controls.CheckBox` (in an `InlineUIContainer`) with `IsChecked == true/false` and `IsEnabled == false` (read-only at this story), OR a checkbox **glyph** (`☑`/`☐` i.e. `☑`/`☐`) prefixed inline. The item's checked/unchecked state is provable from the produced tree (the `CheckBox.IsChecked`, or the presence of the checked-vs-unchecked glyph). The task-list items still live inside a `List`/`ListItem` structure (a task list is a list). *(AC7 — architecture mapping "task lists (GFM) → `List` + inline `CheckBox`"; DESIGN.md task-list "checkbox task lists"; requires `UseAdvancedExtensions`/`UseTaskLists`.)*
+
+   Proven by a `[StaFact]`: render `"- [ ] todo\n- [x] done\n"`; assert two list items, the first carrying an unchecked marker (`CheckBox.IsChecked == false` or `☐`), the second a checked marker (`IsChecked == true` or `☑`); assert any `CheckBox` is `IsEnabled == false` (not interactive at this story).
+
+8. **[blockquote → bordered `Section` (left rule)]** **Given** a blockquote (`> quoted`), **When** rendered, **Then** it maps to a `System.Windows.Documents.Section` (or a `Paragraph`-container) that is **visually marked as a quote**: it carries a left-edge rule — a non-zero left `BorderThickness` with a `BorderBrush`, and/or a left `Padding`/`Margin` and a muted/secondary marker — distinguishing it from a normal paragraph; the quoted content (paragraphs, nested inlines) is preserved inside it. Nested blockquotes nest as a `Section` within a `Section`. (Exact GitHub left-rule color/width is Story 3.6 polish; the REQUIRED marker here is that the quote is a distinct `Section` with a left-rule indicator the test can read.) *(AC8 — architecture mapping "blockquote → bordered `Section` (left rule)"; DESIGN.md blockquote "left-rule blockquotes".)*
+
+   Proven by a `[StaFact]`: render `"> hello\n"`; assert a `Section` whose `BorderThickness.Left > 0` (or an equivalent recorded left-rule marker) and a non-null `BorderBrush`, containing a `Paragraph` whose text is `hello`.
+
+9. **[GFM tables → `System.Windows.Documents.Table`]** **Given** a GFM pipe table (header row, delimiter row, body rows; requires the pipe-tables extension), **When** rendered, **Then** it maps to a `System.Windows.Documents.Table` with: one `TableColumn` per column; a header `TableRow` (in a `TableRowGroup`) whose cells are bold/distinguished as a header; and one body `TableRow` per data row — i.e. the produced `Table` has the **correct column count and row count** matching the source, and each `TableCell` holds the cell's inlines. Column text alignment from the delimiter row (`:--`, `:-:`, `--:`) SHOULD be carried onto the cells' `TextAlignment` (left/center/right) where Markdig provides it (nice-to-have; the REQUIRED bars are the column/row counts + header distinction). Exact hairlines/zebra-row fills are Story 3.6 polish. *(AC9 — architecture mapping "GFM tables → `Table` (native FlowDocument table)"; DESIGN.md gfm-table "hairline tables with zebra rows"; requires `UseAdvancedExtensions`/`UsePipeTables`.)*
+
+   Proven by a `[StaFact]`: render a 2-column, 1-header + 2-body-row pipe table; assert a `Table` with `Columns.Count == 2`, total rows == 3 (1 header + 2 body) across its row group(s), the header row's cells bold/marked, and a known body cell's text round-trips. (A pure `[Fact]` MAY additionally assert at the Markdig AST level that the input parsed to a `Markdig.Extensions.Tables.Table` with the expected dimensions — proving the pipe-tables extension is on — without touching WPF types.)
+
+10. **[images → `Image` element bound to the source URI, WITHOUT Rendering doing network I/O]** **Given** an image `![alt](https://host/pic.png)`, **When** rendered, **Then** it maps to a `System.Windows.Controls.Image` hosted in an `InlineUIContainer` (inline image inside a paragraph) or a `BlockUIContainer` (standalone image block), where:
+    - the image's **source URI is recorded** on the produced element (e.g. `Image.Tag` = the source string, and/or `Image.Source` set to a `BitmapImage` whose `UriSource` is the absolute URI) so a later story (3.5) can resolve/display it;
+    - the **alt text is recorded** as the element's accessible name (`AutomationProperties.SetName(image, alt)`) — accessibility floor;
+    - **Rendering performs NO network fetch**: it does NOT call `HttpClient`, does NOT block on a download, does NOT require the bytes to exist. If it sets a `BitmapImage`, it MUST be configured so WPF's imaging stack would load it lazily/async (`CacheOption`/`CreateOptions` for delayed creation) — but the **pure-safe default for this story is to record the URI on the element and leave actual fetching/decoding to Story 3.5** (no socket opened by `Render`). A missing/relative/unresolvable image source does NOT throw — it produces the `Image` element with the recorded source + alt and a graceful empty/placeholder state.
+
+    This keeps `Rendering` **pure (no `System.Net.Http`, no I/O)** — remote-image fetching is an App/3.5 concern behind a seam, NOT inside the pure render lib. *(AC10 — architecture mapping "images → `InlineUIContainer` → `Image` (resolved from vault)" with the RESOLUTION/fetch explicitly deferred to FR-3/Story 3.5; the pure-Rendering constraint forbids networking here — see "Resolved image-loading decision".)*
+
+    Proven by a `[StaFact]` that asserts the produced `InlineUIContainer`/`BlockUIContainer`'s child is an `Image`, its recorded source URI equals `https://host/pic.png`, and its automation name equals the alt text — **with no network access** (the test never opens a socket; if a `BitmapImage` is created it is not downloaded/decoded by the test). Render of an image with an unresolvable/relative source does not throw.
+
+11. **[`Rendering` stays PURE — no networking, no AI; the WPF/boundary guards stay green]** **Given** this story turns the bedrock into a real FlowDocument renderer, **When** the dependency graph is inspected, **Then** **`Rendering` gains NO networking (`System.Net.Http`/sockets), NO AI, and NO reference to `App` or `Agent`.** The new render code uses ONLY Markdig (already referenced) + WPF UI types (`System.Windows.Documents.*`, `System.Windows.Controls.*`, `System.Windows.Media.*`) which are available because **`Rendering.csproj` is already `net10.0-windows` + `UseWPF=true`** (this story does NOT change the TFM or re-add `UseWPF` — it merely uses the WPF surface that is already there; turning a library `UseWPF` adds `PresentationFramework`/`WindowsBase`/`PresentationCore` refs, which are WPF UI refs and are **allowed** — they are NOT App/Agent/networking/AI). Concretely:
+    - the inherited **`DependencyBoundaryTests.Rendering_DoesNotReference_AppOrAgent` MUST stay green** (Rendering references neither `TheMarkdownWeb.App` nor `TheMarkdownWeb.Agent`);
+    - the inherited **`NoEmbeddedBrowserTests` (csproj tier) MUST stay green** — it globs `Rendering.csproj` + `Rendering.Tests.csproj`; adding `Xunit.StaFact` to `Rendering.Tests` introduces **no** forbidden embedded-browser substring (`Xunit.StaFact` ≠ any of `webview/cefsharp/chromium/...`), and `Rendering` adds **no** `PackageReference` beyond the existing `Markdig`;
+    - **NO `HttpClient`, no webview, no `WebBrowser`, no AI SDK** is added to `Rendering`. Image sources are recorded, not fetched (AC10).
+    *(AC11 — epics.md Story 3.3 line 323 "the `Rendering` library has no networking or AI dependencies"; architecture "`Rendering/` is isolated … pure, independently testable bedrock (no networking, no AI)", FC-1 no embedded browser.)*
+
+12. **[windows-latest CI gate — STA + no-parallel; the only verification surface]** **Given** this story is verified exclusively on `windows-latest` CI, **When** `build-windows.yml` runs (`dotnet restore` → `build -c Release` → `test -c Release` on `TheMarkdownWeb.sln`), **Then** the whole solution **builds clean** (no new warnings-as-errors regressions; `nullable`/`ImplicitUsings` consistent with the existing projects) and **all tests pass green**, including: the **existing** `Rendering.Tests` (`Probe`, `CountTopLevelBlocks` — NO regression), the **existing** `App.Tests` (Story 3.1 + 3.2 — incl. `NoEmbeddedBrowserTests`/`DependencyBoundaryTests`, which now also see the new render code and `Rendering.Tests` package), **plus** the new Story 3.3 render tests in `Rendering.Tests`. Specifically:
+    - **STA + no-parallel discipline.** Every test that calls `FlowDocumentRenderer.Render(...)` or inspects a `FlowDocument`/flow element runs on an STA thread via `[StaFact]`. `Rendering.Tests` adds `Xunit.StaFact` (match App.Tests: `1.1.11`) and `[assembly: CollectionBehavior(DisableTestParallelization = true)]` (serializes WPF-object construction so the `System.IO.Packaging` race that hit 3.2 cannot recur). Pure Markdig-AST-shape assertions that touch no WPF type MAY stay `[Fact]`. No test shows a `Window`, runs a `Dispatcher` message pump, opens a socket, asserts pixels/colors-on-screen, or depends on timing.
+    - **No regression / boundary intact.** `Rendering` is still pure (AC11); `App`/`Agent`/`App.Tests`/the `.sln`/the CI workflow are **untouched** by this story (this is a `Rendering` + `Rendering.Tests` story). The `paths:` filter (`clients/windows/**`) already covers the changed files; `Rendering.Tests` is already in the `.sln`. No `.sln` or workflow edit is needed.
+    *(AC12 — DERIVED CI/build gate + epics.md "covered by unit tests"; the only place this story is verified, per the Environment Constraint; build-windows.yml; NFR-7 "don't reinvent plumbing" — Markdig + WPF FlowDocument are the chosen stack.)*
+
+> Source: [_bmad-output/planning-artifacts/epics.md#Story 3.3: Markdig AST → FlowDocument rendering] (lines 312–323): **Given** the pure `Rendering` library and a `.md` string **When** it renders **Then** it parses GFM with Markdig and produces a WPF FlowDocument mapping headings, bold/italic/strikethrough, paragraphs, inline + fenced code, lists, task lists, blockquotes, GFM tables, and images per DESIGN.md **And** the `Rendering` library has no networking or AI dependencies and is covered by unit tests. (FR-6, GFM bedrock). **AC1** = the "parses GFM with Markdig and produces a WPF FlowDocument" half (the API + pipeline + root). **AC2–AC10** = the per-element-family mapping clause, one provable AC per family (headings; bold/italic/strikethrough; paragraphs+inline code; fenced code [mono, no colors — colors are Story 3.4]; lists; task lists; blockquotes; GFM tables; images [pure, no-net]). **AC11** = the epic's "And … no networking or AI dependencies" + the boundary/no-embedded-browser guards, with the note that `Rendering` is ALREADY a `UseWPF` library (no TFM change). **AC12** = the derived build/CI gate + "covered by unit tests", with the STA + DisableTestParallelization discipline the WPF document objects require (Linux dev box has no .NET SDK; WPF is Windows-only).
+
+## Tasks / Subtasks
+
+- [ ] **Task 1 — Add `Xunit.StaFact` + DisableTestParallelization to `Rendering.Tests` (AC: 12)**
+  - [ ] In `clients/windows/Rendering.Tests/TheMarkdownWeb.Rendering.Tests.csproj`, add `<PackageReference Include="Xunit.StaFact" Version="1.1.11" />` (match `App.Tests`). Add NO other package. Keep the existing `Microsoft.NET.Test.Sdk` 17.12.0 / `xunit` 2.9.2 / `xunit.runner.visualstudio` 2.8.2 and the `ProjectReference` to `Rendering` unchanged. [Source: Environment Constraint STA; App.Tests csproj as the version template; AC12]
+  - [ ] Add `clients/windows/Rendering.Tests/AssemblyInfo.cs` with `[assembly: Xunit.CollectionBehavior(DisableTestParallelization = true)]` (serialize WPF-object construction — the same fix App.Tests applied at 3.2 run #11 to dodge the `System.IO.Packaging` `LoadComponent` race). [Source: Environment Constraint LoadComponent/packaging not thread-safe; 3.2 run #9→#11]
+  - [ ] Confirm `NoEmbeddedBrowserTests` (in App.Tests) still passes: `Xunit.StaFact` contains no forbidden embedded-browser substring, so the csproj-tier glob over `Rendering.Tests.csproj` stays green. Add NO forbidden dependency. [Source: AC11; NoEmbeddedBrowserTests globs clients/windows/**/*.csproj]
+
+- [ ] **Task 2 — `FlowDocumentRenderer` skeleton: the API surface + shared Markdig GFM pipeline + FlowDocument root (AC: 1, 11)**
+  - [ ] Add `clients/windows/Rendering/FlowDocumentRenderer.cs` (namespace `TheMarkdownWeb.Rendering`): `public sealed class FlowDocumentRenderer` with the parameterless ctor (default options) and a `FlowDocumentRenderOptions`-taking ctor, and `public System.Windows.Documents.FlowDocument Render(string markdown)`. Build the Markdig pipeline ONCE (a `private static readonly MarkdownPipeline` via `new MarkdownPipelineBuilder().UseAdvancedExtensions().Build()`). `Render`: `ArgumentNullException.ThrowIfNull(markdown)`; parse with the shared pipeline (`Markdown.Parse(markdown, pipeline)`); create a `new FlowDocument()`; map each top-level Markdig block to a FlowDocument `Block` (Tasks 3–11 fill the mapping); return it. `Render("")` → empty non-null doc, no throw. **Do NOT modify `MarkdownRenderer`** (keep `Probe`/`CountTopLevelBlocks` + their tests intact — this is a NEW type). [Source: AC1; architecture render-path; existing MarkdownRenderer pipeline pattern]
+  - [ ] Add `clients/windows/Rendering/FlowDocumentRenderOptions.cs` (namespace `TheMarkdownWeb.Rendering`): `MonospaceFontFamily` (default `"Consolas"`), `BodyFontFamily` (default `"Segoe UI"`) — minimal seams; exact GitHub theming is Story 3.6. Apply `BodyFontFamily`/a base `FontSize` to the `FlowDocument` so headings/inline-code can be compared against the body default. [Source: AC1, AC4; DESIGN.md typography.mono/sans; 3.6 owns full theme]
+  - [ ] Keep `Rendering` PURE: use only `Markdig` + `System.Windows.*` (WPF). Add NO `PackageReference`, NO `System.Net.Http`, NO AI, NO ref to `App`/`Agent`. (The csproj is ALREADY `net10.0-windows`/`UseWPF=true` — do NOT change the TFM or re-add `UseWPF`.) [Source: AC11; architecture Rendering pure; Rendering.csproj already UseWPF]
+  - [ ] **`[StaFact]` AC1** (`FlowDocumentRendererTests.cs`): `Render("")` is a non-null empty `FlowDocument`; `Render(null!)` throws `ArgumentNullException`; a 3-block doc (`"# H\n\npara\n\n```\nx\n```"`) yields `Blocks.Count == 3` in source order. [Source: AC1]
+
+- [ ] **Task 3 — Map headings H1–H6 → styled `Paragraph`s (AC: 2)**
+  - [ ] In the block mapper, map Markdig `HeadingBlock` (Level 1–6) to a `Paragraph`: `FontWeight = FontWeights.Bold`; `FontSize` monotonic by level (h1 largest … h6 smallest, all > body size — derive from DESIGN.md scale, e.g. h1≈2.1em, h2≈1.5em, h3≈1.2em, h4–h6 progressively down but still > body); set `Paragraph.Tag = "h{level}"`. Map the heading's inline children into the paragraph's `Inlines` (reuse the inline mapper from Task 4). (Exact GitHub h1/h2 bottom hairline is Story 3.6 — not here.) [Source: AC2; architecture heading mapping; DESIGN.md typography.scale]
+  - [ ] **`[StaFact]` AC2:** render `"# A\n\n## B\n\n###### F"`; assert 3 `Paragraph`s tagged `h1`/`h2`/`h6`, each `Bold`, `FontSize` h1>h2>h6 and each > body, text round-trips. [Source: AC2]
+
+- [ ] **Task 4 — Inline mapper: text + bold/italic/strikethrough + inline code + (inert) links (AC: 3, 4)**
+  - [ ] Implement a reusable inline mapper that turns Markdig `Inline`s into FlowDocument `Inline`s: `LiteralInline` → `Run` (body font); `EmphasisInline` → `Bold` (delimiter `**`/`__`, count 2 / strong) or `Italic` (`*`/`_`, emphasis) — and **GFM strikethrough** (`~~`, the `EmphasisInline` with `~` delimiter from `UseAdvancedExtensions`/`UseEmphasisExtras`) → a `Span`/`Run` with `TextDecorations = TextDecorations.Strikethrough`; nested emphasis composes (bold span containing an italic span, etc.). `CodeInline` → `Run` with `FontFamily = options.MonospaceFontFamily` (optionally a subtle `Background` — background fill is 3.6 polish, mono family is the required marker). `LineBreakInline` → space/`LineBreak` as appropriate. [Source: AC3, AC4; architecture emphasis + inline-code mapping]
+  - [ ] Map `LinkInline` that is NOT an image → an **inert** `Hyperlink` (records `NavigateUri`/the href, but NO click navigation — navigation is Story 3.5; do NOT wire a click handler that fetches). Image links (`LinkInline.IsImage`) are handled in Task 11. [Source: scope note links/nav = 3.5; architecture "links → Hyperlink + click handler" with the handler deferred to 3.5]
+  - [ ] **`[StaFact]` AC3:** render `"**b** *i* ~~s~~"`; assert one bold inline, one italic inline, one inline with `TextDecorations.Strikethrough` (proves the GFM strikethrough extension is on). Render `"**_x_**"`; assert the inner run is both bold and italic. [Source: AC3]
+  - [ ] **`[StaFact]` AC4:** render ``"Use the `dotnet` CLI."``; assert one top-level `Paragraph` (NOT heading-tagged) containing a mono-`FontFamily` `Run` with text `dotnet` and body-font runs around it. [Source: AC4]
+
+- [ ] **Task 5 — Map paragraphs (AC: 4)**
+  - [ ] Map Markdig `ParagraphBlock` → a `Paragraph` (body font, default weight/size, no heading tag) whose inlines come from the Task 4 mapper. A horizontal rule (`ThematicBreakBlock`) → a styled separator `Paragraph`/`Separator` (minimum-coherent nicety; not an epic-required AC but should not throw). [Source: AC4; architecture paragraph mapping + horizontal rule]
+  - [ ] (Covered by the AC4 `[StaFact]` in Task 4 — a bare paragraph round-trips its text.) [Source: AC4]
+
+- [ ] **Task 6 — Map fenced + indented code blocks → monospace block, NO colors, language preserved (AC: 5)**
+  - [ ] Map Markdig `FencedCodeBlock`/`CodeBlock` → a top-level `Paragraph` (or `Section`) rendering the code **verbatim** in `options.MonospaceFontFamily` — preserve line breaks (split the code lines into `Run`s separated by `LineBreak`, or a single space-preserving run); a single foreground brush for ALL text (NO syntax-color runs — Story 3.4 adds those). Record the fence info-string/language in `Tag` (`fenced.Info`/the first word, e.g. `"csharp"`; null/empty when absent). Optionally a subtle code background (3.6 polish). An unknown/missing language → plain mono, never an error. [Source: AC5; architecture fenced-code mapping with COLOR deferred to Story 3.4; DESIGN.md code-block]
+  - [ ] **`[StaFact]` AC5:** render a ```` ```csharp\nvar x = 1;\nif (x) {}\n``` ````; assert one top-level code block, mono `FontFamily`, `Tag == "csharp"`, code text preserved verbatim incl. the newline, and a SINGLE foreground brush across the block (no multi-color highlight — proves colors are NOT applied here). A no-language fenced block renders mono with null/empty `Tag`, no throw. [Source: AC5]
+
+- [ ] **Task 7 — Map unordered + ordered lists → `List` + `ListItem` (AC: 6)**
+  - [ ] Map Markdig `ListBlock` → `System.Windows.Documents.List`: `MarkerStyle = TextMarkerStyle.Disc` for unordered, `TextMarkerStyle.Decimal` (+ `StartIndex` from the list's start) for ordered; map each `ListItemBlock` → a `ListItem` whose blocks come from recursively mapping the item's child blocks (so an item paragraph → `Paragraph`, a nested list → nested `List` inside the `ListItem`). [Source: AC6; architecture list mapping]
+  - [ ] **`[StaFact]` AC6:** `"- a\n- b\n"` → `List` disc, 2 items; `"1. x\n2. y\n3. z\n"` → `List` decimal, 3 items; `"- a\n  - a1\n"` → inner `List` reachable inside the first item's blocks. [Source: AC6]
+
+- [ ] **Task 8 — Map GFM task lists → checkbox per item (AC: 7)**
+  - [ ] Detect GFM task-list items (Markdig `TaskList` inline inside a `ListItemBlock`, from `UseTaskLists`/`UseAdvancedExtensions`). For each, prefix the item with a read-only checkbox reflecting `TaskList.Checked`: either an inline `System.Windows.Controls.CheckBox { IsChecked = checked, IsEnabled = false }` in an `InlineUIContainer`, OR a glyph `☑` (checked) / `☐` (unchecked). Keep the items inside the `List`/`ListItem` structure. [Source: AC7; architecture task-list mapping; DESIGN.md task-list]
+  - [ ] **`[StaFact]` AC7:** `"- [ ] todo\n- [x] done\n"` → 2 items; item 1 unchecked marker (`IsChecked == false` or `☐`), item 2 checked (`IsChecked == true` or `☑`); any `CheckBox` is `IsEnabled == false`. [Source: AC7]
+
+- [ ] **Task 9 — Map blockquotes → bordered `Section` with a left rule (AC: 8)**
+  - [ ] Map Markdig `QuoteBlock` → a `System.Windows.Documents.Section` with a left-edge rule: non-zero `BorderThickness` on the left + a `BorderBrush` (a muted brush per DESIGN.md), plus a left `Padding`/`Margin`; recursively map the quote's child blocks inside it; nested quotes → `Section` within `Section`. (Exact GitHub rule color/width is 3.6.) [Source: AC8; architecture blockquote mapping; DESIGN.md blockquote]
+  - [ ] **`[StaFact]` AC8:** `"> hello\n"` → a `Section` with `BorderThickness.Left > 0` and non-null `BorderBrush`, containing a `Paragraph` whose text is `hello`. [Source: AC8]
+
+- [ ] **Task 10 — Map GFM tables → `System.Windows.Documents.Table` (AC: 9)**
+  - [ ] Map Markdig `Markdig.Extensions.Tables.Table` → a `System.Windows.Documents.Table`: add one `TableColumn` per column; create a `TableRowGroup`; map the header `TableRow` (bold/distinguished cells) and each body `TableRow`; map each `Markdig.Extensions.Tables.TableCell` → a `TableCell` holding a `Paragraph` with the cell's inlines. Carry per-column `TextAlignment` from the table's `ColumnDefinitions` alignment where available (nice-to-have). [Source: AC9; architecture table mapping; DESIGN.md gfm-table]
+  - [ ] **`[StaFact]` AC9:** render a 2-col, 1-header + 2-body pipe table; assert `Table.Columns.Count == 2`, total rows == 3, header cells bold/marked, a known body cell's text round-trips. **`[Fact]` (pure AST) optional:** assert the input parses to a Markdig `Table` with the expected dimensions (proves `UsePipeTables` is on) without touching WPF types. [Source: AC9; Environment Constraint Fact-vs-StaFact]
+
+- [ ] **Task 11 — Map images → `Image` element + recorded source/alt, NO network fetch (AC: 10, 11)**
+  - [ ] Map Markdig `LinkInline` with `IsImage == true` → a `System.Windows.Controls.Image` hosted in an `InlineUIContainer` (inline) or `BlockUIContainer` (standalone image paragraph). Record the source URI on the element (`Image.Tag = url`, and/or `Image.Source = new BitmapImage` whose `UriSource` is the absolute URI **configured for lazy/delayed load** so no synchronous download happens) and set `AutomationProperties.SetName(image, altText)`. **Open NO socket; hold NO `HttpClient`; do NOT block on a download.** A relative/missing/unresolvable source does NOT throw — it yields the `Image` element with the recorded source + alt and a graceful empty state (actual fetch/resolve is Story 3.5). [Source: AC10, AC11; architecture image mapping with vault-resolution deferred to FR-3/3.5; Resolved image-loading decision]
+  - [ ] **`[StaFact]` AC10:** render `"![alt](https://host/pic.png)"`; assert the container's child is an `Image`, its recorded source URI == `https://host/pic.png`, its automation name == `alt`, **and no network access occurs** (the test opens no socket; a created `BitmapImage` is not downloaded/decoded by the test). Render an image with a relative/unresolvable source → no throw, element still produced. [Source: AC10]
+
+- [ ] **Task 12 — Boundary / purity / no-Chromium hygiene (AC: 11, 12)**
+  - [ ] Confirm `Rendering` added NO `PackageReference` beyond the existing `Markdig 1.3.1`, NO `System.Net.Http`, NO AI, NO ref to `App`/`Agent`; the csproj TFM/`UseWPF` are UNCHANGED. The inherited `DependencyBoundaryTests.Rendering_DoesNotReference_AppOrAgent` and `NoEmbeddedBrowserTests` (csproj tier over `Rendering`/`Rendering.Tests`) stay green. [Source: AC11; DependencyBoundaryTests; NoEmbeddedBrowserTests]
+  - [ ] Confirm this story touched ONLY `Rendering/*` (new render code) and `Rendering.Tests/*` (new tests + `Xunit.StaFact` + `AssemblyInfo.cs`). `App`/`Agent`/`App.Tests`/`TheMarkdownWeb.sln`/`build-windows.yml` are UNTOUCHED. `Rendering.Tests` is already in the `.sln`; the CI `paths:` filter (`clients/windows/**`) already covers the new files — **no `.sln` or workflow edit.** [Source: AC12; .sln already lists Rendering.Tests; build-windows.yml paths]
+  - [ ] Keep `nullable`/`ImplicitUsings` consistent; introduce no new build warnings. The new render code must compile clean alongside the existing `MarkdownRenderer`. [Source: AC12; existing csproj conventions]
+
+- [ ] **Task 13 — Final verification against ACs (Definition of Done — checked via CI, not locally) (AC: 1–12)**
+  - [ ] **AC1:** `FlowDocumentRenderer.Render` returns a `FlowDocument`; empty→empty, null→throws, GFM pipeline (`UseAdvancedExtensions`) built once. Proven by the AC1 `[StaFact]`.
+  - [ ] **AC2:** H1–H6 → bold `Paragraph`s, monotonic size, level marker. Proven by the AC2 `[StaFact]`.
+  - [ ] **AC3:** bold/italic/strikethrough → `Bold`/`Italic`/`TextDecorations.Strikethrough`. Proven by the AC3 `[StaFact]`.
+  - [ ] **AC4:** paragraph + inline code (mono `FontFamily`). Proven by the AC4 `[StaFact]`.
+  - [ ] **AC5:** fenced code → mono block, language preserved in `Tag`, SINGLE foreground (no colors — 3.4). Proven by the AC5 `[StaFact]`.
+  - [ ] **AC6:** ordered/unordered/nested lists → `List`+`ListItem`. Proven by the AC6 `[StaFact]`.
+  - [ ] **AC7:** task lists → read-only checkbox per item reflecting checked state. Proven by the AC7 `[StaFact]`.
+  - [ ] **AC8:** blockquote → `Section` with a left rule. Proven by the AC8 `[StaFact]`.
+  - [ ] **AC9:** GFM table → `Table` with correct columns/rows + header. Proven by the AC9 `[StaFact]` (+ optional pure `[Fact]`).
+  - [ ] **AC10:** image → `Image` element + recorded source/alt, NO network fetch in `Rendering`. Proven by the AC10 `[StaFact]`.
+  - [ ] **AC11:** `Rendering` pure — no net/AI/reverse-ref; TFM/`UseWPF` unchanged; guards green. Proven by inherited `DependencyBoundaryTests` + `NoEmbeddedBrowserTests` staying green.
+  - [ ] **AC12:** `dotnet build -c Release` clean + `dotnet test -c Release` all green on `windows-latest` (existing `Rendering.Tests` + `App.Tests` + new render tests); STA + `DisableTestParallelization`; no shown window/socket/pixel/timing. Proven by the green `build-windows.yml` run.
+  - [ ] Push and confirm the `Build Windows Client` GitHub Actions run is green (the authoritative verification — there is no local build). Record the run result in the Dev Agent Record.
+
+## Dev Notes
+
+### What already exists (build ON this, do not recreate)
+
+- **Rendering lib (Epic 3 skeleton, commit `8a651b1`):** `Rendering/MarkdownRenderer.cs` = `MarkdownRenderer` with `ProbeValue` const + `Probe()` + `CountTopLevelBlocks(string)` (Markdig `UseAdvancedExtensions` → `MarkdownDocument.Count`). **Keep this type + its two tests untouched and green; add the render API as a NEW type `FlowDocumentRenderer`.**
+- **Rendering is ALREADY a `UseWPF` library.** `Rendering/TheMarkdownWeb.Rendering.csproj` is `net10.0-windows`, `UseWPF=true`, `Nullable`/`ImplicitUsings` enabled, `PackageReference Markdig 1.3.1`. ⚠️ **The FlowDocument/WPF surface (`PresentationFramework`/`PresentationCore`/`WindowsBase`) is already wired in — do NOT retarget the TFM, do NOT re-add `UseWPF`, do NOT bump `Markdig`.** This makes the "turn Rendering into a UseWPF library" worry from the epic a NON-event: it's done. The ONE discipline that matters is that adding WPF UI usage must NOT smuggle in networking/AI/an App-or-Agent reference — the boundary guards enforce that.
+- **Rendering.Tests (skeleton, green):** `Rendering.Tests/MarkdownRendererTests.cs` (`Probe_ReturnsKnownConstant`, `CountTopLevelBlocks_ParsesGfm_ReturnsExpectedCount`). Project is `net10.0-windows`/`UseWPF`/`IsTestProject`, refs `Rendering`, has `Microsoft.NET.Test.Sdk` 17.12.0 / `xunit` 2.9.2 / `xunit.runner.visualstudio` 2.8.2 — **but NOT yet `Xunit.StaFact`** (Task 1 adds it) and NO `DisableTestParallelization` attribute (Task 1 adds it). Already in `TheMarkdownWeb.sln` and covered by the CI `paths:` filter.
+- **Inherited HARD guards (App.Tests, must stay green):** `NoEmbeddedBrowserTests` (csproj tier globs `clients/windows/**/*.csproj` — incl. `Rendering`/`Rendering.Tests` — for forbidden embedded-browser substrings; + a runtime-closure tier over the App closure) and `DependencyBoundaryTests` (`Rendering` references neither `App` nor `Agent`; `App` references `Rendering`).
+- **CI:** `.github/workflows/build-windows.yml` on `windows-latest`, `dotnet-version: 10.0.x`, triggers on `clients/windows/**`; restore → `build -c Release` → `test -c Release` on the `.sln`. **Sole verification path.**
+
+### Resolved image-loading decision (pure-Rendering-safe)
+
+**Decision: `Rendering` RECORDS each image's source URI + alt on the produced `Image` element and does NOT fetch it. Remote/relative image resolution and display are Story 3.5's job (FR-3, "resolve relative paths against the vault → WPF `Image`").**
+
+Why this is the pure-safe choice (and the only one consistent with "Rendering has no networking"):
+- The epic's mapping says images "resolved from the vault" — but **resolution/fetch is FR-3 / Story 3.5**, not the AST→FlowDocument mapping. Putting an `HttpClient` (or any socket I/O) inside `Rendering` would violate epics.md Story 3.3 line 323 ("no networking … dependencies") and the architecture's "`Rendering/` … pure (no networking, no AI)" — and would trip the spirit of the boundary guards.
+- So `Render` emits the **`Image` element + a recorded source URI (`Image.Tag`/a lazily-configured `BitmapImage.UriSource`) + the alt as the automation name**, leaving a clean seam: Story 3.5 (which owns navigation/media/vault resolution + has App-side network access) resolves the URI and supplies the bytes. If a `BitmapImage` is created, it MUST be configured so WPF would load it lazily/async (no synchronous blocking download during `Render`); the **conservative default is to set only `Image.Tag`/`UriSource` and not force a download at all** at this story.
+- This is **fully unit-testable with NO network** (AC10): the test reads the recorded source URI + automation name off the produced `Image` and asserts no socket is opened. A relative/unresolvable source must not throw — it yields a graceful empty `Image` placeholder.
+
+> **DEFERRED-WORK LOG entry (for whoever maintains it):** *Story 3.3 emits image `Image` elements with a recorded source URI + alt but does NOT fetch/resolve them (Rendering stays pure, no net). Story 3.5 must resolve relative image paths against the vault and load the bytes (FR-3) — wiring the recorded source URI to an actual `BitmapImage`/`MediaElement` through an App-side fetch seam. Until then images render as empty/placeholder `Image` elements with the source recorded.*
+
+### Critical constraints (do not violate)
+
+- **`Rendering` stays PURE — no networking, no AI.** Use ONLY `Markdig` + `System.Windows.*` (WPF UI). NO `System.Net.Http`/sockets, NO AI SDK, NO `HttpClient` (images are recorded, not fetched — see the image decision). NO reference to `App`/`Agent`. Inherited `DependencyBoundaryTests` enforces the one-way boundary.
+- **NFR-1 / FC-1 — NO embedded browser engine.** The render path is Markdig→FlowDocument (native WPF document model), never HTML/webview. Add NO forbidden dependency; inherited `NoEmbeddedBrowserTests` (which globs `Rendering.csproj`/`Rendering.Tests.csproj`) stays green. `Xunit.StaFact` is a test-only STA helper, not a browser.
+- **`Rendering` is ALREADY `UseWPF`.** Do NOT change the TFM or re-add `UseWPF` or bump `Markdig`. Adding WPF UI *usage* (FlowDocument elements) is exactly what this story does; it brings in `PresentationFramework` etc. (allowed WPF refs) and nothing else.
+- **Windows-only verification, STA + no-parallel for FlowDocument.** No .NET SDK on the Linux dev box; WPF is Windows-only; headless runner. Every check is compiler-or-`dotnet test`-on-windows-latest. FlowDocument + flow elements are DispatcherObjects (STA affinity) → `[StaFact]` for any test that calls `Render(...)` or walks the tree; `[Fact]` only for pure Markdig-AST-shape assertions. Add `[assembly: CollectionBehavior(DisableTestParallelization = true)]` (LoadComponent/packaging not thread-safe). No shown `Window`, no `Dispatcher` pump, no socket, no pixels/colors-on-screen, no timing.
+- **Scope: AST→FlowDocument element mapping ONLY.** NO syntax-highlight COLORS (3.4 — fenced code is plain mono here, language recorded in `Tag` for 3.4 to colorize). NO in-client link-click navigation / media playback / relative-link/image resolution (3.5 — links are inert `Hyperlink`s, images record-but-don't-fetch). NO basic-faithful theming/spacing polish (3.6 — emit structural + style MARKERS the ACs assert; exact GitHub px/hairline/zebra is 3.6). NO personality rendering (Epic 4). NO wiring the FlowDocument into `MainWindow.ContentHost` (3.5/3.6 — optional seam only; the AC is the Rendering API + unit tests).
+
+### Minimum coherent element-mapping set (this story) vs polish deferred to 3.6
+
+- **Minimum (required + asserted here):** the API + GFM pipeline (AC1); headings = bold + monotonic size + level marker (AC2); bold/italic/strikethrough decorations (AC3); paragraph + inline-code mono family (AC4); fenced code = verbatim mono + language `Tag`, single foreground, no colors (AC5); ordered/unordered/nested `List`+`ListItem` (AC6); task-list read-only checkbox per item (AC7); blockquote = `Section` + left-rule marker (AC8); GFM table = `Table` with correct columns/rows + header distinction (AC9); image = `Image` element + recorded source/alt, no fetch (AC10).
+- **Deferred to Story 3.6 (basic-faithful polish — NOT asserted here, do not over-build):** exact GitHub px sizes / `2.1em`/`1.5em` heading scale, h1/h2 bottom **hairlines**, code-block + inline-code **background fills** and `6px` radius, table **hairlines + zebra rows**, blockquote exact rule color/width + muted text, reading **measure (760px)** + page padding, light/dark theming. This story sets the *structure + a style marker the test reads*; 3.6 refines the look.
+- **Deferred to Story 3.4:** fenced-code **syntax-highlight colors** (ColorCode). This story preserves the language in `Tag` and renders a single-foreground monospace block so 3.4 can drop colors in.
+- **Deferred to Story 3.5:** link **click navigation** (relative `.md` → in-client fetch, `#anchor` → scroll, external → system browser), **image/media resolution + load** (vault), broken-link state. This story emits inert `Hyperlink`s + record-only `Image`s.
+
+### Intended Rendering API surface (the exact contract for Step 4 TDD + Step 5 impl)
+
+```csharp
+namespace TheMarkdownWeb.Rendering;
+
+using System.Windows.Documents; // FlowDocument
+
+public sealed class FlowDocumentRenderer
+{
+    public FlowDocumentRenderer();                                  // default GFM pipeline + default options
+    public FlowDocumentRenderer(FlowDocumentRenderOptions options); // custom fonts (minimal seam)
+
+    // Pure + total: ""-> empty FlowDocument (no throw); null -> ArgumentNullException; no socket, no AI.
+    // Parses GFM via a shared MarkdownPipelineBuilder().UseAdvancedExtensions().Build()
+    // (pipe tables + task lists + strikethrough + autolinks), maps the AST to FlowDocument Blocks/Inlines.
+    public FlowDocument Render(string markdown);
+}
+
+public sealed class FlowDocumentRenderOptions
+{
+    public string MonospaceFontFamily { get; init; } = "Consolas"; // DESIGN.md typography.mono
+    public string BodyFontFamily { get; init; } = "Segoe UI";       // DESIGN.md typography.sans
+    // Minimal seams only; full GitHub theming (sizes/hairlines/zebra/measure/dark) is Story 3.6.
+}
+```
+
+- `MarkdownRenderer` (existing) is **unchanged** — `Probe()`/`CountTopLevelBlocks()` keep their contract + tests. `FlowDocumentRenderer` is the new render entry point.
+- The FlowDocument tree the dev produces is asserted by the tests on its LOGICAL structure (`Blocks`, `Inlines`, `List.ListItems`, `Table.RowGroups[].Rows[].Cells[]`, `Section.Blocks`, `InlineUIContainer/BlockUIContainer.Child`, plus `FontSize`/`FontWeight`/`FontStyle`/`FontFamily`/`TextDecorations`/`Tag`/automation name markers) — never pixels.
+
+### Source tree components to touch
+
+- `clients/windows/Rendering/FlowDocumentRenderer.cs` — the render API + Markdig pipeline + block/inline mappers (NEW).
+- `clients/windows/Rendering/FlowDocumentRenderOptions.cs` — minimal font seams (NEW). *(May be folded into the renderer file if preferred — keep the public type names.)*
+- `clients/windows/Rendering.Tests/FlowDocumentRendererTests.cs` (+ optionally split per-family files, e.g. `HeadingTests.cs`, `EmphasisTests.cs`, `CodeBlockTests.cs`, `ListTests.cs`, `TaskListTests.cs`, `BlockquoteTests.cs`, `TableTests.cs`, `ImageTests.cs`) — new `[StaFact]`/`[Fact]` tests (NEW, in the EXISTING `Rendering.Tests` project).
+- `clients/windows/Rendering.Tests/TheMarkdownWeb.Rendering.Tests.csproj` — add `Xunit.StaFact` 1.1.11 (UPDATE).
+- `clients/windows/Rendering.Tests/AssemblyInfo.cs` — `[assembly: CollectionBehavior(DisableTestParallelization = true)]` (NEW).
+- Do NOT touch: `Rendering/MarkdownRenderer.cs` (keep probe contract), `Rendering.csproj` TFM/`UseWPF`/`Markdig` version, `App/*`, `Agent/*`, `App.Tests/*`, `TheMarkdownWeb.sln` (Rendering.Tests already in it), `build-windows.yml` (paths filter already covers it), and the existing `MarkdownRendererTests`.
+
+### Testing standards summary
+
+- **Framework:** xUnit (match `Rendering.Tests` versions). **STA:** `Xunit.StaFact` `[StaFact]` for EVERY test that calls `FlowDocumentRenderer.Render(...)` or inspects a `FlowDocument`/flow element (they are DispatcherObjects with STA affinity). **`[Fact]`** only for pure Markdig-AST-shape assertions that touch no `System.Windows.*` type. **`[assembly: CollectionBehavior(DisableTestParallelization = true)]`** serializes WPF-object construction (LoadComponent/packaging race).
+- **No headless-incompatible tests:** no shown `Window`, no `Dispatcher.Run`/message pump, no socket (images are record-only — AC10 asserts no network), no pixels/colors-on-screen, no real-font metrics, no timing.
+- **Assert on the LOGICAL tree:** walk `Blocks`/`Inlines`/`ListItems`/`RowGroups[].Rows[].Cells[]`/`Section.Blocks`/`*UIContainer.Child` and read `FontSize`/`FontWeight`/`FontStyle`/`FontFamily.Source`/`TextDecorations`/`Tag`/`AutomationProperties.GetName`/`CheckBox.IsChecked`. NOT a rendered bitmap.
+- **No-tautology:** assert against the REAL `FlowDocumentRenderer.Render(...)` output (the actual produced tree), not a re-declared stub. The "no colors in fenced code" assertion reads the actual single foreground brush off the produced runs.
+- **No regression:** the existing `Rendering.Tests` (`Probe`, `CountTopLevelBlocks`) and all `App.Tests` (3.1 + 3.2, incl. `NoEmbeddedBrowserTests`/`DependencyBoundaryTests`) stay green; `Rendering` stays pure; `MarkdownRenderer` untouched.
+
+### Advanced-elicitation hardening applied (this revision)
+
+Three methods auto-applied — edge-case/failure hunting, testability sharpening for the CI-on-Windows constraint, and architecture-boundary rigor — yielding these refinements (scope UNCHANGED = AST→FlowDocument element mapping bedrock):
+
+- **`Rendering`-becomes-`UseWPF` de-risked:** verified the csproj is ALREADY `net10.0-windows`/`UseWPF=true`, so the feared framework retarget is a non-event; reframed AC11 around "uses the already-present WPF surface without smuggling in net/AI/up-references" and explicitly forbade touching the TFM/`UseWPF`/`Markdig` version.
+- **STA + no-parallel pinned to the real 3.2 failure:** FlowDocument elements are DispatcherObjects (STA), and `LoadComponent`/packaging is not thread-safe (the exact `System.IO.Packaging` race App.Tests hit at run #9 and fixed at #11) — so `Rendering.Tests` must add `Xunit.StaFact` + `[assembly: CollectionBehavior(DisableTestParallelization = true)]`. `[Fact]` reserved for pure Markdig-AST assertions; `[StaFact]` for any FlowDocument touch.
+- **Image-loading purity decision recorded:** `Render` records the source URI + alt and does NOT fetch (no `HttpClient` in the pure lib); resolution/load is deferred to Story 3.5 behind a seam — provable with zero network in AC10.
+- **Fenced-code "no colors" made provable:** AC5 asserts a SINGLE foreground brush across the code block (proving syntax-highlight colors are NOT applied here — they are Story 3.4) and that the language info-string is preserved in `Tag` for 3.4 to consume.
+- **Minimum-vs-polish line drawn:** each element AC requires only a structural + style MARKER the test can read (heading size monotonicity + level tag; blockquote left-rule thickness; table column/row counts + header) — exact GitHub theming (hairlines/zebra/measure/dark/backgrounds) explicitly deferred to Story 3.6 so 3.3 does not over-build.
+
+### Project Structure Notes
+
+- Aligns with architecture `clients/windows/{App,Rendering,Agent}` and the named bedrock file intent (`Rendering/MarkdownToFlowDocument.cs` in the architecture sketch — here the concrete type is `FlowDocumentRenderer` alongside the existing `MarkdownRenderer`). This story adds `Rendering`-only render code + `Rendering.Tests`-only tests; `Rendering` stays the pure, independently-testable bedrock (no net, no AI), and `App`/`Agent` are untouched — exactly the architecture's "`Rendering/` is isolated … App and Agent depend on it, never the reverse." No new project, no `.sln`/CI edit.
+
+### References
+
+- [Source: _bmad-output/planning-artifacts/epics.md#Story 3.3: Markdig AST → FlowDocument rendering] (lines 312–323) — user story + ACs (FR-6, GFM bedrock).
+- [Source: _bmad-output/planning-artifacts/epics.md#Story 3.4 / 3.5 / 3.6] (lines 325–363) — the deferral boundaries: 3.4 = syntax-highlight COLORS (ColorCode); 3.5 = in-client links/media/navigation + relative resolution; 3.6 = basic faithful default render polish.
+- [Source: _bmad-output/planning-artifacts/architecture.md#Native client bedrock — Windows stack] (lines 76–78) — Markdig 1.3.1 (GFM AST), WPF FlowDocument (maps ~1:1 to the markdown AST), render path Markdig AST → FlowDocument.
+- [Source: _bmad-output/planning-artifacts/architecture.md#Rendering Pipeline] (lines 81–104) — the GFM → FlowDocument element mapping TABLE (headings→styled Paragraph, emphasis→Bold/Italic/strikethrough Run, inline code→mono Run, fenced→mono Section/Paragraph w/ language preserved [highlight=ColorCode later], lists→List/ListItem, task lists→List+inline CheckBox, blockquote→bordered Section, tables→Table, images→InlineUIContainer→Image [resolved from vault], links→Hyperlink+click [3.5]); the three "feel like GitHub" details (highlight=3.4, link resolution=3.5, images/media=3.5).
+- [Source: _bmad-output/planning-artifacts/architecture.md#Project Structure & Boundaries] (lines 130–164) — `Rendering/` = "BEDROCK: Markdig AST → FlowDocument (pure, no net, no AI)"; isolated from App/Agent; App/Agent depend on it never the reverse; FC-1 no embedded browser.
+- [Source: _bmad-output/planning-artifacts/ux-designs/ux-the-markdown-web-2026-06-21/DESIGN.md] — the GitHub-style visual mapping the FlowDocument approximates: code-block / gfm-table (hairline + zebra) / blockquote (left-rule) / task-list (checkboxes); typography.scale (h1 2.1em / h2 1.5em / h3 1.2em), typography.mono/sans, code-bg; note DESIGN.md owns the *web theme + shell chrome*, NOT the client *content* look — the basic-faithful content polish is Story 3.6.
+- [Source: clients/windows/Rendering/MarkdownRenderer.cs, Rendering/TheMarkdownWeb.Rendering.csproj] — the existing probe API + the ALREADY-`net10.0-windows`/`UseWPF`/`Markdig 1.3.1` Rendering library this story extends.
+- [Source: clients/windows/Rendering.Tests/MarkdownRendererTests.cs, Rendering.Tests/TheMarkdownWeb.Rendering.Tests.csproj] — the existing xUnit test project (versions template; add `Xunit.StaFact` + DisableTestParallelization).
+- [Source: clients/windows/App.Tests/NoEmbeddedBrowserTests.cs, App.Tests/DependencyBoundaryTests.cs] — the inherited HARD guards that must stay green (csproj glob over Rendering/Rendering.Tests; Rendering references neither App nor Agent).
+- [Source: _bmad-output/implementation-artifacts/3-1-wpf-app-shell-with-toolbar.md, 3-2-md-only-address-bar-and-fetch.md] — the proven Windows-CI-only + STA + DisableTestParallelization discipline (App.Tests run #9→#11 packaging-race fix) this story mirrors for `Rendering.Tests`.
+- [Source: .github/workflows/build-windows.yml] — windows-latest CI: restore → build -c Release → test -c Release on `TheMarkdownWeb.sln` (the sole verification surface; `paths: clients/windows/**` already covers the new files; `Rendering.Tests` already in the `.sln`).
+
+## Dev Agent Record
+
+### Agent Model Used
+
+Opus 4.8 (1M context) — claude-opus-4-8[1m]
+
+### Debug Log References
+
+_(to be filled by the dev agent — WPF builds/runs Windows-only; verification is exclusively via `build-windows.yml` on `windows-latest`.)_
+
+### Completion Notes List
+
+_(to be filled by the dev agent.)_
+
+### File List
+
+_(to be filled by the dev agent.)_
+
+### CI Verification
+
+_(to be filled by the dev agent — record the authoritative green `Build Windows Client` run id.)_
+
+### AC → Test Trace
+
+_(to be filled by the dev agent after the green CI run.)_
