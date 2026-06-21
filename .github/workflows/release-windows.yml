@@ -15,6 +15,19 @@ on:
   push:
     tags:
       - 'v*'
+    # Also build the installer + refresh the rolling v0.1.0 release whenever the client changes on
+    # main, so themarkdownweb.com/get always has a current download (tag pushes / workflow_dispatch
+    # are not available from every environment). Scoped to the client + installer + this workflow so
+    # web/content-only changes don't rebuild the 150MB installer.
+    branches:
+      - main
+    paths:
+      - 'clients/windows/App/**'
+      - 'clients/windows/Rendering/**'
+      - 'clients/windows/Agent/**'
+      - 'clients/windows/installer/**'
+      - 'clients/windows/TheMarkdownWeb.sln'
+      - '.github/workflows/release-windows.yml'
   workflow_dispatch:
     inputs:
       version:
@@ -55,7 +68,9 @@ jobs:
             if ($env:GITHUB_REF -like 'refs/tags/v*') {
               $v = $env:GITHUB_REF -replace '^refs/tags/v',''
             } else {
-              $v = "0.1.0-dev.$($env:GITHUB_RUN_NUMBER)"
+              # Plain main push / dispatch with no input: a STABLE rolling version so the release tag
+              # stays v0.1.0 and the installer asset is refreshed in place (no release proliferation).
+              $v = '0.1.0'
             }
           }
           "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
