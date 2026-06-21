@@ -1,0 +1,237 @@
+/*
+ * github.css — GitHub-style default reading theme (Story 2.2, FR-6).
+ *
+ * Single source of token truth: the DESIGN.md frontmatter values are declared
+ * as CSS custom properties on :root, then applied to the server-rendered GFM
+ * body. Pure static CSS — no runtime JS, no web-font fetch (system-font stacks
+ * only), no dark mode (light is the web default per DESIGN.md).
+ *
+ * Scope discipline: this themes the reading surface and the in-body GFM
+ * components (code-block / gfm-table / blockquote / task-list) only. It does
+ * NOT add site-header / get-client-cta / pitch-card chrome — those are Story 2.6.
+ *
+ * Token source: DESIGN.md frontmatter lines 10–41.
+ */
+
+:root {
+  /* colors */
+  --md-surface: #ffffff;
+  --md-fg: #1f2328;
+  --md-ink: #0d1117;
+  --md-muted: #59636e;
+  --md-border: #d1d9e0;
+  --md-link: #0969da;
+  --md-success: #3fb950;
+  --md-code-bg: #f6f8fa;
+
+  /* typography */
+  --md-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+  --md-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* layout / spacing */
+  --md-measure: 760px;
+  --md-page-x: 24px;
+
+  /* shapes */
+  --md-radius-code: 6px;
+}
+
+/* ---- Reading surface + 760px centered measure ------------------------- */
+
+html {
+  background: var(--md-surface);
+}
+
+body {
+  margin: 0;
+  background: var(--md-surface);
+  color: var(--md-fg);
+  font: 16px/1.6 var(--md-sans);
+  /* Center the single-column reading measure with page padding. */
+  max-width: var(--md-measure);
+  margin-inline: auto;
+  padding: var(--md-page-x);
+  /* Long content (e.g. a wide code line) must scroll inside its own box, not
+     widen the column or force horizontal scroll on the document. */
+  overflow-wrap: break-word;
+}
+
+main,
+article {
+  /* The measure lives on <body>; keep inner shell transparent to it. */
+  max-width: 100%;
+}
+
+/* ---- Typography: headings, links, rhythm ------------------------------ */
+
+article :is(p, ul, ol, blockquote, pre, table, dl) {
+  margin-top: 0;
+  margin-bottom: 1em; /* spacing.block */
+}
+
+article :is(h1, h2, h3, h4, h5, h6) {
+  color: var(--md-ink);
+  line-height: 1.25;
+  margin-top: 1.6em; /* spacing.section above headings */
+  margin-bottom: 0.6em;
+  font-weight: 600;
+}
+
+article h1 {
+  font-size: 2.1em;
+}
+article h2 {
+  font-size: 1.5em;
+}
+article h3 {
+  font-size: 1.2em;
+}
+
+/* GitHub-style bottom hairline under h1 and h2. */
+article h1,
+article h2 {
+  border-bottom: 1px solid var(--md-border);
+  padding-bottom: 0.3em;
+}
+
+article a {
+  color: var(--md-link);
+  text-decoration: none;
+}
+article a:hover {
+  text-decoration: underline;
+}
+
+/* Keyboard focus must stay visible (UX-DR9). */
+article a:focus-visible {
+  outline: 2px solid var(--md-link);
+  outline-offset: 2px;
+}
+
+/* ---- Code: fenced blocks + inline chips ------------------------------- */
+
+/* Fenced code surface. Shiki emits <pre class="astro-code github-light">; we
+   override its theme background to the DESIGN code-bg token and round it. */
+article pre,
+article pre.astro-code {
+  background: var(--md-code-bg) !important;
+  border-radius: var(--md-radius-code);
+  padding: 1em;
+  /* AC5(a): a long unbreakable line scrolls INSIDE the <pre>, never widening
+     the column or forcing the document to scroll horizontally. */
+  overflow-x: auto;
+  font-family: var(--md-mono);
+  font-size: 85%; /* typography.scale.code */
+  line-height: 1.45;
+}
+
+/* Block code must not double-apply the inline chip — it inherits the pre
+   surface (transparent fill, no padding/radius/scroll of its own). */
+article pre code,
+article pre.astro-code code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+  font-family: var(--md-mono);
+  white-space: pre;
+}
+
+/* AC5(b): inline code (a <code> NOT inside <pre>) gets the chip fill + radius +
+   85% mono, but no block padding/scroll. */
+article :not(pre) > code {
+  background: var(--md-code-bg);
+  border-radius: var(--md-radius-code);
+  padding: 0.2em 0.4em;
+  font-family: var(--md-mono);
+  font-size: 85%;
+}
+
+/* ---- Shiki token AA correction (Story 2.2 Task 4) --------------------- */
+/*
+ * Astro's bundled `github-light` theme emits two token colors that DON'T clear
+ * WCAG AA (4.5:1) on the DESIGN code-bg #f6f8fa:
+ *   - keyword red   #D73A49 = 4.30:1  (below floor)
+ *   - orange/entity #E36209 = 3.28:1  (well below floor)
+ * Per the story, darken JUST those tokens (minimal CSS override on the emitted
+ * inline color) rather than shipping a failing token. The other emitted tokens
+ * (#005CC5 5.91, #032F62 12.43, #24292E 13.78, #6F42C1 6.12) already pass.
+ */
+article pre.astro-code span[style*='color:#D73A49'] {
+  color: #cf222e !important; /* DESIGN keyword — 5.03:1 on #f6f8fa */
+}
+article pre.astro-code span[style*='color:#E36209'] {
+  color: #953800 !important; /* darker orange — 6.94:1 on #f6f8fa */
+}
+
+/* ---- Blockquotes (incl. per-level nested left-rule) ------------------- */
+
+article blockquote {
+  margin-left: 0;
+  padding: 0 1em;
+  color: var(--md-muted);
+  border-left: 0.25em solid var(--md-border);
+}
+
+/* AC5(c): a nested blockquote keeps its OWN visible left-rule at each level. */
+article blockquote blockquote {
+  margin-top: 1em;
+  border-left: 0.25em solid var(--md-border);
+}
+
+/* ---- GFM tables (hairlines + zebra rows, scroll if wide) -------------- */
+
+/* AC5(d): a wide table scrolls within the column rather than blowing out the
+   measure. */
+article table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+article table th,
+article table td {
+  padding: 0.4em 0.8em;
+  border: 1px solid var(--md-border);
+}
+
+article table th {
+  font-weight: 600;
+  background: var(--md-code-bg);
+}
+
+/* Zebra rows. */
+article table tr:nth-child(2n) {
+  background: var(--md-code-bg);
+}
+
+/* ---- Task lists ------------------------------------------------------- */
+
+article ul.contains-task-list,
+article li.task-list-item {
+  list-style: none;
+}
+
+article li.task-list-item {
+  margin-left: -1.2em;
+}
+
+article li.task-list-item input[type='checkbox'] {
+  margin: 0 0.4em 0 0;
+}
+
+/* ---- Misc rhythm ------------------------------------------------------ */
+
+article img {
+  max-width: 100%;
+}
+
+article hr {
+  height: 1px;
+  border: 0;
+  background: var(--md-border);
+  margin: 1.6em 0;
+}

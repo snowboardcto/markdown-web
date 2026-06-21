@@ -1,10 +1,15 @@
 ---
 // Story 2.1 — minimal, well-formed HTML5 document shell (AC3).
+// Story 2.2 — adds the GitHub-style reading theme (design tokens, typography,
+// 760px measure, light code highlighting) as a static, hashed CSS asset.
 //
 // Wraps rendered markdown in a valid <html lang> -> <head> -> <body> document
-// with the content inside a semantic <main>/<article>. No GitHub theme, design
-// tokens, site-header or pitch-card (Stories 2.2/2.6); no `client:*` islands —
-// content is pure server-rendered HTML so it survives JS-disabled (AC2).
+// with the content inside a semantic <main>/<article>. The reading theme ships
+// as pure static CSS (no `client:*` island, no runtime JS for styling), so the
+// page stays server-rendered and survives JS-disabled (AC2). The site-header
+// and pitch-card chrome remain deferred to Story 2.6.
+import '../styles/github.css';
+
 interface Props {
   /** Deterministic, never-empty page title (H1 / front-matter title / slug). */
   title: string;
