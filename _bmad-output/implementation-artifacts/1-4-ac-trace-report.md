@@ -11,8 +11,8 @@ Phase A verified now; Phase B (HTTPS) is legitimately BLOCKED-PENDING-DNS until 
 | AC2 | Exact `_dnsauth` TXT + apex A/ALIAS records emitted | Handoff doc: TXT `_dnsauth`=token; apex A→40.67.153.174 / ALIAS→default hostname; no apex CNAME; parked-record-removal warning | ✅ PASS |
 | AC3 | Binding captured as IaC, apply-after-DNS | Guarded `Microsoft.Web/staticSites/customDomains@2024-04-01` in `infra/main.bicep` (`enableCustomDomain=false`); warning-free compile; flag-off what-if adds no resource | ✅ PASS |
 | AC4 | Honest BLOCKED-PENDING-DNS gate, no false HTTPS claim | Story status non-Ready; ACs 5/6 marked blocked; post-DNS verify commands pre-written | ✅ PASS |
-| AC5 | `https://themarkdownweb.com` 200 + valid cert + our body | Cannot verify until DNS added + propagates; Azure auto-issues TLS once `Ready` | ⏸ BLOCKED-PENDING-DNS |
-| AC6 | `http://` → `https://` redirect | Automatic on SWA once domain `Ready`; verify-curl pre-written | ⏸ BLOCKED-PENDING-DNS |
+| AC5 | `https://themarkdownweb.com` 200 + valid cert + our body | DNS added (GoDaddy); domain `Ready`, TLS issued; `curl https://themarkdownweb.com/` → HTTP 200, valid cert, body "The Markdown Web" | ✅ PASS |
+| AC6 | `http://` → `https://` redirect | `curl http://themarkdownweb.com/` → **301** → `https://themarkdownweb.com/` (automatic on SWA) | ✅ PASS |
 | AC7 | Optional `www` binding | Documented (CNAME + cname-delegation); **explicitly DEFERRED** (apex-only now) | ✅ PASS (deferred, recorded) |
 
 ## What the user must do to close Phase B
@@ -23,4 +23,4 @@ run the three verify curls (200 + valid cert + body "The Markdown Web"; http→h
 ## Code review
 - Phase-A PASS (0 critical, 5 low — all doc/record polish, applied).
 
-**Trace verdict: 5/7 ACs satisfied now (incl. 1 deferred-and-recorded); 2 BLOCKED-PENDING-DNS by design.**
+**Trace verdict: 7/7 ACs satisfied (AC7 = www, deferred-and-recorded by design). Site is LIVE at https://themarkdownweb.com.**

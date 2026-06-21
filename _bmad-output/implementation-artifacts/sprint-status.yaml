@@ -43,11 +43,11 @@ story_location: _bmad-output/implementation-artifacts
 
 development_status:
   # Epic 1: Walking Skeleton — IaC + CI/CD live on Azure
-  epic-1: in-progress
+  epic-1: done
   1-1-scaffold-the-monorepo: done
   1-2-provision-azure-hosting-via-iac-bicep: done
   1-3-deploy-a-placeholder-page-via-github-actions-on-push: done
-  1-4-bind-custom-domain-themarkdownweb-com-over-https: in-progress # phase-A done + verified; BLOCKED-PENDING-DNS (user adds _dnsauth TXT + apex A/ALIAS, then verify HTTPS)
+  1-4-bind-custom-domain-themarkdownweb-com-over-https: done # live at https://themarkdownweb.com (Ready, TLS issued, http->https 301)
   epic-1-retrospective: optional
 
   # Epic 2: Publish & Read on the Web
