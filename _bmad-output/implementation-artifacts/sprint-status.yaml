@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-21
-last_updated: 2026-06-21 (2-7 code review — CHANGES REQUESTED, 2 Critical; status -> in-progress)
+last_updated: 2026-06-21 (2-7 DONE — 8/8 ACs covered, api 45 pass/3 gated-skip, web 157 green, Option 2 same-URL deferred; epic-2 COMPLETE)
 project: The Markdown Web
 project_key: NOKEY
 tracking_system: file-system
@@ -51,14 +51,14 @@ development_status:
   epic-1-retrospective: optional
 
   # Epic 2: Publish & Read on the Web
-  epic-2: in-progress
+  epic-2: done
   2-1-render-a-md-file-to-an-html-page: done # 6/6 ACs covered + green (20/20 E2E), code review resolved (5 patches applied)
   2-2-apply-the-github-style-default-theme: done # 5/5 ACs covered + green (39/39 E2E), code review resolved (4 patches applied)
   2-3-inter-file-linking-and-navigation: done # 6/6 ACs covered + green (66/66 E2E), code review resolved (F1 HIGH + F2/F3/F4 patches applied)
   2-4-media-embedding: done # 7/7 ACs covered + green (94 E2E: 66 prior + 28 media), code review resolved (1 CRITICAL + 2 HIGH + 2 MEDIUM patches applied, 2 decisions documented)
   2-5-browsable-vault-index: done # 7/7 ACs covered + green (121 E2E: 94 prior + 27 index), code review resolved (1 decision + 3 patches applied, 2 deferred pre-existing)
   2-6-site-header-and-pitch-card: done # 7/7 ACs covered + green (157 E2E: 121 prior reconciled + 36 chrome), code review resolved (9 items applied, 3 deferred); AC trace report written
-  2-7-content-negotiation-one-url-two-representations: in-progress # code review: 2 CRITICAL (no page->Function SWA route; .funcignore *.md strips bundled vault) + 1 HIGH (mixed-case false-404); "one URL" NOT MET. 39 api pass/3 skip, web 157 green
+  2-7-content-negotiation-one-url-two-representations: done # 8/8 ACs covered + green (api 45 pass/3 gated-skip, web 157 green); review resolved (2 Critical + 1 High fixed, rest deferred); Option 2 = markdown at /api/negotiate/<slug>, true same-URL DEFERRED (SWA can't branch on Accept); AC trace report written
 
   epic-2-retrospective: optional
 
