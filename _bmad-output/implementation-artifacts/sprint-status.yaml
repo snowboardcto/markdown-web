@@ -47,7 +47,7 @@ development_status:
   1-1-scaffold-the-monorepo: done
   1-2-provision-azure-hosting-via-iac-bicep: done
   1-3-deploy-a-placeholder-page-via-github-actions-on-push: done
-  1-4-bind-custom-domain-themarkdownweb-com-over-https: backlog
+  1-4-bind-custom-domain-themarkdownweb-com-over-https: in-progress # phase-A done + verified; BLOCKED-PENDING-DNS (user adds _dnsauth TXT + apex A/ALIAS, then verify HTTPS)
   epic-1-retrospective: optional
 
   # Epic 2: Publish & Read on the Web

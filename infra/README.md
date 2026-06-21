@@ -29,9 +29,24 @@ this cannot be set in any template and does not represent real drift.)
 `infra/main.json` (compiled ARM) is a build artifact and is gitignored — never commit it; recompile
 from `main.bicep`.
 
-## Future (later stories)
+## Story 1.4 — custom domain (FR-18)
+
+`main.bicep` also captures the apex custom-domain binding as IaC, behind a guard flag:
+
+- `param enableCustomDomain bool = false` — **leave false** until DNS is in place. The live binding was
+  initiated out-of-band via `az staticwebapp hostname set ... --validation-method dns-txt-token` to
+  surface the validation token for the manual DNS step.
+- `param customDomain = 'themarkdownweb.com'` — the apex domain.
+- The guarded `Microsoft.Web/staticSites/customDomains` resource is dormant while the flag is false
+  (flag-off deploy adds no resource — idempotency preserved). Apply it **after** the `_dnsauth` TXT and
+  apex A/ALIAS records propagate and the domain shows `Ready`:
+  `az deployment group create -g rg-markdown-web -f infra/main.bicep -p infra/main.bicepparam -p enableCustomDomain=true`
+
+The exact DNS records to add by hand are in
+`_bmad-output/implementation-artifacts/1-4-dns-records-handoff.md`. Azure issues a managed TLS cert and
+redirects http→https automatically once the domain validates.
+
+## Related downstream
 
 - **Story 1.3** deploys the built Astro site to this SWA via GitHub Actions using the SWA
-  **deployment token** (enabled by manual-deploy mode).
-- **Story 1.4** binds the custom domain `themarkdownweb.com` + TLS (FR-18) — DNS records are managed
-  externally, so that story emits the records to add by hand.
+  **deployment token** (enabled by manual-deploy mode). See `.github/workflows/deploy-web.yml`.

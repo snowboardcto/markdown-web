@@ -34,6 +34,12 @@ param location string = 'eastus2'
 ])
 param sku string = 'Free'
 
+@description('Story 1.4 (FR-18): bind the apex custom domain. Leave FALSE until the _dnsauth TXT validation record and the apex A/ALIAS record are live in DNS — deploying this before DNS is in place would block on validation. Flip to true (or deploy with -p enableCustomDomain=true) once records have propagated; Azure then validates and auto-issues a managed TLS certificate.')
+param enableCustomDomain bool = false
+
+@description('Apex custom domain to bind when enableCustomDomain is true.')
+param customDomain string = 'themarkdownweb.com'
+
 resource staticWebApp 'Microsoft.Web/staticSites@2024-04-01' = {
   name: appName
   location: location
@@ -54,7 +60,20 @@ resource staticWebApp 'Microsoft.Web/staticSites@2024-04-01' = {
   }
 }
 
-@description('Default *.azurestaticapps.net hostname assigned to the Static Web App. Consumed by Story 1.3 (deploy target) and Story 1.4 (custom-domain CNAME).')
+// Story 1.4 (FR-18): apex custom-domain binding, captured as IaC but guarded behind a flag.
+// dns-txt-token validation: the user adds a TXT at _dnsauth.<domain> (the validation token) and an
+// apex A/ALIAS record; Azure then validates and issues a managed TLS cert automatically. The live
+// binding was initiated via `az staticwebapp hostname set` to surface the token for the manual DNS
+// step; this resource is the declarative record to apply (enableCustomDomain=true) once DNS is live.
+resource apexCustomDomain 'Microsoft.Web/staticSites/customDomains@2024-04-01' = if (enableCustomDomain) {
+  parent: staticWebApp
+  name: customDomain
+  properties: {
+    validationMethod: 'dns-txt-token'
+  }
+}
+
+@description('Default *.azurestaticapps.net hostname assigned to the Static Web App. Consumed by Story 1.3 (deploy target) and Story 1.4 (apex A/ALIAS + _dnsauth TXT records).')
 output defaultHostname string = staticWebApp.properties.defaultHostname
 
 @description('Resource name of the Static Web App (for downstream az staticwebapp commands).')
