@@ -1,20 +1,66 @@
 ---
-// Minimal placeholder page for the walking skeleton (Story 1.1).
-// Stories 1.3/1.4 deploy this page to Azure Static Web Apps at themarkdownweb.com.
-const title = 'The Markdown Web';
+// Story 2.5 — the browsable vault index, the site's entry surface at `/`.
+//
+// Replaces the Story-1.1 "Coming soon" placeholder. The listing is GENERATED
+// from the `pages` content collection (NOT a hand-maintained list), so adding a
+// `.md` to the vault and rebuilding makes it appear automatically — the
+// "add a file, get a page (and it shows up in the index)" promise.
+//
+// Each entry links to its route via `entry.id` (the authoritative, already
+// index-collapsed slug the catch-all emits — `sub/index.md` -> `/sub`), with a
+// human-readable label from the SAME title precedence the destination uses.
+//
+// Decisions (Dev Agent Record):
+//  - A: the index lives at `/` by replacing `src/pages/index.astro` (the index
+//    is NOT in the `pages` collection, so it never lists itself).
+//  - B: a single flat <ul> sorted by route (`entry.id`), CI-stably via
+//    `localeCompare(b.id, 'en')` (locale pinned so dev and CI agree).
+//  - C: `/` is owned by this page; `content/**/*.md` by `[...slug].astro`. An
+//    `entry.id === ''` (a future root `content/index.md`) is filtered out so the
+//    index never emits a `/` self-link.
+//  - D: label = `entry.data.title || slugToTitle(entry.id)` (the cheap path, no
+//    per-entry render()). For an H1-only page (e.g. `/no-h1`) the label is the
+//    slug-derived Title Case while the destination <title> is the H1 — a known,
+//    documented divergence; `/no-h1` has no H1 either, so its label is "No H1".
+//
+// Themed via the shared `Page` layout (2.1 shell + 2.2 GitHub theme), JS-free,
+// crawlable. Listing surface ONLY — no 2.6 site-header / pitch-card / CTA chrome.
+import { getCollection } from 'astro:content';
+import { slugToTitle } from '../lib/title.mjs';
+import Page from '../layouts/Page.astro';
+
+const entries = await getCollection('pages');
+
+const items = entries
+  // Guard the empty-id case: a root `content/index.md` collapses to `''` (and
+  // would route to `/`), so it must never appear as a `/` self-link. None today.
+  .filter((entry) => entry.id !== '')
+  .map((entry) => {
+    const frontmatterTitle =
+      typeof entry.data?.title === 'string' ? entry.data.title.trim() : '';
+    return {
+      href: '/' + entry.id,
+      label: frontmatterTitle || slugToTitle(entry.id),
+      id: entry.id,
+    };
+  })
+  // Decision B: deterministic, CI-stable sort by route id (locale pinned).
+  .sort((a, b) => a.id.localeCompare(b.id, 'en'));
 ---
 
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{title} — coming soon</title>
-  </head>
-  <body>
-    <main>
-      <h1>The Markdown Web</h1>
-      <p>Coming soon.</p>
-    </main>
-  </body>
-</html>
+<Page title="The Markdown Web">
+  <h1>The Markdown Web</h1>
+  {
+    items.length === 0 ? (
+      <p>No pages yet.</p>
+    ) : (
+      <ul>
+        {items.map((item) => (
+          <li>
+            <a href={item.href}>{item.label}</a>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+</Page>

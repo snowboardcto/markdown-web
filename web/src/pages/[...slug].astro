@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { readdirSync } from 'node:fs';
 import { join, relative, sep, extname } from 'node:path';
 import { pathToSlug } from '../lib/slug.mjs';
+import { slugToTitle } from '../lib/title.mjs';
 import Page from '../layouts/Page.astro';
 
 // Story 2.1 — emit one static HTML page per `content/**/*.md`, sourced from the
@@ -69,14 +70,8 @@ const { entry } = Astro.props;
 const { Content, headings } = await render(entry);
 
 // Total, never-empty <title> (AC3/AC5): front-matter title -> first H1 -> slug.
-function slugToTitle(slug: string): string {
-  const last = slug.split('/').pop() ?? slug;
-  return last
-    .replace(/[-_]+/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-    .trim();
-}
-
+// `slugToTitle` is the shared helper in `../lib/title.mjs`, imported by BOTH this
+// route and the generated index (`index.astro`) so labels can never drift.
 const frontmatterTitle =
   typeof entry.data?.title === 'string' ? entry.data.title.trim() : '';
 const h1 = headings.find((h) => h.depth === 1)?.text?.trim() ?? '';
