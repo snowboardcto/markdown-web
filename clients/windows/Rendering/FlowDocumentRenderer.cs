@@ -40,6 +40,48 @@ public sealed class FlowDocumentRenderer
     // document FontSize the heading tests compare against.
     private const double BodyFontSize = 14.0;
 
+    // ---- Story 3.6 faithful basic (GitHub-light) theme tokens ---------------------------------
+    // Frozen, constructed ONCE and shared across STA reconstructions (same pattern as the 3.4
+    // palette). Brushes are full-opacity (alpha 0xFF via Color.FromRgb) and match DESIGN.md /
+    // web/src/styles/github.css :root EXACTLY. Theming is STYLE-ONLY (brushes/thicknesses/margins/
+    // backgrounds): it adds NO package, NO net/AI/webview, and NO throwing branch (Render stays
+    // total). It is applied ADDITIVELY and must preserve every 3.3/3.4/3.5 marker.
+
+    // colors.border #d1d9e0 — h1/h2 + hr hairline, table cell border, blockquote left rule.
+    private static readonly SolidColorBrush BorderBrushToken =
+        Frozen(Color.FromRgb(0xD1, 0xD9, 0xE0));
+
+    // colors.muted #59636e — blockquote quoted-text foreground.
+    private static readonly SolidColorBrush MutedBrushToken =
+        Frozen(Color.FromRgb(0x59, 0x63, 0x6E));
+
+    // colors.code-bg #f6f8fa — code-block container background (G1) + table header shade.
+    private static readonly SolidColorBrush CodeBackgroundBrushToken =
+        Frozen(Color.FromRgb(0xF6, 0xF8, 0xFA));
+
+    // colors.link #0969da — hyperlink foreground.
+    private static readonly SolidColorBrush LinkBrushToken =
+        Frozen(Color.FromRgb(0x09, 0x69, 0xDA));
+
+    // typography.line 1.6 -> a body LineHeight strictly above the body font size (~22.4 at 14px).
+    private const double BodyLineHeight = BodyFontSize * 1.6;
+
+    // spacing.block (1em) -> a positive bottom margin between body blocks.
+    private const double BlockSpacing = 14.0;
+
+    // spacing.section (1.6em) -> heading top/bottom margins.
+    private const double HeadingTopMargin = 22.0;
+    private const double HeadingBottomMargin = 8.0;
+
+    private static SolidColorBrush Frozen(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
+
+    private bool UseBasicTheme => _options.Theme == RenderTheme.Basic;
+
     // Built ONCE (static): UseAdvancedExtensions turns on pipe tables, task lists, strikethrough
     // (EmphasisExtras), autolinks, and the rest of the GFM family.
     private static readonly MarkdownPipeline Pipeline =
@@ -136,6 +178,19 @@ public sealed class FlowDocumentRenderer
             FontWeight = FontWeights.Bold,
             FontSize = HeadingFontSize(level),
         };
+
+        // Story 3.6: GitHub-style heading spacing + the h1/h2 bottom hairline (ADDITIVE — Tag/Bold/
+        // FontSize are UNCHANGED so the 3.3 heading markers stay green).
+        if (UseBasicTheme)
+        {
+            paragraph.Margin = new Thickness(0, HeadingTopMargin, 0, HeadingBottomMargin);
+            if (level is 1 or 2)
+            {
+                paragraph.BorderThickness = new Thickness(0, 0, 0, 1);
+                paragraph.BorderBrush = BorderBrushToken;
+            }
+        }
+
         AppendInlines(paragraph.Inlines, heading.Inline);
         return paragraph;
     }
@@ -153,6 +208,15 @@ public sealed class FlowDocumentRenderer
     private Paragraph MapParagraph(ParagraphBlock paragraph)
     {
         var result = new Paragraph();
+
+        // Story 3.6: body reading rhythm — block spacing (spacing.block) + a line-height above the
+        // body font size (typography.line 1.6). ADDITIVE: Tag stays null, FontFamily/text unchanged.
+        if (UseBasicTheme)
+        {
+            result.Margin = new Thickness(0, 0, 0, BlockSpacing);
+            result.LineHeight = BodyLineHeight;
+        }
+
         AppendInlines(result.Inlines, paragraph.Inline);
         return result;
     }
@@ -172,6 +236,15 @@ public sealed class FlowDocumentRenderer
             Tag = string.IsNullOrEmpty(language) ? null : language,
             FontFamily = MonoFamily,
         };
+
+        // Story 3.6 (G1): the GitHub code surface — a CONTAINER-level #f6f8fa background + padding on
+        // the code Paragraph. NEVER on the per-token Runs: DistinctForegrounds reads run.Foreground
+        // only, so a container Background is orthogonal to the 3.4 highlighting (>=2 / <=1 counts).
+        if (UseBasicTheme)
+        {
+            paragraph.Background = CodeBackgroundBrushToken;
+            paragraph.Padding = new Thickness(12, 8, 12, 8);
+        }
 
         IReadOnlyList<string> lines = CodeLines(code);
 
@@ -288,6 +361,13 @@ public sealed class FlowDocumentRenderer
             MarkerStyle = list.IsOrdered ? TextMarkerStyle.Decimal : TextMarkerStyle.Disc,
         };
 
+        // Story 3.6: GitHub-style left indent (ADDITIVE — MarkerStyle/StartIndex/CheckBox unchanged).
+        if (UseBasicTheme)
+        {
+            result.MarkerOffset = 6.0;
+            result.Padding = new Thickness(24, 0, 0, 0);
+        }
+
         if (list.IsOrdered
             && int.TryParse(list.OrderedStart, out int start)
             && start > 0)
@@ -378,6 +458,16 @@ public sealed class FlowDocumentRenderer
             Padding = new Thickness(12, 0, 0, 0),
         };
 
+        // Story 3.6: keep the 3.3 left rule (BorderThickness.Left>0 + non-null BorderBrush) and ADD
+        // the GitHub look — recolor the left rule to the hairline + muted (#59636e) quoted text. The
+        // muted Foreground is set on the Section so the quoted text INHERITS it (G2-safe — never on
+        // code Runs); the inner paragraph text round-trips unchanged.
+        if (UseBasicTheme)
+        {
+            section.BorderBrush = BorderBrushToken;
+            section.Foreground = MutedBrushToken;
+        }
+
         foreach (MarkdigBlock child in quote)
         {
             Block? mapped = MapBlock(child);
@@ -417,6 +507,12 @@ public sealed class FlowDocumentRenderer
             if (markdigRow.IsHeader)
             {
                 wpfRow.FontWeight = FontWeights.Bold;
+
+                // Story 3.6: shade the header row #f6f8fa (ADDITIVE — header stays bold).
+                if (UseBasicTheme)
+                {
+                    wpfRow.Background = CodeBackgroundBrushToken;
+                }
             }
 
             int columnIndex = 0;
@@ -440,6 +536,15 @@ public sealed class FlowDocumentRenderer
                 if (markdigRow.IsHeader)
                 {
                     wpfCell.FontWeight = FontWeights.Bold;
+                }
+
+                // Story 3.6: hairline cell border (#d1d9e0) + cell padding (ADDITIVE — structure,
+                // bold header, and cell text are UNCHANGED).
+                if (UseBasicTheme)
+                {
+                    wpfCell.BorderBrush = BorderBrushToken;
+                    wpfCell.BorderThickness = new Thickness(1);
+                    wpfCell.Padding = new Thickness(6, 3, 6, 3);
                 }
 
                 if (columnIndex < alignments.Count && alignments[columnIndex] is { } align)
@@ -477,14 +582,19 @@ public sealed class FlowDocumentRenderer
         return alignments;
     }
 
-    private static Paragraph MapThematicBreak()
+    private Paragraph MapThematicBreak()
     {
-        // A thin separator paragraph tagged "hr" (D1). Exact GitHub hairline is Story 3.6.
+        // A thin separator paragraph tagged "hr" (D1). Story 3.6 refines ONLY the hairline color to
+        // the GitHub border token #d1d9e0 (Tag=="hr" + BorderThickness.Bottom>0 stay green).
+        SolidColorBrush hairline = UseBasicTheme
+            ? BorderBrushToken
+            : new SolidColorBrush(Color.FromRgb(0xEA, 0xEC, 0xEF));
+
         return new Paragraph
         {
             Tag = "hr",
             BorderThickness = new Thickness(0, 0, 0, 1),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xEA, 0xEC, 0xEF)),
+            BorderBrush = hairline,
         };
     }
 
@@ -627,6 +737,13 @@ public sealed class FlowDocumentRenderer
     private Hyperlink MapLink(LinkInline link)
     {
         var hyperlink = new Hyperlink();
+
+        // Story 3.6: GitHub link color #0969da (ADDITIVE — NavigateUri/navigation behavior unchanged).
+        if (UseBasicTheme)
+        {
+            hyperlink.Foreground = LinkBrushToken;
+        }
+
         AppendInlines(hyperlink.Inlines, link);
         if (hyperlink.Inlines.Count == 0 && !string.IsNullOrEmpty(link.Url))
         {
@@ -640,6 +757,11 @@ public sealed class FlowDocumentRenderer
     private Hyperlink MapAutolink(AutolinkInline autolink)
     {
         var hyperlink = new Hyperlink(new Run(autolink.Url));
+        if (UseBasicTheme)
+        {
+            hyperlink.Foreground = LinkBrushToken;
+        }
+
         SetNavigateUri(hyperlink, autolink.Url);
         return hyperlink;
     }

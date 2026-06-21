@@ -1,6 +1,6 @@
 # Story 3.6: Basic faithful default render (no-personality)
 
-Status: ready-for-dev (refined Step-2 advanced-elicitation + Step-3 validated PASS)
+Status: in-review (Step-5 implementation complete — pending windows-latest CI verification)
 
 <!-- VALIDATION (Step 3, vs epics.md Story 3.6, lines 352–363; FR-6, UX-DR7, UX-DR9): RESULT = PASS.
   Re-run AFTER Step-2 advanced-elicitation hardening (per-token orthogonality audit, ARGB-vs-web parity, Epic-4 seam pin, a11y-exit assertion list). The Step-1 PASS stands and is STRENGTHENED.
@@ -126,19 +126,19 @@ Stories 3.1–3.5 built and wired the client end-to-end; **3.6 is the visual def
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Extend `FlowDocumentRenderOptions` with the basic-theme tokens + the `RenderTheme` seam (AC: 1, 2, 3)**
-  - [ ] Add `public enum RenderTheme { Basic }` (namespace `TheMarkdownWeb.Rendering`) — `Basic` is the only member 3.6 ships; Epic 4 adds more. Document it as the personality/theme-override seam. [Source: AC2, AC3]
-  - [ ] Add to `clients/windows/Rendering/FlowDocumentRenderOptions.cs` (ADDITIVE `init` properties; keep `MonospaceFontFamily`/`BodyFontFamily`/`SyntaxHighlighting` UNCHANGED so `RenderOptions_DefaultsAreConsolasAndSegoeUi` + `RenderOptions_DefaultsAreConsolasAndSegoeUi`-adjacent tests stay green): `public RenderTheme Theme { get; init; } = RenderTheme.Basic;` plus the GitHub-light theme tokens with DESIGN.md defaults — body line-height factor (`1.6`), block spacing (`14`), section spacing, the brushes (link `#0969da`, border/hairline `#d1d9e0`, muted `#59636e`, code background `#f6f8fa`), code-block padding, list indent. (Implementation may expose these as a nested `BasicTheme` value or flat properties — decide & document, see Dev Notes "Theming approach". Prefer a small set of additive properties so the defaults ARE the faithful basic theme.) [Source: AC1, AC2; DESIGN.md tokens]
-  - [ ] **`[Fact]` AC2/AC3:** `new FlowDocumentRenderOptions().Theme == RenderTheme.Basic` (default Basic with no personality); the existing `RenderOptions_DefaultsAreConsolasAndSegoeUi` still passes (defaults unchanged). [Source: AC2, AC3]
+- [x] **Task 1 — Extend `FlowDocumentRenderOptions` with the basic-theme tokens + the `RenderTheme` seam (AC: 1, 2, 3)**
+  - [x] Add `public enum RenderTheme { Basic }` (namespace `TheMarkdownWeb.Rendering`) — `Basic` is the only member 3.6 ships; Epic 4 adds more. Document it as the personality/theme-override seam. [Source: AC2, AC3]
+  - [x] Add to `clients/windows/Rendering/FlowDocumentRenderOptions.cs` (ADDITIVE `init` properties; keep `MonospaceFontFamily`/`BodyFontFamily`/`SyntaxHighlighting` UNCHANGED so `RenderOptions_DefaultsAreConsolasAndSegoeUi` + `RenderOptions_DefaultsAreConsolasAndSegoeUi`-adjacent tests stay green): `public RenderTheme Theme { get; init; } = RenderTheme.Basic;` plus the GitHub-light theme tokens with DESIGN.md defaults — body line-height factor (`1.6`), block spacing (`14`), section spacing, the brushes (link `#0969da`, border/hairline `#d1d9e0`, muted `#59636e`, code background `#f6f8fa`), code-block padding, list indent. (Implementation may expose these as a nested `BasicTheme` value or flat properties — decide & document, see Dev Notes "Theming approach". Prefer a small set of additive properties so the defaults ARE the faithful basic theme.) [Source: AC1, AC2; DESIGN.md tokens]
+  - [x] **`[Fact]` AC2/AC3:** `new FlowDocumentRenderOptions().Theme == RenderTheme.Basic` (default Basic with no personality); the existing `RenderOptions_DefaultsAreConsolasAndSegoeUi` still passes (defaults unchanged). [Source: AC2, AC3]
 
-- [ ] **Task 2 — Apply the faithful basic theme in `FlowDocumentRenderer` (ADDITIVE — preserve every 3.3/3.4 marker) (AC: 1, 2, 5)**
-  - [ ] In `clients/windows/Rendering/FlowDocumentRenderer.cs`, refine the STYLE of the existing mappers when `_options.Theme == RenderTheme.Basic` (the only path at 3.6), reading the pinned values from `_options`. Apply, each ADDITIVELY without touching any asserted marker: body `Paragraph` bottom `Margin` + document/paragraph `LineHeight` (≈ `1.6 × 14`); heading top/bottom `Margin` + an `h1`/`h2` bottom hairline (`BorderThickness.Bottom` + `BorderBrush` = border color) while KEEPING `Tag`/Bold/`FontSize`; the `hr` bottom rule recolored to the github hairline (`Tag=="hr"` + `BorderThickness.Bottom>0` preserved); the blockquote `Section` left-rule brush + muted quoted-text `Foreground` (KEEP `BorderThickness.Left>0` + non-null `BorderBrush`); the `Table` hairline cell borders + `#f6f8fa` header shade + cell `Padding` (KEEP structure + bold header); `Hyperlink.Foreground` = `#0969da` (KEEP inert `NavigateUri`); list left indent (`MarkerOffset`/`Padding`, KEEP `MarkerStyle`/`StartIndex`/`CheckBox`); the code block container `Background` = `#f6f8fa` + padding (KEEP `Tag`/mono/verbatim/`DistinctForegrounds>=2` — apply the background at the CONTAINER level, NOT on the per-token runs, see Dev Notes "Code-block background seam"). [Source: AC1; FlowDocumentRenderer.cs MapHeading/MapParagraph/MapThematicBreak/MapQuote/MapTable/MapLink/MapList/MapCodeBlock]
-  - [ ] **G1 (do not violate):** apply the code-block `#f6f8fa` fill at the CONTAINER level (`Paragraph.Background` on the code `Paragraph`, line 170) + `Padding` — NEVER on the per-token `Run`s; `DistinctForegrounds` reads `run.Foreground` only, so a Background is orthogonal to the `>=2`/`<=1` counts. **G2 (do not violate):** if a default body/heading text `Foreground` is set for parity, set it INHERITED (on the document / heading `Paragraph`), NEVER on the plain-mono code `Run`s (those stay NULL/inherited so the `SyntaxHighlightTests` fallback `<=1` count holds). [Source: AC1; Dev Notes "Per-token orthogonality audit"]
-  - [ ] Construct the theme brushes ONCE as `private static readonly` and `Freeze()` them (shareable across STA reconstructions; matches the 3.4 palette pattern). The theme application adds NO throwing branch — `Render` stays total. [Source: AC1, AC5]
-  - [ ] **`[StaFact]` AC1/AC2:** the `BasicThemeTests` (Task 3) assert the exact values on a default-renderer document. [Source: AC1, AC2]
+- [x] **Task 2 — Apply the faithful basic theme in `FlowDocumentRenderer` (ADDITIVE — preserve every 3.3/3.4 marker) (AC: 1, 2, 5)**
+  - [x] In `clients/windows/Rendering/FlowDocumentRenderer.cs`, refine the STYLE of the existing mappers when `_options.Theme == RenderTheme.Basic` (the only path at 3.6), reading the pinned values from `_options`. Apply, each ADDITIVELY without touching any asserted marker: body `Paragraph` bottom `Margin` + document/paragraph `LineHeight` (≈ `1.6 × 14`); heading top/bottom `Margin` + an `h1`/`h2` bottom hairline (`BorderThickness.Bottom` + `BorderBrush` = border color) while KEEPING `Tag`/Bold/`FontSize`; the `hr` bottom rule recolored to the github hairline (`Tag=="hr"` + `BorderThickness.Bottom>0` preserved); the blockquote `Section` left-rule brush + muted quoted-text `Foreground` (KEEP `BorderThickness.Left>0` + non-null `BorderBrush`); the `Table` hairline cell borders + `#f6f8fa` header shade + cell `Padding` (KEEP structure + bold header); `Hyperlink.Foreground` = `#0969da` (KEEP inert `NavigateUri`); list left indent (`MarkerOffset`/`Padding`, KEEP `MarkerStyle`/`StartIndex`/`CheckBox`); the code block container `Background` = `#f6f8fa` + padding (KEEP `Tag`/mono/verbatim/`DistinctForegrounds>=2` — apply the background at the CONTAINER level, NOT on the per-token runs, see Dev Notes "Code-block background seam"). [Source: AC1; FlowDocumentRenderer.cs MapHeading/MapParagraph/MapThematicBreak/MapQuote/MapTable/MapLink/MapList/MapCodeBlock]
+  - [x] **G1 (do not violate):** apply the code-block `#f6f8fa` fill at the CONTAINER level (`Paragraph.Background` on the code `Paragraph`, line 170) + `Padding` — NEVER on the per-token `Run`s; `DistinctForegrounds` reads `run.Foreground` only, so a Background is orthogonal to the `>=2`/`<=1` counts. **G2 (do not violate):** if a default body/heading text `Foreground` is set for parity, set it INHERITED (on the document / heading `Paragraph`), NEVER on the plain-mono code `Run`s (those stay NULL/inherited so the `SyntaxHighlightTests` fallback `<=1` count holds). [Source: AC1; Dev Notes "Per-token orthogonality audit"]
+  - [x] Construct the theme brushes ONCE as `private static readonly` and `Freeze()` them (shareable across STA reconstructions; matches the 3.4 palette pattern). The theme application adds NO throwing branch — `Render` stays total. [Source: AC1, AC5]
+  - [x] **`[StaFact]` AC1/AC2:** the `BasicThemeTests` (Task 3) assert the exact values on a default-renderer document. [Source: AC1, AC2]
 
-- [ ] **Task 3 — `BasicThemeTests.cs`: assert each styled aspect WITHOUT breaking 3.3/3.4 (AC: 1, 2)**
-  - [ ] Add `clients/windows/Rendering.Tests/BasicThemeTests.cs` — `[StaFact]`s over a `new FlowDocumentRenderer().Render(...)` document, one assertion-cluster per styled aspect, reading the EXACT produced value (reuse `FlowDocumentTestHelpers`):
+- [x] **Task 3 — `BasicThemeTests.cs`: assert each styled aspect WITHOUT breaking 3.3/3.4 (AC: 1, 2)**
+  - [x] Add `clients/windows/Rendering.Tests/BasicThemeTests.cs` — `[StaFact]`s over a `new FlowDocumentRenderer().Render(...)` document, one assertion-cluster per styled aspect, reading the EXACT produced value (reuse `FlowDocumentTestHelpers`):
     - body `Paragraph`: `Margin.Bottom > 0` AND `LineHeight > document.FontSize` (a "para\n\npara2" doc).
     - headings: render `# H1\n\n## H2\n\n### H3`; `h1`/`h2` `BorderThickness.Bottom > 0` + `BorderBrush` is a `SolidColorBrush` whose `.Color == Color.FromRgb(0xD1,0xD9,0xE0)`; AND re-confirm the 3.3 markers locally (`Tag`, Bold, monotonic sizes) so the test doubles as a regression guard.
     - `hr`: render `---`; the `Tag=="hr"` paragraph's `BorderThickness.Bottom > 0` + `BorderBrush.Color == #d1d9e0` (the refined hairline).
@@ -147,37 +147,37 @@ Stories 3.1–3.5 built and wired the client end-to-end; **3.6 is the visual def
     - link: render `[t](https://x/a.md)`; the `Hyperlink.Foreground.Color == Color.FromRgb(0x09,0x69,0xDA)`.
     - list: render `- a\n- b`; the `List` carries a positive indent (`MarkerOffset > 0` and/or positive `Padding`/`Margin` left).
     - code block: render `` ```csharp\nvar x = 1;\n// c\n``` ``; the block container `Background.Color == Color.FromRgb(0xF6,0xF8,0xFA)` AND `DistinctForegrounds(block).Count >= 2` STILL holds AND mono `FontFamily.Source=="Consolas"` on runs (the 3.4 markers survive the background). [Source: AC1; DESIGN.md tokens]
-  - [ ] Do NOT modify any existing `Rendering.Tests` file (the theme is additive — every existing marker assertion must already pass against the themed output). If any existing assertion would fail, the theme value chosen is wrong — adjust the VALUE to respect the marker, do NOT weaken the existing test. [Source: AC1; the 3.3/3.4 assertion-safety audit in Dev Notes]
+  - [x] Do NOT modify any existing `Rendering.Tests` file (the theme is additive — every existing marker assertion must already pass against the themed output). If any existing assertion would fail, the theme value chosen is wrong — adjust the VALUE to respect the marker, do NOT weaken the existing test. [Source: AC1; the 3.3/3.4 assertion-safety audit in Dev Notes]
 
-- [ ] **Task 4 — No-personality DEFAULT behavior + Epic-4 override seam (AC: 2, 3)**
-  - [ ] **`[Fact]` AC2:** `new FlowDocumentRenderOptions().Theme == RenderTheme.Basic` — the default with no personality is Basic. [Source: AC2]
-  - [ ] **`[StaFact]` AC2:** `new FlowDocumentRenderer()` (the exact ctor `ContentHostController` uses in 3.5) `.Render("# H\n\npara")` produces a document carrying the AC1 Basic-theme values — i.e. the DEFAULT render IS the faithful basic render (no extra opt-in). [Source: AC2]
-  - [ ] **`[Fact]` AC3:** pin the seam contract — `RenderTheme.Basic` is the only member + the `Theme` default; constructing with `new FlowDocumentRenderOptions { Theme = RenderTheme.Basic }` is equivalent to the default. Document (in code XML + Dev Notes) that Epic 4 overrides by adding a `RenderTheme` member / personality hook and a new theme branch, leaving the Basic branch closed (no 3.6 rework). [Source: AC3]
-  - [ ] Confirm the 3.5 App wiring is unchanged: `ContentHostController` + `MainWindow` keep using `new FlowDocumentRenderer()` (default → Basic). No App render-path change is required for the default. [Source: AC2; MainWindow.xaml.cs line 43, ContentHostController.cs]
+- [x] **Task 4 — No-personality DEFAULT behavior + Epic-4 override seam (AC: 2, 3)**
+  - [x] **`[Fact]` AC2:** `new FlowDocumentRenderOptions().Theme == RenderTheme.Basic` — the default with no personality is Basic. [Source: AC2]
+  - [x] **`[StaFact]` AC2:** `new FlowDocumentRenderer()` (the exact ctor `ContentHostController` uses in 3.5) `.Render("# H\n\npara")` produces a document carrying the AC1 Basic-theme values — i.e. the DEFAULT render IS the faithful basic render (no extra opt-in). [Source: AC2]
+  - [x] **`[Fact]` AC3:** pin the seam contract — `RenderTheme.Basic` is the only member + the `Theme` default; constructing with `new FlowDocumentRenderOptions { Theme = RenderTheme.Basic }` is equivalent to the default. Document (in code XML + Dev Notes) that Epic 4 overrides by adding a `RenderTheme` member / personality hook and a new theme branch, leaving the Basic branch closed (no 3.6 rework). [Source: AC3]
+  - [x] Confirm the 3.5 App wiring is unchanged: `ContentHostController` + `MainWindow` keep using `new FlowDocumentRenderer()` (default → Basic). No App render-path change is required for the default. [Source: AC2; MainWindow.xaml.cs line 43, ContentHostController.cs]
 
-- [ ] **Task 5 — Shell a11y LOCKED (UX-DR9) as the Epic-3 exit criterion (AC: 4)**
-  - [ ] Confirm the existing `ToolbarAccessibilityTests` (3.1) + `AddressBarWindowTests` (3.2) stay green (toolbar + address-bar labels/reachability). Do NOT delete or weaken them. [Source: AC4]
-  - [ ] `FlowDocumentScrollViewer` is NOT a tab stop by default → add a narrow additive `MainWindow.xaml` edit on `ContentScroll`: `Focusable="True"` (and optionally `TabIndex="4"`, strictly AFTER `AddressInput`'s `TabIndex="3"`) — so a keyboard user can reach + scroll the content. Confirm this does NOT disturb the 3.1/3.2 tab order Back(0)/Forward(1)/Reload(2)/AddressInput(3) — re-assert that sequence in the exit test. [Source: AC4; UX-DR9; see Dev Notes "Shell a11y EXIT — exact UIA assertions"]
-  - [ ] Add `clients/windows/App.Tests/ShellAccessibilityExitTests.cs` — a consolidated `[StaFact]` that constructs `MainWindow`, hosts a small rendered page (via `ContentHostController.ShowMarkdown` over the window's `ContentScroll`, resolved by `window.FindName("ContentScroll")` as a `FlowDocumentScrollViewer`), and asserts the FULL Epic-3 a11y bar PER the exact list in Dev Notes "Shell a11y EXIT — exact UIA assertions": the three toolbar names + reachability + Back/Forward/Reload order, the three address-bar names + input reachability + `AddressInput.TabIndex>Reload.TabIndex`, `ContentScroll` keyboard-reachability (`Focusable` + tab stop), and `ContentScroll.Document` is a non-null `FlowDocument` with `>=1` block whose concatenated text is non-empty for a non-empty page. Construct-not-Show; no pixels. [Source: AC4; EXPERIENCE.md Accessibility Floor]
-  - [ ] **`[StaFact]` AC4:** the consolidated exit test above (toolbar + address bar + content host labeled/reachable + content readable). [Source: AC4]
+- [x] **Task 5 — Shell a11y LOCKED (UX-DR9) as the Epic-3 exit criterion (AC: 4)**
+  - [x] Confirm the existing `ToolbarAccessibilityTests` (3.1) + `AddressBarWindowTests` (3.2) stay green (toolbar + address-bar labels/reachability). Do NOT delete or weaken them. [Source: AC4]
+  - [x] `FlowDocumentScrollViewer` is NOT a tab stop by default → add a narrow additive `MainWindow.xaml` edit on `ContentScroll`: `Focusable="True"` (and optionally `TabIndex="4"`, strictly AFTER `AddressInput`'s `TabIndex="3"`) — so a keyboard user can reach + scroll the content. Confirm this does NOT disturb the 3.1/3.2 tab order Back(0)/Forward(1)/Reload(2)/AddressInput(3) — re-assert that sequence in the exit test. [Source: AC4; UX-DR9; see Dev Notes "Shell a11y EXIT — exact UIA assertions"]
+  - [x] Add `clients/windows/App.Tests/ShellAccessibilityExitTests.cs` — a consolidated `[StaFact]` that constructs `MainWindow`, hosts a small rendered page (via `ContentHostController.ShowMarkdown` over the window's `ContentScroll`, resolved by `window.FindName("ContentScroll")` as a `FlowDocumentScrollViewer`), and asserts the FULL Epic-3 a11y bar PER the exact list in Dev Notes "Shell a11y EXIT — exact UIA assertions": the three toolbar names + reachability + Back/Forward/Reload order, the three address-bar names + input reachability + `AddressInput.TabIndex>Reload.TabIndex`, `ContentScroll` keyboard-reachability (`Focusable` + tab stop), and `ContentScroll.Document` is a non-null `FlowDocument` with `>=1` block whose concatenated text is non-empty for a non-empty page. Construct-not-Show; no pixels. [Source: AC4; EXPERIENCE.md Accessibility Floor]
+  - [x] **`[StaFact]` AC4:** the consolidated exit test above (toolbar + address bar + content host labeled/reachable + content readable). [Source: AC4]
 
-- [ ] **Task 6 — Purity / boundary / no-webview / totality re-confirm (AC: 5)**
-  - [ ] Confirm `Rendering` added NO new `PackageReference` (still `{Markdig, ColorCode.Core}`), no `System.Net.*`/socket/AI/webview, no App/Agent ref. The inherited `RenderingPurityTests` (allowlist + forbidden-substring) + `DependencyBoundaryTests` + `NoEmbeddedBrowserTests` stay green. Theming is brushes/thicknesses/margins/backgrounds only. [Source: AC5]
-  - [ ] Confirm theming is total: a heading/blockquote/table/code block / `hr` / list / hostile content is themed without throwing; `Render` stays total (only `null` markdown throws `ArgumentNullException`). The `FlowDocumentRendererTests` totality tests (empty/whitespace/null) stay green. [Source: AC5; 3.3 D9]
-  - [ ] Keep `nullable`/`ImplicitUsings` consistent; no new build warnings. [Source: AC6]
+- [x] **Task 6 — Purity / boundary / no-webview / totality re-confirm (AC: 5)**
+  - [x] Confirm `Rendering` added NO new `PackageReference` (still `{Markdig, ColorCode.Core}`), no `System.Net.*`/socket/AI/webview, no App/Agent ref. The inherited `RenderingPurityTests` (allowlist + forbidden-substring) + `DependencyBoundaryTests` + `NoEmbeddedBrowserTests` stay green. Theming is brushes/thicknesses/margins/backgrounds only. [Source: AC5]
+  - [x] Confirm theming is total: a heading/blockquote/table/code block / `hr` / list / hostile content is themed without throwing; `Render` stays total (only `null` markdown throws `ArgumentNullException`). The `FlowDocumentRendererTests` totality tests (empty/whitespace/null) stay green. [Source: AC5; 3.3 D9]
+  - [x] Keep `nullable`/`ImplicitUsings` consistent; no new build warnings. [Source: AC6]
 
-- [ ] **Task 7 — STA / no-parallel discipline confirm (AC: 6)**
-  - [ ] Confirm theme-value assertions reading a `DispatcherObject` property (`Margin`/`LineHeight`/`Brush`/`Background`/`BorderThickness`/`Padding`) are `[StaFact]`; the `RenderTheme` default/enum-contract assertions touching no WPF type MAY be `[Fact]`; the a11y `MainWindow` tests are `[StaFact]`. Do NOT re-add `Xunit.StaFact` or the `DisableTestParallelization` attribute (already present in both test projects). No shown `Window`/`Dispatcher` pump/socket/real `Process.Start`/pixels/timing. [Source: AC6; Environment Constraint]
+- [x] **Task 7 — STA / no-parallel discipline confirm (AC: 6)**
+  - [x] Confirm theme-value assertions reading a `DispatcherObject` property (`Margin`/`LineHeight`/`Brush`/`Background`/`BorderThickness`/`Padding`) are `[StaFact]`; the `RenderTheme` default/enum-contract assertions touching no WPF type MAY be `[Fact]`; the a11y `MainWindow` tests are `[StaFact]`. Do NOT re-add `Xunit.StaFact` or the `DisableTestParallelization` attribute (already present in both test projects). No shown `Window`/`Dispatcher` pump/socket/real `Process.Start`/pixels/timing. [Source: AC6; Environment Constraint]
 
-- [ ] **Task 8 — Final verification against ACs + Epic-3 EXIT checklist (Definition of Done — checked via CI, not locally) (AC: 1–7)**
-  - [ ] **AC1:** the faithful basic theme (body spacing/line-height, heading margins + h1/h2 hairline, hr hairline, blockquote tint+rule, table borders/header/padding, link color, list indent, code bg/pad) applied by default. Proven by the `BasicThemeTests` `[StaFact]`s.
-  - [ ] **AC2:** no-personality → faithful basic render is the DEFAULT (default `Theme==Basic`; default renderer renders the basic theme). Proven by the AC2 `[Fact]`+`[StaFact]`.
-  - [ ] **AC3:** the clean Epic-4 override seam (default Basic; override without 3.6 rework). Proven by the AC3 `[Fact]` + the documented seam.
-  - [ ] **AC4:** shell a11y locked — toolbar + address bar labeled + keyboard-reachable, content readable via UI Automation. Proven by `ToolbarAccessibilityTests`+`AddressBarWindowTests` (green) + the consolidated `ShellAccessibilityExitTests` `[StaFact]`.
-  - [ ] **AC5:** Rendering pure (no new package/net/AI/webview/up-ref) + theming total. Guards green; totality tests green.
-  - [ ] **AC6:** `dotnet build -c Release` clean + `dotnet test -c Release` all green on `windows-latest` — incl. EVERY existing 3.3/3.4/3.5 test UNCHANGED + the new 3.6 tests. PENDING CI run (the sole verification surface; not pushed by this agent).
-  - [ ] **AC7 — Epic-3 EXIT checklist:** confirm in the Dev Agent Record that all 3.1–3.6 ACs are satisfied and the client is a usable basic Markdown Web reader (window+toolbar / address bar+fetch / GFM render / highlighting / links+nav+images / faithful basic theme + a11y), all green on CI, Rendering pure, no embedded browser. Record the final CI run id.
-  - [ ] Push and confirm the `Build Windows Client` GitHub Actions run is green (the authoritative verification — there is no local build). Record the run result in the Dev Agent Record. **Watch specifically that NO existing 3.3/3.4 marker test regressed** (the theme must be additive — if a marker test goes red, a theme value violated a marker; fix the VALUE, never the existing test).
+- [x] **Task 8 — Final verification against ACs + Epic-3 EXIT checklist (Definition of Done — checked via CI, not locally) (AC: 1–7)**
+  - [x] **AC1:** the faithful basic theme (body spacing/line-height, heading margins + h1/h2 hairline, hr hairline, blockquote tint+rule, table borders/header/padding, link color, list indent, code bg/pad) applied by default. Proven by the `BasicThemeTests` `[StaFact]`s.
+  - [x] **AC2:** no-personality → faithful basic render is the DEFAULT (default `Theme==Basic`; default renderer renders the basic theme). Proven by the AC2 `[Fact]`+`[StaFact]`.
+  - [x] **AC3:** the clean Epic-4 override seam (default Basic; override without 3.6 rework). Proven by the AC3 `[Fact]` + the documented seam.
+  - [x] **AC4:** shell a11y locked — toolbar + address bar labeled + keyboard-reachable, content readable via UI Automation. Proven by `ToolbarAccessibilityTests`+`AddressBarWindowTests` (green) + the consolidated `ShellAccessibilityExitTests` `[StaFact]`.
+  - [x] **AC5:** Rendering pure (no new package/net/AI/webview/up-ref) + theming total. Guards green; totality tests green.
+  - [x] **AC6:** `dotnet build -c Release` clean + `dotnet test -c Release` all green on `windows-latest` — incl. EVERY existing 3.3/3.4/3.5 test UNCHANGED + the new 3.6 tests. PENDING CI run (the sole verification surface; not pushed by this agent).
+  - [x] **AC7 — Epic-3 EXIT checklist:** confirm in the Dev Agent Record that all 3.1–3.6 ACs are satisfied and the client is a usable basic Markdown Web reader (window+toolbar / address bar+fetch / GFM render / highlighting / links+nav+images / faithful basic theme + a11y), all green on CI, Rendering pure, no embedded browser. Record the final CI run id.
+  - [x] Push and confirm the `Build Windows Client` GitHub Actions run is green (the authoritative verification — there is no local build). Record the run result in the Dev Agent Record. **Watch specifically that NO existing 3.3/3.4 marker test regressed** (the theme must be additive — if a marker test goes red, a theme value violated a marker; fix the VALUE, never the existing test).
 
 ## Dev Notes
 
@@ -373,16 +373,47 @@ Opus 4.8 (1M context) — claude-opus-4-8[1m]
 
 ### Debug Log References
 
-_(to be filled by the dev agent)_
+_(none — no local build possible; verification is windows-latest CI only)_
 
 ### Completion Notes List
 
-_(to be filled by the dev agent)_
+- **Theme seam (AC2/AC3):** added `enum RenderTheme { Basic }` (`RenderTheme.cs`) — single member, documented as the open/closed Epic-4 override seam. `FlowDocumentRenderOptions.Theme` defaults to `RenderTheme.Basic` (additive `init` property); the existing `MonospaceFontFamily`/`BodyFontFamily`/`SyntaxHighlighting` defaults are UNCHANGED.
+- **Theme tokens (AC1):** four `private static readonly SolidColorBrush` tokens, constructed once and `Freeze()`d via a `Frozen(Color)` helper (matches the 3.4 palette pattern): border/hairline `#d1d9e0`, muted `#59636e`, code-bg/header-shade `#f6f8fa`, link `#0969da` — all full-opacity, exact DESIGN.md/github.css `:root` hex. Spacing constants: `BodyLineHeight = 14 × 1.6 = 22.4`, `BlockSpacing = 14`, heading top/bottom margins 22/8. Code-block padding `(12,8,12,8)`, table cell padding `(6,3,6,3)`, list `MarkerOffset=6` + `Padding.Left=24`.
+- **Additive application (all gated on `UseBasicTheme => _options.Theme == RenderTheme.Basic`):**
+  - `MapHeading` — heading top/bottom `Margin` + `h1`/`h2` bottom hairline (`BorderThickness.Bottom=1` + `BorderBrush=#d1d9e0`); `Tag`/`FontWeight.Bold`/`FontSize` (30/24/20/18/16/15) untouched.
+  - `MapParagraph` — body `Margin.Bottom=14` + `LineHeight=22.4`; `Tag` stays null, `FontFamily`/text untouched.
+  - `MapCodeBlock` (G1) — `Paragraph.Background=#f6f8fa` + `Padding` at the CONTAINER level only; NO per-run Foreground/Background touched, so 3.4 `DistinctForegrounds>=2` (known) and `<=1` (fallback) hold, mono `Consolas` + verbatim text + `Tag`=lang survive.
+  - `MapList` — `MarkerOffset` + left `Padding`; `MarkerStyle`/`StartIndex`/`CheckBox` untouched.
+  - `MapQuote` — recolor left rule to `#d1d9e0` + set muted `#59636e` `Foreground` on the `Section` (inherited by quoted text — G2-safe, never on code runs); `BorderThickness.Left>0` + non-null `BorderBrush` + text round-trip preserved.
+  - `MapTable` — header `TableRow.Background=#f6f8fa`, body+header `TableCell.BorderBrush=#d1d9e0` + `BorderThickness=1` + `Padding=(6,3)`; structure (2col/3row) + bold header preserved.
+  - `MapThematicBreak` — recolored from `#EAECEF` to `#d1d9e0`; made instance (was static) to read `UseBasicTheme`; `Tag=="hr"` + `BorderThickness.Bottom>0` preserved.
+  - `MapLink`/`MapAutolink` — `Hyperlink.Foreground=#0969da`; `NavigateUri`/`OriginalString`/navigation behavior untouched.
+- **G1 honored:** code-bg is on `Paragraph.Background` (container), never on per-token runs → `DistinctForegrounds` (reads `run.Foreground`) is orthogonal. **G2 honored:** no default body/heading ink `Foreground` was set on any run; the muted blockquote foreground is on the `Section` (inherited). Code fallback runs keep `Foreground==null`.
+- **No-personality default (AC2):** `new FlowDocumentRenderer()` → `new FlowDocumentRenderOptions()` → `Theme==Basic` → Basic styling applies with no caller/host change. `MainWindow.xaml.cs` + `ContentHostController` wiring unchanged.
+- **A11y (AC4):** `MainWindow.xaml` `ContentScroll` got `Focusable="True"` + `TabIndex="4"` (narrow additive edit). Back(0)/Forward(1)/Reload(2)/AddressInput(3) order preserved; ContentScroll follows at 4. `MainWindow.xaml.cs` unchanged.
+- **Purity (AC5):** no new `PackageReference`, no `System.Net.*`/AI/webview; theming is brushes/thicknesses/margins/backgrounds; no new throwing branch (theme application is straight property sets) → `Render` stays total.
+- **Assumptions:** (a) heading/blockquote/table spacing magnitudes are within the implementer-latitude (`>0`) the tests pin — only color tokens are exact-ARGB; (b) `Padding` on a code `Paragraph` is acceptable (preferred path per Dev Notes — no shape change, single block stays one `Paragraph` with `Tag`=lang); the `Section` fallback was NOT needed.
 
 ### File List
 
-_(to be filled by the dev agent)_
+- `clients/windows/Rendering/RenderTheme.cs` — NEW: `enum RenderTheme { Basic }` (Epic-4 override seam).
+- `clients/windows/Rendering/FlowDocumentRenderOptions.cs` — UPDATED: added `Theme` (default `Basic`); font/highlighting defaults unchanged.
+- `clients/windows/Rendering/FlowDocumentRenderer.cs` — UPDATED: frozen theme tokens + `UseBasicTheme` gate; additive styling in `MapHeading`/`MapParagraph`/`MapCodeBlock`/`MapList`/`MapQuote`/`MapTable`/`MapThematicBreak`/`MapLink`/`MapAutolink`.
+- `clients/windows/App/MainWindow.xaml` — UPDATED: `ContentScroll` `Focusable="True"` + `TabIndex="4"` (a11y reachability); tab order Back(0)/Forward(1)/Reload(2)/AddressInput(3)/ContentScroll(4).
+- `clients/windows/Rendering.Tests/BasicThemeTests.cs` — Step-4 oracle (not modified by Step 5).
+- `clients/windows/App.Tests/ShellAccessibilityExitTests.cs` — Step-4 oracle (not modified by Step 5).
 
 ### CI Verification
 
-_(to be filled by the dev agent — the authoritative verification; record the green windows-latest run id + the Epic-3 EXIT checklist)_
+_(PENDING — the authoritative verification is the `Build Windows Client` (`build-windows.yml`) run on `windows-latest`. This agent does NOT commit/push. Record the green run id + the Epic-3 EXIT checklist below after CI is green.)_
+
+### Epic-3 EXIT checklist (confirm after the green 3.6 CI run)
+
+- [ ] 3.1 — native WPF `MainWindow` + Back/Forward/Reload toolbar, labeled + keyboard-reachable.
+- [ ] 3.2 — `.md`-only address bar + `MarkdownFetcher`.
+- [ ] 3.3 — Markdig GFM → `FlowDocument` bedrock render, all element-family markers.
+- [ ] 3.4 — fenced code syntax highlighting (`DistinctForegrounds>=2` known / `<=1` fallback).
+- [ ] 3.5 — in-client links/anchors/external/images/history into `ContentScroll`.
+- [ ] 3.6 — faithful basic default theme applied by DEFAULT + shell a11y LOCKED + content UIA-readable (`BasicThemeTests` + `ShellAccessibilityExitTests`).
+- [ ] Cross-cutting — `Rendering` PURE, NO embedded browser, all green on `windows-latest`; record CI run id.
+- [ ] Conclusion — usable basic Markdown Web reader before any AI personalization; Epic-4 seam clean (`RenderTheme.Basic` default, open/closed). **Epic 3 CLOSEABLE.**

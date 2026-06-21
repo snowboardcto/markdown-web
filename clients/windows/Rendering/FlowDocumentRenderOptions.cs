@@ -1,9 +1,11 @@
 namespace TheMarkdownWeb.Rendering;
 
 /// <summary>
-/// Minimal font seams for <see cref="FlowDocumentRenderer"/>. This story (3.3) sets element
-/// STRUCTURE plus the markers the acceptance tests assert; exact GitHub theming (px sizes,
-/// hairlines, zebra rows, code-block backgrounds, reading measure, light/dark) is Story 3.6.
+/// Font + theme seams for <see cref="FlowDocumentRenderer"/>. Story 3.3 set element STRUCTURE plus
+/// the markers the acceptance tests assert; Story 3.6 lands the exact GitHub theming (px-ish
+/// hairlines, spacing/line-height, code-block backgrounds, link/muted/border colors) ADDITIVELY via
+/// the <see cref="Theme"/> seam below — the defaults ARE the faithful basic (GitHub-light) theme.
+/// The existing font/highlighting defaults are UNCHANGED.
 /// </summary>
 public sealed class FlowDocumentRenderOptions
 {
@@ -20,4 +22,12 @@ public sealed class FlowDocumentRenderOptions
     /// monospace rendering. Unknown/missing languages always fall back regardless of this flag.
     /// </summary>
     public bool SyntaxHighlighting { get; init; } = true;
+
+    /// <summary>
+    /// Story 3.6 — the render-theme / Epic-4 personality-override seam. Defaults to
+    /// <see cref="RenderTheme.Basic"/>, so the no-personality DEFAULT render IS the faithful basic
+    /// (GitHub-light) theme with no opt-in. Epic 4 supplies a non-Basic theme to override the render
+    /// without reworking the Basic path (open/closed — see <see cref="RenderTheme"/>).
+    /// </summary>
+    public RenderTheme Theme { get; init; } = RenderTheme.Basic;
 }

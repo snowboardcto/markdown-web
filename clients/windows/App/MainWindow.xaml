@@ -106,7 +106,12 @@
              FlowDocument. FlowDocumentScrollViewer has no editing surface (read-only by
              construction) and routes Hyperlink.RequestNavigate for hosted hyperlinks. -->
         <Border x:Name="ContentHost">
+            <!-- Story 3.6 (AC4): ContentScroll is keyboard-reachable so a keyboard user can reach +
+                 scroll the rendered content (FlowDocumentScrollViewer is NOT a tab stop by default).
+                 TabIndex 4 keeps the Back(0)/Forward(1)/Reload(2)/AddressInput(3) sequence intact. -->
             <FlowDocumentScrollViewer x:Name="ContentScroll"
+                                      Focusable="True"
+                                      TabIndex="4"
                                       IsToolBarVisible="False"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Auto" />
