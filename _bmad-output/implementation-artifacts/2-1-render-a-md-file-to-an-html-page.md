@@ -1,6 +1,6 @@
 # Story 2.1: Render a `.md` file to an HTML page
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
