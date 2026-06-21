@@ -9,6 +9,10 @@ web/dist/
 # Astro
 .astro/
 
+# Bicep compiled ARM output (transpiled artifact — never commit; recompile from .bicep).
+# Narrow to the known template name so a future infra/staticwebapp.config.json stays tracked.
+infra/main.json
+
 # Logs / env
 *.log
 .env
