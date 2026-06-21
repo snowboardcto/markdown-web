@@ -1,6 +1,6 @@
 # Story 3.2: `.md`-only address bar and fetch
 
-Status: ready-for-review
+Status: done
 
 <!-- VALIDATION (vs epics.md Story 3.2, lines 299–310; FR-9, FR-14 consume, UX-DR5, UX-DR7): RESULT = PASS.
   - AC↔epic alignment: the epic "Then" is a compound clause + an "And". Mapped exhaustively:
@@ -315,3 +315,27 @@ Modified (clients/windows/App/):
 - `MainWindow.xaml.cs` — constructs the `AddressBarViewModel`, sets `AddressBar.DataContext`, wires Enter→`SubmitAsync`.
 
 Unchanged (per scope): `ShellViewModel.cs`, all 3.1 test files, Rendering/*, Agent/*, `TheMarkdownWeb.sln`, `build-windows.yml`.
+
+### CI Verification & Step 8 Fix
+
+- **CI run #9** (`c758a65`, green-phase impl): compiled clean; **77/78 passed, 1 red** — `ShellWindowTests.Toolbar_HasBackForwardReloadButtons` threw `ArgumentOutOfRangeException` in `System.IO.Packaging.PackagePart.CleanUpRequestedStreamsList` during `MainWindow` `LoadComponent`. **NOT an implementation defect** — a known WPF resource-load thread-safety race: xUnit runs window-constructing test classes in parallel on separate STA threads, and 3-2's new `AddressBarWindowTests` made a 3rd concurrent `LoadComponent`, tipping the race (intermittent; 3-1's 2-class run #6 was green).
+- **Fix** (`5565897`): `App.Tests/AssemblyInfo.cs` → `[assembly: CollectionBehavior(DisableTestParallelization = true)]` serializes window construction (suite ~10s; `[StaFact]` still gives each test its STA thread). Also applied review MINOR #1: dropped `ConfigureAwait(false)` on the VM fetch await so `State`/`LastFetchedMarkdown` `PropertyChanged` resumes on the UI thread (correct for 3.3's UI binding).
+- **CI run #11** (`5565897`): **GREEN — Restore ✓ Build ✓ Test ✓, 78/78 pass** on windows-latest (run id 27914164684). Authoritative verification.
+
+### Consolidated Code Review (Step 7) — APPROVED
+
+No CRITICAL/MAJOR. Independently confirmed the nav-button tree-walker is not broken by the column-1 address bar, the re-entrancy generation counter is correct (Loading set synchronously pre-await; stale completions dropped; single terminal write), the oversized-body guard trips on the 64 MiB stub, and signatures/behaviors match every test. MINOR items: #1 ConfigureAwait (APPLIED); #2 `State` not yet bound to a visual affordance (deferred to 3.3, within "where practical" latitude); #3 byte-vs-char size cap (harmless); #4 live success path lands in `Broken` against the SWA (the documented, deferred fetch-target decision owned by 3.3+).
+
+### AC → Test Trace (Step 10) — all green on run #11
+
+| AC | Requirement | Test(s) |
+|----|-------------|---------|
+| AC1 | Address bar: lock + host/path input + exact `.md only` tag; a11y names; input tab-reachable after Reload | `AddressBarWindowTests` (6 `[StaFact]`: named elements, exact tag text, automation names, focusable, TabIndex>Reload, nav-still-3-buttons) |
+| AC2 | `.md`-only predicate, total, never throws | `AddressBarValidationTests` (`[Theory]` 23-row matrix + never-throws) |
+| AC3 | Non-`.md` declined (zero fetches) + open-in-system-browser seam | `AddressBarViewModelTests` decline cases + `OpenDeclinedInBrowser` + fake `IUrlLauncher` |
+| AC4 | Fetch via `Accept: text/markdown`; body on 200 text/markdown | `MarkdownFetcherTests` (stub `HttpMessageHandler`: GET + Accept header + success body) |
+| AC5 | App owns net/validation/launch; Rendering pure; no embedded browser | inherited `DependencyBoundaryTests` + `NoEmbeddedBrowserTests` green; no webview package |
+| AC6 | `AddressBarState` machine; every failure → `Broken`, never crashes; re-entrancy | `MarkdownFetcherTests` failure taxonomy + `AddressBarViewModelTests` state/re-entrancy/INotifyPropertyChanged |
+| AC7 | windows-latest CI: builds clean, all tests green, no regression | CI run #11 green (78/78); 3.1 + Rendering tests still green |
+
+All 7 ACs covered by CI-runnable proofs; none relies on "launch and look". Trace complete. **Story 3-2 DONE.**
