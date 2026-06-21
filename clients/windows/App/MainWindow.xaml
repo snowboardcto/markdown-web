@@ -4,6 +4,59 @@
         Title="The Markdown Web"
         Height="600"
         Width="800">
-    <Grid>
-    </Grid>
+    <DockPanel LastChildFill="True">
+        <!-- Browser-like toolbar, docked at the top of the window (client-toolbar). -->
+        <Border DockPanel.Dock="Top"
+                Background="#F3F3F3"
+                BorderBrush="#E0E0E0"
+                BorderThickness="0,0,0,1"
+                Padding="6,4">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <!-- Navigation buttons: Back / Forward / Reload, left-aligned. -->
+                    <ColumnDefinition Width="Auto" />
+                    <!-- Reserved space for the Story 3.2 address bar (and the Epic 4
+                         personality selector). Intentionally EMPTY at this story — do not build. -->
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Left">
+                    <Button x:Name="BackButton"
+                            TabIndex="0"
+                            Content="&#x2039;"
+                            AutomationProperties.Name="Back"
+                            ToolTip="Back"
+                            MinWidth="32"
+                            Margin="0,0,2,0"
+                            Padding="6,2"
+                            Click="BackButton_Click" />
+                    <Button x:Name="ForwardButton"
+                            TabIndex="1"
+                            Content="&#x203A;"
+                            AutomationProperties.Name="Forward"
+                            ToolTip="Forward"
+                            MinWidth="32"
+                            Margin="0,0,2,0"
+                            Padding="6,2"
+                            Click="ForwardButton_Click" />
+                    <Button x:Name="ReloadButton"
+                            TabIndex="2"
+                            Content="&#x27F3;"
+                            AutomationProperties.Name="Reload"
+                            ToolTip="Reload"
+                            MinWidth="32"
+                            Padding="6,2"
+                            Click="ReloadButton_Click" />
+                </StackPanel>
+
+                <!-- Grid.Column 1 (Width="*") is the reserved address-bar slot — left empty here. -->
+            </Grid>
+        </Border>
+
+        <!-- Named, empty content host. Story 3.3 / 3.6 will fill this with the Markdig -> FlowDocument
+             render. It renders nothing at this story. -->
+        <Border x:Name="ContentHost" />
+    </DockPanel>
 </Window>
