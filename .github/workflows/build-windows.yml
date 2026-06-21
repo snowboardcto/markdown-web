@@ -1,0 +1,48 @@
+name: Build Windows Client
+
+on:
+  push:
+    branches:
+      - main
+      - claude/npx-bmad-method-install-ne8bw9
+    paths:
+      - 'clients/windows/**'
+      - '.github/workflows/build-windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & Test (.NET 10 / WPF)
+    runs-on: windows-latest
+
+    env:
+      SOLUTION: clients/windows/TheMarkdownWeb.sln
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('clients/windows/**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore "$env:SOLUTION"
+
+      - name: Build
+        run: dotnet build "$env:SOLUTION" -c Release --no-restore
+
+      - name: Test
+        run: dotnet test "$env:SOLUTION" -c Release --no-build --verbosity normal
