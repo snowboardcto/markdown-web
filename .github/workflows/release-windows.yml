@@ -7,9 +7,14 @@ name: Release Windows client (installer)
 #   - push of a tag matching v* (e.g. v0.1.0) -> versioned release
 #   - manual workflow_dispatch (version defaults to 0.1.0-dev.<run_number>)
 #
-# The release asset is built with the repo's GITHUB_TOKEN (no extra secret). Hosting the installer
-# for ANONYMOUS download from themarkdownweb.com is a separate step (Azure Blob or making the repo
-# public) — a private-repo Release asset is only downloadable by authenticated collaborators.
+# The release asset is built with the repo's GITHUB_TOKEN (no extra secret) and published to a
+# public GitHub Release (the repo is public), so themarkdownweb.com/get can link to it anonymously.
+#
+# CODE SIGNING (Azure Trusted Signing): when the repo variable SIGNING_ENABLED=='true', the app exe
+# and the installer are Authenticode-signed via OIDC (no stored secret) so Windows SmartScreen
+# trusts them. Until that variable is set, builds are produced UNSIGNED (SmartScreen prompts). The
+# required repo VARIABLES are: SIGNING_ENABLED, AZURE_CLIENT_ID, AZURE_TENANT_ID,
+# AZURE_SUBSCRIPTION_ID, TRUSTED_SIGNING_ENDPOINT, TRUSTED_SIGNING_ACCOUNT, TRUSTED_SIGNING_PROFILE.
 
 on:
   push:
@@ -37,6 +42,7 @@ on:
 
 permissions:
   contents: write   # create the GitHub Release + upload the installer asset
+  id-token: write   # OIDC login to Azure Trusted Signing (no long-lived secret)
 
 concurrency:
   group: release-windows-${{ github.ref }}
@@ -92,6 +98,33 @@ jobs:
             throw 'publish/TheMarkdownWeb.App.exe not found — publish failed'
           }
 
+      # --- Code signing (Azure Trusted Signing) -------------------------------------------------
+      # Gated on the repo VARIABLE `SIGNING_ENABLED == 'true'` so the workflow keeps producing
+      # (unsigned) builds until the Azure Trusted Signing account + OIDC federated credential are
+      # set up. Flip the variable to 'true' once the Azure setup is done — no workflow edit needed.
+      # Auth is OIDC (azure/login) — no signing secret stored in the repo.
+      - name: Azure login (OIDC) for signing
+        if: vars.SIGNING_ENABLED == 'true'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign the app executable (Authenticode)
+        if: vars.SIGNING_ENABLED == 'true'
+        uses: azure/trusted-signing-action@v0
+        with:
+          endpoint: ${{ vars.TRUSTED_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ vars.TRUSTED_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.TRUSTED_SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\publish
+          files-folder-filter: exe
+          files-folder-recurse: false
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress -y
@@ -107,6 +140,22 @@ jobs:
           "SETUP_PATH=$setup" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "Built installer: $setup ($([math]::Round((Get-Item $setup).Length/1MB,1)) MB)"
 
+      # Sign the installer itself (the file the user actually double-clicks — this is what SmartScreen
+      # checks first). The app exe inside was already signed pre-package above.
+      - name: Sign the installer (Authenticode)
+        if: vars.SIGNING_ENABLED == 'true'
+        uses: azure/trusted-signing-action@v0
+        with:
+          endpoint: ${{ vars.TRUSTED_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ vars.TRUSTED_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.TRUSTED_SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\clients\windows\installer\installer-out
+          files-folder-filter: exe
+          files-folder-recurse: false
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
       - name: Upload installer as build artifact
         uses: actions/upload-artifact@v4
         with:
@@ -118,11 +167,18 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SIGNING_ENABLED: ${{ vars.SIGNING_ENABLED }}
         run: |
           $tag = if ($env:GITHUB_REF -like 'refs/tags/v*') { $env:GITHUB_REF -replace '^refs/tags/','' } else { "v${{ steps.ver.outputs.version }}" }
+          $signNote = if ($env:SIGNING_ENABLED -eq 'true') {
+            "Code-signed (Azure Trusted Signing)."
+          } else {
+            "Unsigned for now — SmartScreen may prompt; choose More info -> Run anyway."
+          }
+          $notes = "Native Windows client (self-contained, no .NET runtime required). $signNote"
           # Create the release if it doesn't exist, then upload (clobber) the installer asset.
           gh release view $tag 2>$null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --title "The Markdown Web $tag" --notes "Native Windows client (self-contained, no .NET runtime required). Unsigned — SmartScreen will prompt; choose More info -> Run anyway." --target $env:GITHUB_SHA
+            gh release create $tag --title "The Markdown Web $tag" --notes "$notes" --target $env:GITHUB_SHA
           }
           gh release upload $tag "$env:SETUP_PATH" --clobber
