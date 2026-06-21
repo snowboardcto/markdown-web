@@ -9,6 +9,11 @@ web/dist/
 # Astro
 .astro/
 
+# Playwright (test runner artifacts — never commit)
+web/test-results/
+web/playwright-report/
+web/.playwright/
+
 # Bicep compiled ARM output (transpiled artifact — never commit; recompile from .bicep).
 # Narrow to the known template name so a future infra/staticwebapp.config.json stays tracked.
 infra/main.json
