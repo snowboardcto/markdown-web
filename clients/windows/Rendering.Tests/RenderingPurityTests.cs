@@ -56,8 +56,9 @@ public class RenderingPurityTests
             .Select(m => m.Groups["id"].Value)
             .ToArray();
 
-        // The ONLY package Rendering references is Markdig — no net/AI/webview package is added.
-        Assert.All(packages, id => Assert.Equal("Markdig", id, ignoreCase: true));
+        // Allowlist: Rendering references ONLY Markdig + ColorCode.Core — no net/AI/webview package is added.
+        string[] allowed = { "Markdig", "ColorCode.Core" };
+        Assert.All(packages, id => Assert.Contains(id, allowed, StringComparer.OrdinalIgnoreCase));
 
         // Defensive substring guard: no networking/AI/webview hints anywhere in the csproj.
         string[] forbidden = { "System.Net.Http", "HttpClient", "OpenAI", "Anthropic", "Azure.AI", "WebView", "CefSharp" };

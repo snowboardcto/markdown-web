@@ -5,14 +5,16 @@ using System.Windows.Documents;
 namespace TheMarkdownWeb.Rendering.Tests;
 
 /// <summary>
-/// AC5 — a fenced code block maps to a top-level block (Paragraph) whose code is verbatim
+/// A fenced code block maps to a top-level block (Paragraph) whose code is verbatim
 /// (newlines preserved), rendered in the monospace family, with the language info-string in
-/// Tag, and a SINGLE foreground brush across the block (NO syntax-highlight colors — Story 3.4).
+/// Tag. A KNOWN-language fence is SYNTAX-HIGHLIGHTED — it carries MULTIPLE distinct foreground
+/// brushes across its runs (Story 3.4 inverts 3.3's single-foreground proof); an unknown/missing
+/// language degrades to a single-color mono fallback.
 /// </summary>
 public class CodeBlockTests
 {
     [StaFact]
-    public void FencedCode_WithLanguage_IsMonoVerbatimTaggedAndSingleForeground()
+    public void FencedCode_WithLanguage_IsMonoVerbatimTaggedAndSyntaxHighlighted()
     {
         var renderer = new FlowDocumentRenderer();
 
@@ -35,10 +37,10 @@ public class CodeBlockTests
         Assert.Contains("if (x) {}", text);
         Assert.Contains('\n', text);
 
-        // SINGLE foreground brush across the whole block (proves NO multi-color highlight runs).
+        // MULTIPLE distinct foreground brushes across the block (proves syntax highlighting ran).
         var foregrounds = FlowDocumentTestHelpers.DistinctForegrounds(block);
-        Assert.True(foregrounds.Count <= 1,
-            $"Fenced code must use a single foreground (no Story-3.4 colors), found {foregrounds.Count}.");
+        Assert.True(foregrounds.Count >= 2,
+            $"A known-language fence must be syntax-highlighted (>=2 distinct foregrounds), found {foregrounds.Count}.");
     }
 
     [StaFact]
