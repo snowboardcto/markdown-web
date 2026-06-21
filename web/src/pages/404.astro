@@ -1,0 +1,24 @@
+---
+// Story 2.3 — the custom not-found / broken-link state (AC4).
+//
+// Astro builds this to `dist/404.html`. `astro preview` (the Playwright harness)
+// and Azure Static Web Apps both serve it for unmatched routes WITH a 404 HTTP
+// status by default — so a dead `.md` link (rewritten to a would-be `/route`
+// that no page emits) lands here as a clear "page not found" state, never a
+// crash and never a soft-200 (which would be an SEO defect, FR-7/NFR-4).
+//
+// Rendered through the same `Page` layout as content pages, so it inherits the
+// GitHub theme, the semantic <html lang> -> <head> -> <body> -> <main>/<article>
+// shell, the single-<h1> discipline, and the JS-free contract. No site-header /
+// pitch-card chrome (that is Story 2.6), no client JS.
+import Page from '../layouts/Page.astro';
+---
+
+<Page title="Page not found">
+  <h1>Page not found</h1>
+  <p>
+    We couldn&rsquo;t find that page. The markdown file it points to may have
+    been moved, renamed, or never existed.
+  </p>
+  <p><a href="/">Go back home</a></p>
+</Page>

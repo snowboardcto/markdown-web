@@ -3,7 +3,7 @@ import { getCollection, render } from 'astro:content';
 import { fileURLToPath } from 'node:url';
 import { readdirSync } from 'node:fs';
 import { join, relative, sep, extname } from 'node:path';
-import { slug as githubSlug } from 'github-slugger';
+import { pathToSlug } from '../lib/slug.mjs';
 import Page from '../layouts/Page.astro';
 
 // Story 2.1 — emit one static HTML page per `content/**/*.md`, sourced from the
@@ -28,20 +28,17 @@ export async function getStaticPaths() {
     return out;
   };
 
-  // Replicate Astro's glob() id derivation (content/utils.js
-  // getContentEntryIdAndSlug): drop the extension, slugify each path segment
-  // with github-slugger, join with `/`, strip a trailing `/index`. We compute
-  // it from the raw files (not getCollection) because the glob loader SILENTLY
-  // drops one of two colliding files — by the time getCollection returns the
-  // duplicate is already gone, so the collision is only visible on disk.
+  // Replicate Astro's glob() id derivation by delegating to the shared
+  // `pathToSlug` (web/src/lib/slug.mjs) — the SAME function the rehype
+  // link-rewrite plugin uses, so emitted routes and rewritten link hrefs can
+  // never drift. Convert the absolute fs path to a relative POSIX path first
+  // (slug space is forward-slash only). We compute it from the raw files (not
+  // getCollection) because the glob loader SILENTLY drops one of two colliding
+  // files — by the time getCollection returns the duplicate is already gone,
+  // so the collision is only visible on disk.
   const fileToSlug = (absPath: string): string => {
-    const relPath = relative(contentDir, absPath);
-    const withoutExt = relPath.replace(new RegExp(`${extname(relPath)}$`), '');
-    return withoutExt
-      .split(sep)
-      .map((segment) => githubSlug(segment))
-      .join('/')
-      .replace(/\/index$/, '');
+    const relPosix = relative(contentDir, absPath).split(sep).join('/');
+    return pathToSlug(relPosix);
   };
 
   // Fail-loud on slug collisions: two files normalising to the same slug
