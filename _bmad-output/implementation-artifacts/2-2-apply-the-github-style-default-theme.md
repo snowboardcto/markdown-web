@@ -1,6 +1,6 @@
 # Story 2.2: Apply the GitHub-style default theme
 
-Status: review
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -163,6 +163,56 @@ This story is the **reading/typography theme + light code highlighting + AA cont
 - [Source: _bmad-output/planning-artifacts/architecture.md] — Browser path: Astro + remark/rehype (GFM) + Shiki + GitHub-style stylesheet (line 70); `web/src/styles/github.css` # GitHub-style stylesheet (FR-6) (line 123)
 - [Source: _bmad-output/implementation-artifacts/2-1-render-a-md-file-to-an-html-page.md] — existing render path, Page.astro shell, 20-spec Playwright harness, scope-boundary precedent
 - [Source: web/astro.config.mjs, web/src/layouts/Page.astro, web/src/pages/[...slug].astro, content/x.md, web/tests/*.spec.ts, dist/x/index.html] — current repo state (default Shiki = `github-dark`)
+
+## Review Findings
+
+**Consolidated code review — 2026-06-21 (Blind Hunter + Edge Case Hunter + Acceptance Auditor).**
+Verdict: **PASS WITH ITEMS.** All 5 ACs confirmed implemented; gates green (build 0, 38/38 Playwright, astro check clean). 0 critical, 0 decision-needed. 4 patch items (1 HIGH, 3 MEDIUM/test-quality) + 5 deferred test-coverage/cosmetic gaps. No defect blocks ship; the HIGH item is a future-proofing hardening, not a current failure (the override matches today's emitted output and the AC3 contrast loop backstops it).
+
+Key positive resolution: the case-sensitive Shiki override `span[style*='color:#D73A49']` **does** match the emitted `style="color:#D73A49"` (uppercase, no space, Astro preserved inner casing). AC3 is LIVE, not silently dead. The only two sub-AA github-light tokens (#D73A49 = 4.30:1, #E36209 = 3.28:1) are both corrected; no other emitted token drops below 4.5:1.
+
+### Findings table
+
+| # | Source | Severity | Finding | Recommendation |
+|---|--------|----------|---------|----------------|
+| 1 | blind+edge | HIGH | AA-correction override is **case/format brittle** — `span[style*='color:#D73A49']` / `#E36209` use case-sensitive attribute-substring matching. Works only because bundled github-light emits uppercase hex with no space after the colon. A Shiki/Astro bump emitting `#d73a49` or `color: #D73A49` silently disables both overrides → keyword reverts to 4.30:1, entity to 3.28:1 (below AA). AC3 contrast loop would catch it in CI, but the override itself has no dedicated guard. | Add the case-insensitive flag: `[style*='color:#d73a49' i]` / `[style*='color:#e36209' i]`. Lower-risk long-term: configure Shiki `colorReplacements` so corrected colors emit at build time (no `!important`, no inline-style coupling). |
+| 2 | blind+edge | MEDIUM | **Tautological / phantom-token contrast tests.** The "WCAG helper reproduces reference ratios" and "function (#8250df)/keyword (#cf222e) pinned" tests assert hardcoded hex against hardcoded math — they never read a rendered token, so they cannot catch rendered drift. Worse, `#8250df` (the spec's "tightest pairing", 4.74:1) is **never emitted** — github-light emits the function token as `#6F42C1` (6.12:1). The headline tight-pairing guard validates a color that does not exist in the build. | Pin the **actually emitted** function token (`#6F42C1`) as the tight-pairing guard, or remap `#6F42C1`→`#8250df` so DESIGN and reality agree. Keep the generic per-token contrast loop (it is the real, palette-agnostic guard). |
+| 3 | blind+edge | MEDIUM | **Override scoped to `article`** (`article pre.astro-code span[...]`) couples the AA fix to DOM ancestry with no test. If a future render path emits a `<pre>` outside `<article>`, contrast regresses to 4.30/3.28 and only the contrast loop catches it. Combined with the test selector `page.locator('article a, main a, a')` returning document-order matches (bare `a` makes `.first()` resolve to the first link anywhere, not necessarily an article link). | Drop the redundant `article` scope on the AA-correction rule (`pre.astro-code span[...]` suffices). Narrow the link test selector to `article a`. |
+| 4 | blind+edge | MEDIUM | **No `box-sizing: border-box`** — `body { max-width:760px; padding:24px }` (content-box) → rendered body border-box is 808px, so the "760px measure" is the content box, not the visual column (effective text width ~712px). Intentional per the test tolerance (`<= 760+48+1`), but flagged so no future rule mis-assumes a 760px usable width. | Add `*,*::before,*::after { box-sizing:border-box }` and make 760px the outer measure, OR document that 760px is the content-box measure (current behavior is internally consistent). |
+
+### Deferred (test-coverage / cosmetic gaps — non-blocking)
+
+- [x] [Review][Defer] Long unbreakable autolink URL in a paragraph is untested — fixture's only autolink is 26 chars; `body{overflow-wrap:break-word}` defense never exercised [content/x.md] — deferred, add a 140+ char bare URL fixture + no-h-scroll assertion.
+- [x] [Review][Defer] Nested-blockquote test asserts `toHaveCount(1)` — couples to the 2-level fixture; a 3-level fixture would break it (CSS descendant combinator handles N levels correctly) [web/tests/2-2-theme.spec.ts:350] — deferred, use `>= 1` / `.first()`.
+- [x] [Review][Defer] AC2 "no dark palette" test blocklists only 5 specific github-dark hexes; a different low-contrast color would pass it (the AC3 contrast loop is the real backstop) [web/tests/2-2-theme.spec.ts:187] — deferred, acceptable while the contrast loop exists.
+- [x] [Review][Defer] `:not(pre) > code` breadth (inline code in heading/link/table-cell/list-item) only exercised for the `<p>` case in the fixture [content/x.md] — deferred, selector is structurally correct; add fixture rows to lock breadth.
+- [x] [Review][Defer] Stacked h1/h2 hairlines and inline-code-in-other-contexts are cosmetically fine but unasserted — deferred, no behavior risk.
+
+### Patch action items (left as action items per non-interactive review — NOT fixed in this step)
+
+- [ ] [Review][Patch] Harden Shiki AA override against case/format drift (add `i` flag or use Shiki `colorReplacements`) [web/src/styles/github.css:160-165]
+- [ ] [Review][Patch] Fix tautological/phantom-token contrast tests; pin emitted `#6F42C1` not phantom `#8250df` [web/tests/2-2-theme.spec.ts:209-217,249-267]
+- [ ] [Review][Patch] Drop redundant `article` scope on AA override; narrow `article a, main a, a` link selector to `article a` [web/src/styles/github.css:160; web/tests/2-2-theme.spec.ts:133,228,547]
+- [ ] [Review][Patch] Add `box-sizing:border-box` (or document 760px as content-box measure) [web/src/styles/github.css:45-57]
+
+### Edge-case findings (unhandled critical edges)
+
+```json
+{ "critical_unhandled_edges": [] }
+```
+No unhandled **critical** edges. The highest-severity edge (EC-1, the case-sensitive override) is non-critical: it does not fail on the current build and is backstopped by the AC3 per-token contrast loop in CI. All robustness edges (nested blockquote N-levels, `:not(pre)>code` breadth, `display:block` tables preserving row semantics, 808px content-box measure, task-list negative margin) are correctly handled by the CSS.
+
+### AC verification (5/5 confirmed)
+
+| AC | Verdict | Note |
+|----|---------|------|
+| AC1 — DESIGN tokens (typography/color/760px) | CONFIRMED | Zero token drift; every value matches DESIGN frontmatter byte-for-byte. |
+| AC2 — light GitHub code palette (not github-dark) | CONFIRMED | `github-light` shipped, `github-dark` count = 0; DESIGN code-token *target* hexes approximated (emits `#6F42C1`/`#032F62` not `#8250df`/`#0a3069`) — in-spec per AC's "≈" wording and documented in Dev Agent Record. |
+| AC3 — WCAG AA contrast ≥4.5:1 | CONFIRMED | Override is LIVE (casing matches emitted spans); all effective tokens ≥4.5:1; no uncorrected sub-AA token. Hardening item #1 protects this going forward. |
+| AC4 — server-rendered / JS-free / semantic shell | CONFIRMED | Static inlined `<style>`, 0 `<script>`, single-h1 / `<main>`/`<article>` shell intact; no `client:*`. |
+| AC5 — overflow / inline-vs-block / nesting | CONFIRMED | All 4 CSS rules present and exercised by `content/x.md`. |
+
+Scope discipline held: site-header/pitch-card (2.6), inter-file links (2.3), media (2.4), index (2.5), content negotiation (2.7), and dark mode were correctly NOT implemented — out of scope, not defects.
 
 ## Dev Agent Record
 
