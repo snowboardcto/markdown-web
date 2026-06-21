@@ -102,8 +102,14 @@
             </Grid>
         </Border>
 
-        <!-- Named, empty content host. Story 3.3 / 3.6 will fill this with the Markdig -> FlowDocument
-             render. It renders nothing at this story. -->
-        <Border x:Name="ContentHost" />
+        <!-- Content host (Story 3.5): a read-only FlowDocumentScrollViewer hosts the rendered
+             FlowDocument. FlowDocumentScrollViewer has no editing surface (read-only by
+             construction) and routes Hyperlink.RequestNavigate for hosted hyperlinks. -->
+        <Border x:Name="ContentHost">
+            <FlowDocumentScrollViewer x:Name="ContentScroll"
+                                      IsToolBarVisible="False"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Auto" />
+        </Border>
     </DockPanel>
 </Window>
