@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-21
-last_updated: 2026-06-21 (2-5 code review — in-progress; 1 decision-needed + 3 patch action items)
+last_updated: 2026-06-21 (2-5 marked done — 7/7 ACs covered, 121 tests green)
 project: The Markdown Web
 project_key: NOKEY
 tracking_system: file-system
@@ -56,7 +56,7 @@ development_status:
   2-2-apply-the-github-style-default-theme: done # 5/5 ACs covered + green (39/39 E2E), code review resolved (4 patches applied)
   2-3-inter-file-linking-and-navigation: done # 6/6 ACs covered + green (66/66 E2E), code review resolved (F1 HIGH + F2/F3/F4 patches applied)
   2-4-media-embedding: done # 7/7 ACs covered + green (94 E2E: 66 prior + 28 media), code review resolved (1 CRITICAL + 2 HIGH + 2 MEDIUM patches applied, 2 decisions documented)
-  2-5-browsable-vault-index: in-progress
+  2-5-browsable-vault-index: done # 7/7 ACs covered + green (121 E2E: 94 prior + 27 index), code review resolved (1 decision + 3 patches applied, 2 deferred pre-existing)
   2-6-site-header-and-pitch-card: backlog
   2-7-content-negotiation-one-url-two-representations: backlog
   epic-2-retrospective: optional
