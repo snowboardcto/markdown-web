@@ -171,3 +171,21 @@ Goal: name the whole paradigm/product so naethyn can register a domain. The `.md
 3. If available AND naethyn likes it → buy.
 4. If taken or not loved → next candidate. Repeat.
 5. Fallback: if no `.md` lands, grab a confirmed-available `.com` from the list above.
+
+### DECISION: .com on GoDaddy (chosen by naethyn)
+
+`.md` is unavailable via GoDaddy; naethyn chose to stay on GoDaddy with a `.com`.
+
+**Confirmed-FREE `.com` shortlist (verified live via Verisign RDAP):**
+
+*Descriptive / category name:*
+- `themarkdownweb.com` · `getmarkdownweb.com` · `mymarkdownweb.com`
+
+*Literary / "prose & paper":*
+- `prosepage.com` · `vellumweb.com` · `vellumgarden.com` · `prosereader.com` · `quireweb.com`
+
+*Brandable / coined:*
+- `marklace.com` · `markdle.com` · `marblio.com` · `markaby.com` · `mellowmd.com` · `velliox.com`
+
+**Buy-workflow:** search top pick on GoDaddy → if available & liked → buy → else next.
+**Mary's ranked rec:** 1) prosepage.com  2) themarkdownweb.com  3) vellumweb.com  4) marklace.com  5) mellowmd.com
