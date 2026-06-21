@@ -1,5 +1,5 @@
 ---
-stepsCompleted: [1, 2, 3]
+stepsCompleted: [1, 2, 3, 4, 5]
 inputDocuments:
   - _bmad-output/planning-artifacts/prds/prd-the-markdown-web-2026-06-21/prd.md
   - _bmad-output/planning-artifacts/prds/prd-the-markdown-web-2026-06-21/addendum.md
@@ -74,3 +74,31 @@ _Confirmed by naethyn, 2026-06-21._
 - **UI: WPF (FlowDocument)** *(CONFIRMED — WinUI 3 considered and rejected: no FlowDocument, more DIY for tables/rich docs)* — native rendering (no webview), and FlowDocument is a mature document model that maps almost 1:1 to the markdown AST (Paragraph/Run/Bold, headings, List/ListItem, Table, Image, mono code).
 - **Render path:** Markdig AST → WPF FlowDocument. Prior art to reuse/learn from: `markdig.wpf`, `Markdig.FlowDocument`, `MdXaml`.
 
+
+## Rendering Pipeline (bedrock — "render markdown like GitHub")
+
+**Pipeline:** `raw .md → Markdig parse (GFM) → AST → [AI personality transform — later] → FlowDocument → WPF native render`. The base render is deterministic/faithful; the AI personality is an optional transform stage slotted between AST and FlowDocument later, keeping the bedrock pure and testable.
+
+### GFM → FlowDocument element mapping
+| Markdown (GFM) | FlowDocument target |
+|---|---|
+| `#`–`######` headings | `Paragraph` with heading styles (size/weight) |
+| bold / italic / strikethrough | `Bold` / `Italic` / `Run` w/ strikethrough |
+| paragraph | `Paragraph` |
+| inline code | `Run` — mono font + subtle background |
+| fenced code block | `Section`/`Paragraph` — mono, background, syntax-highlighted, language preserved |
+| lists (ordered/unordered) | `List` + `ListItem` |
+| task lists (GFM) | `List` + inline `CheckBox` |
+| blockquote | bordered `Section` (left rule) |
+| GFM tables | `Table` (native FlowDocument table) |
+| images | `InlineUIContainer` → `Image` (resolved from vault) |
+| links | `Hyperlink` + click handler |
+| horizontal rule | styled separator |
+
+### Three details that make it "feel like GitHub"
+1. **Code highlighting:** ColorCode-Universal (.NET → FlowDocument runs) for bedrock; TextMateSharp later for broader grammars. *(Trade-off: simplicity now vs language coverage later.)*
+2. **Link resolution (FR-2):** intercept `Hyperlink` clicks — relative `.md` → navigate in-client (fetch+render); `#anchor` → scroll; external `http(s)` → system browser (not a general web browser); missing target → clear broken-link state, never a crash.
+3. **Images/media (FR-3):** resolve relative paths against the vault → WPF `Image`; video via `MediaElement` (later concern).
+
+### Cross-cutting: parser consistency across platforms (future fork)
+Markdig is .NET-only. Future iOS/Android clients need GFM-conformant parsers each (swift-markdown, etc.). When that lands, decide: shared `cmark-gfm` core via FFI vs hold each client to GFM conformance. Windows-first: Markdig is the choice.
