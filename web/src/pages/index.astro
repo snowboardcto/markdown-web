@@ -13,8 +13,10 @@
 // Decisions (Dev Agent Record):
 //  - A: the index lives at `/` by replacing `src/pages/index.astro` (the index
 //    is NOT in the `pages` collection, so it never lists itself).
-//  - B: a single flat <ul> sorted by route (`entry.id`), CI-stably via
-//    `localeCompare(b.id, 'en')` (locale pinned so dev and CI agree).
+//  - B: a single flat <ul> sorted by route (`entry.id`), CI-stably via a plain
+//    code-unit comparison (`a.id < b.id ? -1 : a.id > b.id ? 1 : 0`) — ICU/CLDR-
+//    independent, so the order is identical on dev and CI regardless of host
+//    locale data (does not depend on `localeCompare` collation).
 //  - C: `/` is owned by this page; `content/**/*.md` by `[...slug].astro`. An
 //    `entry.id === ''` (a future root `content/index.md`) is filtered out so the
 //    index never emits a `/` self-link.
@@ -26,26 +28,15 @@
 // Themed via the shared `Page` layout (2.1 shell + 2.2 GitHub theme), JS-free,
 // crawlable. Listing surface ONLY — no 2.6 site-header / pitch-card / CTA chrome.
 import { getCollection } from 'astro:content';
-import { slugToTitle } from '../lib/title.mjs';
+import { buildIndexItems } from '../lib/index-entries.mjs';
 import Page from '../layouts/Page.astro';
 
 const entries = await getCollection('pages');
 
-const items = entries
-  // Guard the empty-id case: a root `content/index.md` collapses to `''` (and
-  // would route to `/`), so it must never appear as a `/` self-link. None today.
-  .filter((entry) => entry.id !== '')
-  .map((entry) => {
-    const frontmatterTitle =
-      typeof entry.data?.title === 'string' ? entry.data.title.trim() : '';
-    return {
-      href: '/' + entry.id,
-      label: frontmatterTitle || slugToTitle(entry.id),
-      id: entry.id,
-    };
-  })
-  // Decision B: deterministic, CI-stable sort by route id (locale pinned).
-  .sort((a, b) => a.id.localeCompare(b.id, 'en'));
+// Build the sorted listing via the shared pure helper (empty-id filter,
+// never-empty label, code-unit sort). Extracted so the empty-vault /
+// single-page degenerate branches are unit-testable without an alternate vault.
+const items = buildIndexItems(entries);
 ---
 
 <Page title="The Markdown Web">

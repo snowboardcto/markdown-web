@@ -12,9 +12,13 @@
  * Derive a Title Case label from a route slug's last segment.
  *
  * @param {string} slug e.g. `sub/page`, `gear-guide`, `no-h1`
- * @returns {string} e.g. `Page`, `Gear Guide`, `No H1`
+ * @returns {string} e.g. `Page`, `Gear Guide`, `No H1`. Returns `''` for
+ *   nullish/empty/separator-only input (never throws) — callers add a final
+ *   non-empty fallback (e.g. `|| entry.id`) where a blank label is unacceptable.
  */
 export function slugToTitle(slug) {
+  // Guard nullish/empty input so a missing slug can never throw on `.split`.
+  if (!slug) return '';
   const last = slug.split('/').pop() ?? slug;
   return last
     .replace(/[-_]+/g, ' ')

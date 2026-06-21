@@ -18,20 +18,22 @@ import { test, expect, type Page } from '@playwright/test';
  * HTTP 200 (`page.request.get`), never re-derived from a slug fn in-test.
  *
  * The expected content-route set is the current content vault (every .md):
- *   /empty /gear-guide /my-notes /my-notes-dir/page /no-h1 /readme
+ *   /empty /gear-guide /h1-only /my-notes /my-notes-dir/page /no-h1 /readme
  *   /sub /sub/page /sub/page2 /sub/sibling /x
- * (11 routes — `content/sub/index.md` collapses to `/sub`, not `/sub/index`;
+ * (12 routes — `content/sub/index.md` collapses to `/sub`, not `/sub/index`;
  *  no root `content/index.md`, so no `/` self-link.)
  */
 
 // The authoritative content-route set the catch-all emits today (one per
 // content/**/*.md, with sub/index.md index-collapsed to /sub). Pinned so a
 // dropped or extra page fails loudly. Order here is the DOCUMENTED Decision-B
-// sort: flat, by route id, locale-pinned ('en') == code-unit order (they agree
-// for this all-lowercase-ascii id set).
+// sort: flat, by route id, via a plain code-unit comparison
+// (`a.id < b.id ? -1 : a.id > b.id ? 1 : 0`) — ICU-independent, identical on
+// dev and CI regardless of host locale data.
 const EXPECTED_ROUTES_SORTED = [
   '/empty',
   '/gear-guide',
+  '/h1-only',
   '/my-notes',
   '/my-notes-dir/page',
   '/no-h1',
@@ -43,7 +45,7 @@ const EXPECTED_ROUTES_SORTED = [
   '/x',
 ] as const;
 
-const EXPECTED_COUNT = EXPECTED_ROUTES_SORTED.length; // 11
+const EXPECTED_COUNT = EXPECTED_ROUTES_SORTED.length; // 12
 
 /**
  * The slug-derived Title Case label (mirrors the destination page's
@@ -168,6 +170,24 @@ test.describe('Story 2.5 AC2 — links are resolved routes with readable labels'
     // shared title precedence is actually exercised for the H1-divergence case.
     const label = (await page.locator('a[href="/no-h1"]').first().textContent())?.trim();
     expect(label, '/no-h1 label should be the slug-derived "No H1"').toBe('No H1');
+  });
+
+  test('Decision-D divergence is genuinely exercised: H1-only /h1-only label (slug) DIFFERS from destination <title> (H1)', async ({ page }) => {
+    // `content/h1-only.md` is H1-only (no frontmatter title). The index uses the
+    // cheap precedence `data.title || slugToTitle(entry.id)`, so its label is the
+    // slug-derived Title Case "H1 Only", while the destination page's <title> is
+    // the H1 "Distinct Heading Title". The two PROVABLY differ — this pins the
+    // documented Decision-D divergence (unlike /no-h1, where they coincide).
+    const label = (await page.locator('a[href="/h1-only"]').first().textContent())?.trim();
+    expect(label, '/h1-only index label should be the slug-derived "H1 Only"').toBe('H1 Only');
+
+    const dest = await page.request.get('/h1-only');
+    const html = await dest.text();
+    const destTitle = (html.match(/<title>([^<]*)<\/title>/i)?.[1] ?? '').trim();
+    expect(destTitle, "destination <title> should be the page's H1").toBe('Distinct Heading Title');
+
+    // The whole point: label and destination title are NOT equal here.
+    expect(label, 'Decision-D: index label and destination title must diverge for an H1-only page').not.toBe(destTitle);
   });
 });
 

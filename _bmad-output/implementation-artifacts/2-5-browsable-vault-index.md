@@ -1,6 +1,6 @@
 # Story 2.5: Browsable vault index
 
-Status: in-progress
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -188,10 +188,13 @@ Opus 4.8 (1M context) — claude-opus-4-8[1m]
 
 ### File List
 
-- `web/src/lib/title.mjs` (NEW) — shared `slugToTitle` helper, imported by both the catch-all route and the index.
-- `web/src/pages/index.astro` (REPLACED) — Story-1.1 "Coming soon" placeholder retired; now the generated browsable index from `getCollection('pages')`, sorted + rendered through `Page`.
+- `web/src/lib/title.mjs` (NEW; code-review: nullish/empty-input guard added) — shared `slugToTitle` helper, imported by both the catch-all route and the index helper.
+- `web/src/lib/index-entries.mjs` (NEW; code-review) — pure `buildIndexItems()` (empty-id filter, never-empty label with `|| entry.id` fallback, ICU-independent code-unit sort), rendered by `index.astro` and unit-tested for the degenerate cases.
+- `web/src/pages/index.astro` (REPLACED; code-review: now renders from `buildIndexItems`, code-unit sort) — Story-1.1 "Coming soon" placeholder retired; the generated browsable index from `getCollection('pages')`, sorted + rendered through `Page`.
 - `web/src/pages/[...slug].astro` (UPDATED) — imports `slugToTitle` from `../lib/title.mjs` instead of the inline definition; behaviour unchanged.
-- `web/tests/2-5-index.spec.ts` (NEW, RED→green) — 22 specs for the browsable index (listing completeness, link resolution, reachability, nested + CI-stable order, placeholder retired, themed/JS-free/listing-only).
+- `content/h1-only.md` (NEW; code-review) — H1-only fixture (no frontmatter title) where the index label ("H1 Only") provably differs from the destination `<title>` ("Distinct Heading Title"), exercising the Decision-D divergence.
+- `web/tests/2-5-index.spec.ts` (NEW; code-review: +1 H1-divergence spec, route set→12) — 23 specs for the browsable index (listing completeness, link resolution, reachability, nested + CI-stable order, placeholder retired, themed/JS-free/listing-only, H1-divergence).
+- `web/tests/2-5-index-degenerate.spec.ts` (NEW; code-review) — 4 unit-style specs over `buildIndexItems` exercising the empty-vault / all-empty-id / single-page degenerate branches.
 
 ## Senior Developer Review (AI)
 
@@ -270,9 +273,9 @@ The one substantive concern is a **robustness gap, not a present bug**: the AC4 
 
 ### Review Findings
 
-- [ ] [Review][Decision] AC4 sort uses `localeCompare(b.id, 'en')` not a code-unit comparator — locale-pinned but not ICU/CLDR-data-independent; correct today only by coincidence with code-unit order. Spec sanctioned both options, so the choice needs a human call. [web/src/pages/index.astro:48]
-- [ ] [Review][Patch] Add test coverage for AC1 empty-vault and single-page degenerate cases (code handles them; the `No pages yet.` branch is untested). [web/src/pages/index.astro:54-55; web/tests/2-5-index.spec.ts]
-- [ ] [Review][Patch] Harden the Decision-D label test: add an H1-only-without-frontmatter-title fixture where the index label provably differs from the destination `<title>`, and pin it (current `/no-h1`/`empty` cases coincide, so divergence is unproven). [web/tests/2-5-index.spec.ts:144-171]
-- [ ] [Review][Patch] Guard `slugToTitle` against nullish input and empty/separator-only slugs; add a final non-empty label fallback (`… || entry.id`) on the index. [web/src/lib/title.mjs:17-23; web/src/pages/index.astro:43]
+- [x] [Review][Decision→Resolved] AC4 sort switched to an ICU-independent code-unit comparator `(a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0` (replacing `localeCompare(b.id, 'en')`), so the order is now provably identical on dev and CI regardless of host ICU/CLDR data — not merely coincidental. The extracted `buildIndexItems` helper carries this comparator; the existing pinned-order spec (`EXPECTED_ROUTES_SORTED`) stays green and its rationale comment now references the code-unit comparison. [web/src/lib/index-entries.mjs; web/src/pages/index.astro] — resolved
+- [x] [Review][Patch→Resolved] Empty-vault and single-page degenerate cases are now tested. The index's list-building + label + sort logic was extracted into a pure `buildIndexItems()` in `web/src/lib/index-entries.mjs` (which `index.astro` renders from), and `web/tests/2-5-index-degenerate.spec.ts` exercises it on 0-entry (`buildIndexItems([]) === []`, the exact condition driving the `No pages yet.` branch), all-empty-id, and 1-entry inputs. The `No pages yet.` branch is no longer dead-untested. [web/src/lib/index-entries.mjs; web/tests/2-5-index-degenerate.spec.ts] — resolved
+- [x] [Review][Patch→Resolved] Decision-D divergence is now genuinely exercised: added `content/h1-only.md` (H1-only, no frontmatter title — destination `<title>` = "Distinct Heading Title") where the index label (slug-derived "H1 Only") PROVABLY differs from the destination title. A new spec in `2-5-index.spec.ts` pins both and asserts `label !== destTitle`, so Decision-D is no longer proven only by coincidental `/no-h1`/`empty` cases. The pinned route set/order was updated to 12 routes. [web/tests/2-5-index.spec.ts; content/h1-only.md] — resolved
+- [x] [Review][Patch→Resolved] `slugToTitle` now guards nullish/empty input (`if (!slug) return ''`) so it never throws, and the index (via `buildIndexItems`) adds a final `|| entry.id` fallback so an empty-slug label can't be blank. [web/src/lib/title.mjs:24-26; web/src/lib/index-entries.mjs] — resolved
 - [x] [Review][Defer] No `content.config.ts` collection schema — malformed frontmatter `title` silently coerced to `''`. Pre-existing (config untouched by 2.5); consistent across both files. — deferred, pre-existing
 - [x] [Review][Defer] `slugToTitle` title-case regex `\b\w` uppercases after any word boundary (apostrophes/digits). Pre-existing behaviour of the function extracted unchanged in 2.5. — deferred, pre-existing
