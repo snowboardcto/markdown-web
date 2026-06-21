@@ -171,7 +171,10 @@ public class EdgeCaseHardeningTests
         Hyperlink? link = FlowDocumentTestHelpers.FirstHyperlink(paragraph);
         Assert.NotNull(link);
         // Records the href; inert navigation is Story 3.5 (we do not assert a click handler).
-        Assert.Equal("https://example.com", link!.NavigateUri?.ToString());
+        // Use OriginalString (the exact href as authored): System.Uri canonicalization appends a
+        // trailing slash to an authority-only absolute URL, so .ToString() would yield
+        // "https://example.com/". OriginalString preserves the URL the renderer recorded verbatim.
+        Assert.Equal("https://example.com", link!.NavigateUri?.OriginalString);
     }
 
     [StaFact]
@@ -184,6 +187,6 @@ public class EdgeCaseHardeningTests
         Paragraph paragraph = Assert.IsType<Paragraph>(document.Blocks.Single());
         Hyperlink? link = FlowDocumentTestHelpers.FirstHyperlink(paragraph);
         Assert.NotNull(link);
-        Assert.Equal("https://example.com/page", link!.NavigateUri?.ToString());
+        Assert.Equal("https://example.com/page", link!.NavigateUri?.OriginalString);
     }
 }
