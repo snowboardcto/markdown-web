@@ -1,6 +1,6 @@
 ---
 title: The Markdown Web
-status: draft
+status: final
 created: 2026-06-21
 updated: 2026-06-21
 ---
@@ -10,15 +10,17 @@ updated: 2026-06-21
 
 ## 0. Document Purpose
 
-This PRD is for the builder (naethyn) and any downstream UX/architecture/epics work. It builds on the finalized product brief and addendum (`_bmad-output/planning-artifacts/briefs/brief-the-markdown-web-2026-06-21/`), the manifesto (`_bmad-output/the-markdown-web.md`), and the market research (`_bmad-output/planning-artifacts/research/market-markdown-web-competitive-landscape-research-2026-06-21.md`) — it does not duplicate them. Vocabulary is Glossary-anchored; features are grouped with globally numbered FRs nested under them; tech-how (Azure, rendering engine, HTTP mechanics) lives in `addendum.md`; assumptions are tagged inline and indexed in §9.
+This PRD is for the builder (naethyn) and any downstream UX/architecture/epics work. It builds on, and does not duplicate, the finalized product brief and addendum (`_bmad-output/planning-artifacts/briefs/brief-the-markdown-web-2026-06-21/`), the manifesto (`_bmad-output/the-markdown-web.md`), and the market research (`_bmad-output/planning-artifacts/research/market-markdown-web-competitive-landscape-research-2026-06-21.md`).
+
+Conventions: vocabulary is Glossary-anchored; features are grouped, with globally numbered FRs nested under them; tech-how (Azure, rendering engine, HTTP mechanics) lives in `addendum.md`; assumptions are tagged inline and indexed in §9.
 
 ## 1. Vision
 
 The Markdown Web is a web where URLs point to `.md` files and presentation is delegated, not dictated. The author publishes pure markdown — structure and meaning. A browser still gets a beautiful page; but a reader running the native client has their *own* local agent render that markdown into whatever shape fits them. One source file, a personal experience per reader.
 
-The first job it does is grounded and selfish: give people who use AI agents — and therefore drown in markdown — a place to store, browse, share, and genuinely *enjoy* their `.md`. From that wedge grows the larger thesis: if markdown is the lingua franca for machines, it can be the lingua franca for humans too, rendered by each human's agent.
+The first job it does is grounded and selfish: give people who use AI agents — and therefore drown in markdown — a place to store, browse, share, and genuinely *enjoy* their `.md`. From that wedge grows the larger thesis, and the wedge into the whole industry conversation: everyone says markdown is for models and HTML is for humans — what if markdown were the lingua franca for humans too, rendered by each human's agent?
 
-v0.1 makes the vision real and visible at themarkdownweb.com: markdown rendered beautifully, dogfooded on the author's own files. The native client, content negotiation, and sharing are committed and sequenced behind it — not cut.
+v0.1 makes the vision real and visible at themarkdownweb.com: markdown rendered beautifully, dogfooded on the author's own files — the manifesto, rendered, *is* the proof of concept. The native client, content negotiation, and sharing are committed and sequenced behind it — not cut.
 
 ## 2. Target User
 
@@ -30,7 +32,7 @@ v0.1 makes the vision real and visible at themarkdownweb.com: markdown rendered 
 - **(Latent) own how I read** — eventually, have my own agent shape any page to me (reading level, language, format, accessibility).
 
 ### 2.2 Non-Users (v1)
-- People who want a markdown *editor/authoring* tool — you bring your own `.md`; we render, we don't edit.
+- People who want a markdown *editor/authoring* tool — they bring their own `.md`; we render, we don't edit.
 - Teams needing accounts, permissions, or collaboration workflows (deferred).
 - General "AI browser" users expecting to reformat the *entire existing HTML web* — this is a markdown-native web, not a universal page reformatter.
 
@@ -43,7 +45,7 @@ v0.1 makes the vision real and visible at themarkdownweb.com: markdown rendered 
   Dana, a curious developer who's never heard of this, lands on a themarkdownweb.com page from search. It loads instantly as normal, beautiful HTML — crawlable, no app required. She reads it, gets the idea, and notices a subtle "open this in the client for a personalized view" affordance. **Resolution:** born-compatible reach; the page recruited her. **Realizes FR-5, FR-7, FR-8.** *Edge case:* no JavaScript / old browser still renders readable content.
 
 - **UJ-3. Theo opens a `.md` in the native client and his agent renders it for him.**
-  Theo, an agent-and-markdown power user, opens the same URL in the native client. His local agent renders the page his way — terminal-crisp, his language, the section he cares about surfaced first — and he trusts it because it's *his* agent doing it, locally, on his behalf. **Resolution:** per-reader rendering working end to end; same source, his shape. **Realizes FR-9, FR-10, FR-11, FR-12, FR-13, FR-14.** *(Committed, post-v0.1.)*
+  Theo, an agent-and-markdown power user, opens the same URL in the native client. His local agent renders the page his way — terminal-crisp, his language, the section he cares about surfaced first — and he trusts it because it's *his* agent doing it, locally, on his behalf. **Resolution:** per-reader rendering working end to end; same source, his shape. **Realizes FR-9, FR-10, FR-11, FR-12, FR-13, FR-14.** *(MVP; sequenced after the HTML-client slice.)*
 
 ## 3. Glossary
 
@@ -63,7 +65,7 @@ v0.1 makes the vision real and visible at themarkdownweb.com: markdown rendered 
 ## 4. Features
 
 ### 4.1 Markdown Content & Vault
-**Description:** The canonical content layer. An Author drops `.md` files (plus media) into a Vault; each file becomes an addressable `.md` page. Relative markdown links between files resolve to navigable routes so Readers can browse around. Realizes UJ-1. Use Glossary terms exactly.
+**Description:** The canonical content layer. An Author drops `.md` files (plus media) into a Vault; each file becomes an addressable `.md` page. Relative markdown links between files resolve to navigable routes so Readers can browse around. Realizes UJ-1.
 
 **Functional Requirements:**
 
@@ -85,9 +87,10 @@ Author can embed images and video referenced relatively; media is served alongsi
 - `![](media/powder.jpg)` renders inline; the asset is served from the Vault.
 
 #### FR-4: Browsable space
-A Vault (folder of `.md` + media) is presented as a browsable, linked site.
+A Vault (folder of `.md` + media) is presented as a browsable, linked site. Realizes UJ-1.
 **Consequences (testable):**
 - The Vault's structure is navigable without manually typing URLs.
+- The Vault exposes an entry/index surface that lists or links its pages.
 
 ### 4.2 The HTML Client (browser path)
 **Description:** When a Reader hits a `.md` page from a browser, the system server-renders clean, beautiful HTML — no agent required. This is the born-compatible path: it works everywhere, is crawlable, and casts the vision. Realizes UJ-1, UJ-2.
@@ -112,6 +115,9 @@ HTML pages are SEO-friendly and produce rich link previews when shared into chat
 
 #### FR-8: Navigation
 Reader can browse and navigate the Vault via rendered links. Realizes UJ-1, UJ-2.
+**Consequences (testable):**
+- Clicking an in-page link to another `.md` page loads that page.
+- Browser back/forward returns to the prior page.
 
 ### 4.3 The Native Client & Per-Reader Rendering *(MVP)*
 **Description:** The heart of the product. A Reader opens a `.md` page in the native client; their local agent renders the presentation for them — reflowing, re-leveling, translating, re-emphasizing — without HTML. Trust comes from locality: it's the Reader's *own* agent. Realizes UJ-3.
@@ -122,14 +128,16 @@ Reader can browse and navigate the Vault via rendered links. Realizes UJ-1, UJ-2
 Reader can open a `.md` page in the native client and receive a rendering produced by their local agent. Realizes UJ-3.
 
 #### FR-10: Per-reader rendering
-The native client renders presentation shaped to the individual Reader (layout, reading level, emphasis, format).
+The native client renders presentation shaped to the individual Reader (layout, reading level, emphasis, format). This is "Zero Shared Pixels for humans" — the differences are *substantive* (structure, ordering, reading level, language, format), not merely cosmetic theming.
 **Consequences (testable):**
-- Two readers with different stated preferences see materially different renderings of the same `.md` page.
+- Two readers with different stated preferences receive renderings that differ structurally (e.g. section ordering, summarization, reading level, or language) — not only color/font.
+- A Reader who changes a preference sees the rendering change accordingly.
 
 #### FR-11: Accessibility & translation as rendering outcomes
 Per-reader rendering can produce accessible and translated presentations (e.g. audio, large-text/reflowed, translated) from the same source with no author effort.
 **Consequences (testable):**
 - A reader configured for translation sees the page in their language; one configured for audio gets a spoken rendering.
+- Translated output preserves the page's headings, links, and structure; audio rendering covers the full body in reading order.
 
 #### FR-12: Local-agent trust
 Rendering in the native client is performed by the Reader's own local agent; no third party rewrites content in transit.
@@ -138,6 +146,9 @@ Rendering in the native client is performed by the Reader's own local agent; no 
 
 #### FR-13: Works everywhere
 The native client is available across the Reader's platforms. `[ASSUMPTION: cross-platform form factor (app/CLI/native-UI) is an open decision — see §8; requirement is ubiquity, not a specific shell.]`
+**Consequences (testable):**
+- The native client runs on at least the Reader's primary desktop and mobile platforms.
+- No part of the client requires Chromium/Electron to install or run.
 
 **Feature-specific NFRs:**
 - **No Chromium dependency** — the native client must not depend on Chromium (rules out Electron, Chromium-based webviews, and Chrome extensions). It renders markdown to native UI, not via a bundled browser engine. *(Hard constraint, naethyn.)*
@@ -149,7 +160,7 @@ The native client is available across the Reader's platforms. `[ASSUMPTION: cros
 **Functional Requirements:**
 
 #### FR-14: One URL, two representations
-A `.md` page serves HTML to browsers and raw markdown to agents/native client based on the request, with caching that keeps the two from being confused.
+A `.md` page serves HTML to browsers and raw markdown to agents/native client based on the request, with caching that keeps the two from being confused. Realizes UJ-3.
 **Consequences (testable):**
 - A request signaling a preference for markdown receives markdown; a browser receives HTML; caches vary on the request signal.
 
@@ -160,9 +171,13 @@ A `.md` page serves HTML to browsers and raw markdown to agents/native client ba
 
 #### FR-15: Living Link
 Reader can share a `.md` URL that renders for whoever opens it (HTML for browsers, per-reader in the native client).
+**Consequences (testable):**
+- The same shared URL renders as HTML in a browser and per-reader in the native client.
 
 #### FR-16: Follow / Feed
 Reader can follow a Vault and receive its new `.md` pages as a Feed.
+**Consequences (testable):**
+- After following a Vault, a newly added `.md` page surfaces to the follower.
 
 ### 4.6 Publishing & Hosting
 **Description:** How an Author gets a Vault live. Realizes UJ-1. Tech-how (Azure Static Web Apps, CI) in `addendum.md`.
@@ -170,12 +185,15 @@ Reader can follow a Vault and receive its new `.md` pages as a Feed.
 **Functional Requirements:**
 
 #### FR-17: Publish on push
-Author publishes by committing/pushing changes; the live site updates automatically.
+Author publishes by committing/pushing changes; the live site updates automatically. Realizes UJ-1.
 **Consequences (testable):**
 - Pushing a new `.md` results in a new live page without manual deploy steps.
 
 #### FR-18: Custom domain over HTTPS
-The Vault is served at a custom domain (themarkdownweb.com) over HTTPS.
+The Vault is served at a custom domain (themarkdownweb.com) over HTTPS. Realizes UJ-1, UJ-2.
+**Consequences (testable):**
+- themarkdownweb.com serves the Vault over HTTPS with a valid certificate.
+- Plain HTTP requests redirect to HTTPS.
 
 ## 5. Non-Goals (Explicit)
 - **Not a markdown editor/authoring app** — Authors bring their own `.md`.
@@ -183,6 +201,7 @@ The Vault is served at a custom domain (themarkdownweb.com) over HTTPS.
 - **Not a universal AI browser** — it renders the Markdown Web, not the entire existing HTML web.
 - **Not an accounts/permissions platform in v1** — no auth, teams, or access control yet.
 - **Not monetized yet** — business model deliberately parked.
+- **Not reinventing commodity plumbing** — markdown hosting and content negotiation are near-commodity patterns (Cloudflare, Vercel, Mintlify); use standard approaches, don't build novel infrastructure. The differentiator is per-reader human-facing rendering, not the pipes.
 
 ## 6. MVP Scope
 
@@ -207,13 +226,13 @@ MVP includes **both clients** (naethyn: "we need both"). To keep the build sane,
 **Primary**
 - **SM-1**: Author adoption (dogfood) — naethyn hosts his markdown at themarkdownweb.com and reads it at least weekly without abandoning it after a month. Validates FR-1–FR-4, FR-8, FR-17, FR-18.
 - **SM-2**: "Gets it" on sight — a first-time visitor to themarkdownweb.com perceives a beautiful publication and can articulate the vision unprompted. Validates FR-5, FR-6, FR-7.
-- **SM-3**: Per-reader rendering proven — the native client (non-Chromium) renders the same `.md` materially differently for two readers, end to end (not mocked). Validates FR-9–FR-14.
+- **SM-3**: Per-reader rendering proven — the native client (non-Chromium) renders the same `.md` *structurally* differently for two readers (ordering / reading level / language / format, not just theming), end to end (not mocked). Validates FR-9–FR-14.
 
 **Secondary**
 - **SM-4**: Beyond customer-zero — at least one other agent-and-markdown user publishes a Vault. Validates FR-1–FR-4, FR-17.
 
 **Counter-metrics (do not optimize)**
-- **SM-C1**: Don't trade beauty/speed for breadth — core reading experience load time and visual quality must not regress as features are added. Counterbalances SM-3, SM-4.
+- **SM-C1**: Don't trade beauty/speed for breadth — the core reading experience's load time and visual quality must not regress as features are added. Counterbalances SM-3, SM-4.
 - **SM-C2**: Don't sacrifice born-compatibility — the no-agent HTML experience (FR-5) must stay first-class while chasing personalization. Counterbalances SM-3.
 
 ## 8. Open Questions
@@ -223,8 +242,8 @@ MVP includes **both clients** (naethyn: "we need both"). To keep the build sane,
 4. **Business model** — parked; revisit before scaling.
 5. **Identity & discovery** — how readers find each other's Vaults (pairs with Sharing).
 6. **Author incentive** — why authors publish `.md` and surrender presentation control.
+7. **Timing risk (watch)** — the moat is non-technical and *time-sensitive*; an incumbent (Comet/Dia/Atlas/A2UI) could ship "render this `.md` for you." HTML-first sequencing delays the differentiating native-client capability — monitor and protect the native-client timeline.
 
 ## 9. Assumptions Index
 - §4.3 FR-13 — Native client form factor is undecided; requirement is cross-platform ubiquity with **no Chromium dependency** (hard constraint, confirmed).
 - §8.2 — Markdown flavor = GFM; YAML frontmatter treated as metadata. *(Default — confirm.)*
-- §6 — MVP includes **both clients** + content negotiation (confirmed: "we need both"); Sharing deferred. Internal sequence: HTML client first, native client second.
