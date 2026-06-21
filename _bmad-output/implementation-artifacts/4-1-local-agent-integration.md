@@ -1,6 +1,6 @@
 # Story 4.1: Local agent integration
 
-Status: ready-for-review
+Status: done
 
 <!-- VALIDATION (Step 3, vs epics.md Story 4.1, lines 373–384; FR-12, NFR-5; architecture-epic4-agent.md D1–D5 + the 4.1 binding) — RESULT = PASS.
   Run AFTER Step-2 advanced-elicitation hardening (this revision). Re-validates AC↔epic alignment, addendum conformance, scope drift, missing ACs, and CI-runnable task completeness against the tightened ACs + the new failure-mode/Outcome table, no-leak assertion list, and pinned Anthropic contract.
@@ -521,4 +521,24 @@ _(none — no local build possible; verification is windows-latest CI only)_
 
 ### CI Verification
 
-_(PENDING — the authoritative verification is the `Build Windows Client` (`build-windows.yml`) run on `windows-latest`. This agent does NOT commit/push. Record the green run id after CI is green.)_
+**CI run #42** (`54843b9`): **GREEN** on windows-latest — Restore ✓ (new `Agent.Tests` project + `System.Security.Cryptography.ProtectedData` 9.0.0 restored on net10) Build ✓ Test ✓. The Agent module, DPAPI key store, engine failure-mode table, Anthropic client, gateway seam, and Agent↔App boundary tests pass; all Epic 1–3 tests stay green. Authoritative verification.
+
+**Pre-CI fix caught by Step 5/coordinator:** `AnthropicLlmClient` initially hand-rolled the JSON body leaving newlines raw (to satisfy a raw-substring test assertion) — which is **invalid JSON** the real Anthropic API would reject (a false-green: stub test passed, but live multi-line pages would always fall back). Switched to `System.Text.Json` serialization (valid escaping) and changed the test to assert the **semantic** body contract (`JsonDocument.Parse` → `messages[0].content == pageMarkdown`). The transform now works against the real API.
+
+### Consolidated Code Review (Step 7) — APPROVED
+
+No CRITICAL/MAJOR. Verified: `ProtectedData` 9.0.0 restore/roll-forward on net10 + DPAPI availability; exhaustive signature parity vs the oracle tests; the seam runs the personalize await **inside** `NavigationController`'s last-wins generation guard (no stale render, no UI deadlock; Basic pass-through byte-identical to Epic-3); valid JSON + total response parse; engine/client totality; the API key rides only the `x-api-key` header and never leaks; boundary + purity + no-webview guards green. 3 MINOR notes (model-id is a runtime concern outside CI; redundant defense-in-depth MaxInputChars; shared HttpClient is safe) — non-blocking.
+
+### AC → Test Trace (Step 10) — all green on run #42
+
+| AC | Requirement | Test(s) |
+|----|-------------|---------|
+| AC1 | Agent module surface (ILlmClient/AnthropicLlmClient, ISecretStore/DpapiSecretStore, PersonalityEngine, Persona.Basic) | `AgentSurfaceTests` + `AnthropicLlmClientTests` + `PersonalityEngineTests` |
+| AC2 | App render-time seam (fetch → agent → render) | `PersonalizationGatewayTests` + `PersonalizationSeamTests` `[StaFact]` |
+| AC3 | BYO-key DPAPI storage (never logged) + missing-key handling | `DpapiSecretStoreTests` + engine NeedsKey + no-leak asserts |
+| AC4 | Graceful totality — every failure → fallback to original, never throws | `PersonalityEngineTests` (14-row table) + `AnthropicLlmClientTests` failure paths |
+| AC5 | No server-side rewrite (NFR-5): client→provider, distinct from fetch | `AnthropicLlmClientTests` (host == api.anthropic.com, never themarkdownweb) |
+| AC6 | Rendering pure + App→Agent→(API) boundary | `DependencyBoundaryTests` (Agent↔App) + inherited purity/no-webview |
+| AC7 | Agent.Tests project + windows-latest CI gate (STA + no-parallel; LLM/key faked) | CI run #42 green |
+
+All 7 ACs covered by CI-runnable proofs (LLM + key faked — no real key/network in CI). Trace complete. **Story 4-1 DONE.**

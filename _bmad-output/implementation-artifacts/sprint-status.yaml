@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-21
-last_updated: 2026-06-21 (3-6 marked done — 7 ACs covered, Windows CI green (run #31) on windows-latest; basic faithful default theme + a11y exit; review APPROVED; EPIC 3 COMPLETE — native client is a usable basic Markdown Web reader)
+last_updated: 2026-06-21 (4-1 marked done — 7 ACs covered, Windows CI green (run #42) on windows-latest; BYO-key local agent integration; review APPROVED; epic-4 -> in-progress)
 project: The Markdown Web
 project_key: NOKEY
 tracking_system: file-system
@@ -73,8 +73,8 @@ development_status:
   epic-3-retrospective: optional
 
   # Epic 4: Personalized Rendering (AI Personalities)
-  epic-4: backlog
-  4-1-local-agent-integration: backlog
+  epic-4: in-progress
+  4-1-local-agent-integration: done # 7 ACs covered + GREEN on windows-latest (run #42, 54843b9); BYO-key agent: AnthropicLlmClient (valid System.Text.Json body — caught/fixed a raw-newline invalid-JSON false-green), DpapiSecretStore (ProtectedData), PersonalityEngine total fallback, Persona.Basic pass-through, App PersonalizationGateway seam (re-entrancy preserved); review APPROVED; Agent.Tests project added; Agent<->App boundary + purity guards green
   4-2-personality-selector: backlog
   4-3-per-reader-structural-rendering: backlog
   4-4-accessibility-and-translation-outcomes: backlog
