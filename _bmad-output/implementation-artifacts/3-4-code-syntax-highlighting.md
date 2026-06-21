@@ -1,6 +1,6 @@
 # Story 3.4: Code syntax highlighting
 
-Status: ready-for-dev
+Status: done
 
 <!-- VALIDATION (Step 1, vs epics.md Story 3.4, lines 325–336; FR-6): RESULT = PASS.
   - AC↔epic alignment: the epic "Then/And" is two clauses. Mapped exhaustively:
@@ -335,4 +335,23 @@ Opus 4.8 (1M context) — claude-opus-4-8[1m]
 
 ### CI Verification
 
-_(pending — push to trigger `build-windows.yml` on `windows-latest`; not pushed by this agent. Watch the `restore` step for `ColorCode.Core 2.0.15` on net10-windows — netstandard2.0 asset resolves with zero deps.)_
+**CI run #19** (`6f74f86`): **GREEN** on windows-latest — Restore ✓ (ColorCode.Core 2.0.15 netstandard2.0 asset resolved on net10, zero deps) Build ✓ Test ✓. The full highlighting suite (exact palette ARGB, ≥2 colors for C#/JS, single-color fallback, totality, the two test edits) + all 3.1/3.2/3.3 + Rendering tests pass. Authoritative verification.
+
+### Consolidated Code Review (Step 7) — APPROVED
+
+No blocking changes. Independently confirmed (against upstream ColorCode-Universal source) the two top CI-red risks were safe: (1) `CodeColorizerBase(null, null)` defaults the `languageParser` to a real `LanguageParser` (no NRE); (2) all 25 referenced `ScopeName` constants exist in 2.0.15 (no compile error). Verified token isolation yields exact-ARGB runs for `int`/`1`/`// c`, verbatim text preserved, palette brushes are single frozen instances (DistinctForegrounds counts by reference), purity allowlist correct, no 3.3 regression. 2 MINOR notes (AC2 token-boundary canary; JS proof doesn't exercise number tokens) — non-blocking.
+
+### AC → Test Trace (Step 10) — all green on run #19
+
+| AC | Requirement | Test |
+|----|-------------|------|
+| AC1 | Render API hookup + block contract preserved + `SyntaxHighlighting` option (default true) | `SyntaxHighlightTests.KnownLanguage_PreservesBlockContract_*` + `Default_SyntaxHighlighting_Option_IsTrue` |
+| AC2 | GitHub-light palette exact ARGB on keyword/string/comment/number | `SyntaxHighlightTests.CSharp_Keyword_String_Comment_Number_CarryExactPaletteColors` |
+| AC3 | Known language → ≥2 distinct token colors (C# + JS) | `SyntaxHighlightTests` multi-color + `CodeBlockTests.*SyntaxHighlighted` (≥2) |
+| AC4 | Unknown/missing language → single-color mono fallback, no throw | `SyntaxHighlightTests` unknown/bare-fence (≤1) |
+| AC5 | Totality — never throws on any code (invalid-in-lang, empty, emoji, 50KB, nested backticks) | `SyntaxHighlightTests` totality `[Theory]` + 50KB `[StaFact]` |
+| AC6 | Rendering stays pure (no net/AI/webview/up-ref) | `RenderingPurityTests` (allowlist {Markdig, ColorCode.Core} + forbidden-substring guard) |
+| AC7 | The two narrow test edits applied without weakening other proofs | `CodeBlockTests` (≥2, renamed) + `RenderingPurityTests` (allowlist) |
+| AC8 | windows-latest CI gate (STA + no-parallel) | CI run #19 green |
+
+All 8 ACs covered by CI-runnable proofs. Trace complete. **Story 3-4 DONE.**
