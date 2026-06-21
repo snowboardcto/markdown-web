@@ -151,3 +151,23 @@ _Novelty_: Foundation → compatibility → magic. Each stage ships independent 
 ## Naming Thread — brainstorming a name + registerable domain
 
 Goal: name the whole paradigm/product so naethyn can register a domain. The `.md` TLD (Moldova, widely used for markdown) is an on-theme domain-hack option.
+
+### Naming — findings & shortlist
+
+**Availability reality (checked live via Verisign RDAP):** nearly all dictionary + obvious coined `.com` names are taken (facet, prism, lens, mosaic, mirador, vellum, markway, mdweb, markdownweb, etc. — all gone).
+
+**Confirmed AVAILABLE `.com` (buyable today, no check needed):**
+- `themarkdownweb.com` · `marklace.com` · `markdle.com` · `vellumweb.com` · `velloum.com` · `readme-md.com`
+
+**Strategic recommendation: go `.md`.** The `.md` TLD makes the domain itself express the concept (the Markdown Web on a markdown TLD). Niche TLD → good words more likely free. Cannot be RDAP-checked here → verify on GoDaddy (matches the desired buy-workflow).
+
+**`.md` hit-list to check on GoDaddy (ranked, on-theme):**
+1. Verb/noun hacks: `read.md` · `view.md` · `render.md` · `open.md` · `browse.md` · `web.md` · `my.md` · `see.md` · `show.md` · `feed.md`
+2. Concept words: `facet.md` · `prism.md` · `lens.md` · `mosaic.md` · `vellum.md` · `mirador.md` · `kaleido.md`
+
+**Agreed domain-buying workflow (run when ready):**
+1. Pick top candidate from the `.md` hit-list.
+2. Search it on GoDaddy.
+3. If available AND naethyn likes it → buy.
+4. If taken or not loved → next candidate. Repeat.
+5. Fallback: if no `.md` lands, grab a confirmed-available `.com` from the list above.
