@@ -41,34 +41,17 @@
 // never crash) and the page is recorded for visibility. A degraded page emits
 // literal `foo.md` hrefs, which 404 onto the not-found page — still AC4-safe.
 import { visit } from 'unist-util-visit';
-import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { pathToSlug } from './slug.mjs';
-
-// Repo-root vault dir, resolved identically to the route layer's contentDir.
-const contentDir = fileURLToPath(new URL('../../../content', import.meta.url));
+// Story 2.4 — the VFile->source-path + page-dir-slug derivation was extracted
+// into the shared `page-path.mjs` so this link plugin and the media plugin
+// resolve relative references against the page's location identically (anti-drift).
+import { resolveSourcePath, pageDirSlugFromSource } from './page-path.mjs';
 
 // Pages whose VFile path could not be resolved inside the vault (the link
 // rewrite was skipped). Surfaced so a future Astro VFile-shape change is a
 // visible no-op-with-a-trail, not a silent regression.
 const unresolvedPages = new Set();
-
-/** Resolve the current page's source `.md` absolute path from the VFile. */
-function resolveSourcePath(file) {
-  const candidate =
-    (file && typeof file.path === 'string' && file.path) ||
-    (file && Array.isArray(file.history) && file.history[0]) ||
-    (file && file.data && file.data.astro && file.data.astro.frontmatter
-      ? file.data.astro.frontmatter.__sourcePath
-      : undefined) ||
-    '';
-  if (!candidate) return null;
-  // Must be inside the vault content/ dir, else treat as "no usable path".
-  const normalized = path.normalize(candidate);
-  const dirWithSep = contentDir.endsWith(path.sep) ? contentDir : contentDir + path.sep;
-  if (!normalized.startsWith(dirWithSep)) return null;
-  return normalized;
-}
 
 export default function rehypeMdLinks() {
   return (tree, file) => {
@@ -90,17 +73,9 @@ export default function rehypeMdLinks() {
     }
 
     // The page's directory slug — relative links resolve against the page's
-    // location, not the site root. F2: derive the directory from the SOURCE
-    // FILE PATH *before* any index-collapse. Slugging the page path first and
-    // popping the last segment is wrong for `content/<dir>/index.md`, whose
-    // page slug index-collapses to `<dir>` so the pop yields `''` (root) instead
-    // of `<dir>` — links then resolve one level too shallow. Take the file's
-    // directory (drop the basename) and slug THAT, so `sub/index.md` and
-    // `sub/page.md` both yield a page dir slug of `sub`.
-    const relPosix = path.relative(contentDir, sourcePath).split(path.sep).join('/');
-    const lastSlash = relPosix.lastIndexOf('/');
-    const relDirPosix = lastSlash === -1 ? '' : relPosix.slice(0, lastSlash);
-    const pageDirSlug = relDirPosix === '' ? '' : pathToSlug(relDirPosix);
+    // location, not the site root (the F2 derivation now lives in page-path.mjs,
+    // shared with the media plugin so both resolve the page dir identically).
+    const pageDirSlug = pageDirSlugFromSource(sourcePath);
 
     visit(tree, 'element', (node) => {
       if (node.tagName !== 'a' || !node.properties) return;

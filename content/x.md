@@ -134,3 +134,9 @@ A raw-HTML video with a relative `poster` and a nested relative `<source>` (AC5)
 A raw-HTML audio with a relative `src` (AC5):
 
 <audio controls src="media/clip.mp3"></audio>
+
+The AC1 epic example authored as LITERAL markdown `![]()` (not raw HTML) — proves
+the markdown image syntax flows through the same rewrite and bypasses Astro's
+`astro:assets`/`_astro` optimisation, emitting a plain served `<img>` (AC1):
+
+![markdown embed](media/powder.jpg)

@@ -110,6 +110,31 @@ test.describe('Story 2.4 AC1 — relative image embed renders inline + asset ser
     );
     expect(raw, 'no Astro island hydration directive on media').not.toMatch(/astro-island/);
   });
+
+  // AC1 verbatim: the epic example is LITERAL markdown `![](media/powder.jpg)`.
+  // This proves the markdown image syntax (not just raw HTML `<img>`) is rewritten
+  // to a served `/media/powder.jpg` AND bypasses Astro's astro:assets pipeline
+  // (no `/_astro/*.webp` optimisation, no ImageNotFound crash) — the same rehype
+  // rewrite handles both authoring forms because it runs at the HAST stage before
+  // Astro's internal rehypeImages.
+  test('LITERAL markdown `![markdown embed](media/powder.jpg)` -> served plain <img src="/media/powder.jpg"> (AC1 verbatim)', async ({
+    page,
+  }) => {
+    const img = page.locator('img[alt="markdown embed"]');
+    await expect(img, 'the markdown image must render as a single <img>').toHaveCount(1);
+    const src = await img.getAttribute('src');
+    expect(src, 'markdown ![]() src must be rewritten to the served root-absolute path').toBe(
+      '/media/powder.jpg',
+    );
+    // NOT an astro:assets-optimised /_astro/*.webp — a verbatim served copy.
+    expect(src, 'must NOT be processed by astro:assets (no /_astro/ optimisation)').not.toMatch(
+      /^\/_astro\//,
+    );
+    // The asset it points at is actually served (200, real JPEG bytes).
+    const res = await page.request.get(src!);
+    expect(res.status(), 'the markdown-embedded asset must be served 200').toBe(200);
+    expect(res.headers()['content-type']).toMatch(/^image\//);
+  });
 });
 
 test.describe('Story 2.4 AC2 — relative media resolution (assert emitted src), filenames not slugged', () => {
