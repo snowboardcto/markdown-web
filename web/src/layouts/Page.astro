@@ -1,0 +1,30 @@
+---
+// Story 2.1 — minimal, well-formed HTML5 document shell (AC3).
+//
+// Wraps rendered markdown in a valid <html lang> -> <head> -> <body> document
+// with the content inside a semantic <main>/<article>. No GitHub theme, design
+// tokens, site-header or pitch-card (Stories 2.2/2.6); no `client:*` islands —
+// content is pure server-rendered HTML so it survives JS-disabled (AC2).
+interface Props {
+  /** Deterministic, never-empty page title (H1 / front-matter title / slug). */
+  title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <main>
+      <article>
+        <slot />
+      </article>
+    </main>
+  </body>
+</html>

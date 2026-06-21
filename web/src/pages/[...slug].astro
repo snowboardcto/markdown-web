@@ -1,0 +1,37 @@
+---
+import { getCollection, render } from 'astro:content';
+import Page from '../layouts/Page.astro';
+
+// Story 2.1 — emit one static HTML page per `content/**/*.md`, sourced from the
+// repo-root vault via the `pages` collection (AC1/AC4). `index.md` -> `/`,
+// `x.md` -> `/x`, `sub/page.md` -> `/sub/page`. Slugs are Astro's deterministic
+// glob() ids (lower-cased, spaces/separators normalised) — no custom slugifier.
+export async function getStaticPaths() {
+  const entries = await getCollection('pages');
+  return entries.map((entry) => ({
+    params: { slug: entry.id },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const { Content, headings } = await render(entry);
+
+// Total, never-empty <title> (AC3/AC5): front-matter title -> first H1 -> slug.
+function slugToTitle(slug: string): string {
+  const last = slug.split('/').pop() ?? slug;
+  return last
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim();
+}
+
+const frontmatterTitle =
+  typeof entry.data?.title === 'string' ? entry.data.title.trim() : '';
+const h1 = headings.find((h) => h.depth === 1)?.text?.trim() ?? '';
+const title = frontmatterTitle || h1 || slugToTitle(entry.id) || entry.id;
+---
+
+<Page title={title}>
+  <Content />
+</Page>

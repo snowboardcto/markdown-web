@@ -36,9 +36,11 @@ test.describe('AC6: GFM extensions + HTML escaping on /x', () => {
   test('special characters < and & are HTML-escaped in the raw output', async ({ page }) => {
     const response = await page.goto('/x');
     const raw = await response!.text();
-    // Escaped entities must be present...
-    expect(raw).toContain('&lt;');
-    expect(raw).toContain('&amp;');
+    // Escaped character references must be present. Astro's HTML stringifier
+    // emits numeric refs (`&#x3C;`/`&#x26;`); named refs (`&lt;`/`&amp;`) are an
+    // equally valid escaping. Accept either form — the AC is "escaped, not raw".
+    expect(raw).toMatch(/&lt;|&#x3[cC];|&#60;/);
+    expect(raw).toMatch(/&amp;|&#x26;|&#38;/);
     // ...and the literal injected markup must NOT appear unescaped in body text.
     expect(raw).not.toContain('code with <tags>');
   });

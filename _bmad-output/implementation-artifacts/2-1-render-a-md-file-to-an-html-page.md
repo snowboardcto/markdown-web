@@ -1,6 +1,6 @@
 # Story 2.1: Render a `.md` file to an HTML page
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -23,47 +23,47 @@ so that anyone with a browser can read it.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Add GFM markdown processing to the Astro config** (AC: 1, 2, 3)
-  - [ ] In `web/`, install the GFM remark plugin: `remark-gfm` (Astro already bundles `remark`/`rehype`; `remark-gfm` adds tables, strikethrough, task lists, autolinks). Run `cd web && npm install remark-gfm` so it lands in `web/package.json` + `web/package-lock.json`.
-  - [ ] Update `web/astro.config.mjs`: under `markdown`, set `gfm: true` (Astro default) and register `remarkPlugins: [remarkGfm]`. Do NOT add Shiki theme tokens, a custom syntax theme, or the GitHub stylesheet here — code highlighting polish and the GitHub-style theme are **Story 2.2** scope. Astro's built-in Shiki default may run, but styling/contrast/palette is explicitly out of scope for 2.1.
-  - [ ] Keep the config minimal and additive: no integrations (Tailwind, MDX, sitemap, etc.), no `client:*` islands. Content must be pure server-rendered static HTML (FR-5/FR-7).
-- [ ] **Task 2 — Route `content/*.md` → `/*` via an Astro Content Collection (glob loader)** (AC: 1, 4)
-  - [ ] Define a content collection in `web/src/content.config.ts` (Astro 5 Content Layer API) using the `glob()` loader from `astro/loaders`, pointing `base` at the repo-root vault: `base: '../content'`, `pattern: '**/*.md'` (the vault lives one level up from `web/`). This makes `content/` the source — do NOT copy `.md` files into `web/src/pages/` (would violate the single-source-of-truth boundary, AC4).
-  - [ ] Create the dynamic route `web/src/pages/[...slug].astro` that calls `getCollection(...)` + `getStaticPaths()` to emit one page per `.md` file, and renders each entry's body via `render(entry)` → `<Content />`. The slug must map `content/x.md` → `/x` (drop the `.md` extension; `index.md` → `/`). Verify the emitted path is `dist/x/index.html`.
-  - [ ] Confirm the glob `base` resolves correctly given that `node_modules`/build run from `web/` but the vault is at `../content`. If a relative `base` proves brittle in the Astro 5 loader, resolve an absolute path from `import.meta.url`/`fileURLToPath` instead — but keep the source pointed at the repo-root `content/`, never a duplicate.
-- [ ] **Task 3 — Provide a minimal page layout / HTML document shell** (AC: 2, 3)
-  - [ ] Author a minimal layout (e.g. `web/src/layouts/Page.astro`) that wraps rendered content in a valid HTML5 document: `<!doctype html>`, `<html lang="en">`, `<head>` with `<meta charset="utf-8">`, `<meta name="viewport" ...>`, and a `<title>` (derive from the page's `# H1` or filename), and `<body>` with the article body inside a semantic `<main>`/`<article>`. The `[...slug].astro` route renders `<Content />` inside this layout.
-  - [ ] Make `<title>` derivation total: if a page has no `# H1` and no front-matter title (the empty-file edge case, AC5), fall back to the slug/filename so `<title>` is never empty. The document shell must stay valid even when the body is empty.
-  - [ ] Do NOT add the GitHub-style stylesheet, design tokens, `site-header`, or `pitch-card` — those are Stories 2.2 / 2.6. A bare (or near-bare) document is correct for 2.1; the only requirement is well-formed, semantic, JS-free HTML. A tiny amount of unopinionated base CSS is acceptable only if needed for legibility, but the themed look is explicitly deferred.
-  - [ ] Ensure no `client:*` directive is used anywhere on the content path — content must render server-side so it survives JS-disabled (AC2).
-- [ ] **Task 4 — Add a representative seed `.md` file to the vault that exercises every required GFM feature** (AC: 1, 6)
-  - [ ] Add a content file under `content/` (e.g. `content/x.md` to mirror the AC literally, or a real seed page) containing: multiple heading levels, **bold** and _italic_, an ordered list and an unordered list, inline `code` and a fenced ```code block``` with a language tag, and a GFM `| table |` with a header row. This is the build fixture proving AC1. (If a richer dogfood page like `the-markdown-web.md` is preferred per the architecture's seed-vault note, ensure it still covers all six feature classes.)
-  - [ ] Also include the GFM-extension + escaping cases for AC6: a `~~strikethrough~~`, a task list (`- [ ] todo` / `- [x] done`), a bare autolink URL (e.g. `https://themarkdownweb.com`), and at least one special character / HTML-escaping case (literal `<`, `&`, and an inline `` `code with <tags> & ampersand` ``). These prove correct `<del>`/checkbox/`<a>` rendering and that `<`/`&` are escaped in the output HTML.
-  - [ ] Keep media/images OUT of this file — image embedding is **Story 2.4**. Keep cross-file `[links](other.md)` OUT — inter-file linking/navigation is **Story 2.3**. (Plain inline content + bare autolink only for 2.1; an autolinked bare URL is GFM text rendering, NOT the inter-file `.md` link resolution that 2.3 owns.)
-- [ ] **Task 4b — Add edge-case fixtures proving slug determinism and empty-file safety** (AC: 5)
-  - [ ] Add a near-empty file (e.g. `content/empty.md` with only a single `# Heading` or only front matter) to prove an empty/content-light body builds to a valid document, not a crash or broken shell.
-  - [ ] Add at least one slug-edge fixture: a filename with a space/uppercase (e.g. `content/My Notes.md`) and/or a nested file (`content/sub/page.md`). Capture the actual slug Astro's `glob()` loader produces (do NOT hand-roll a custom slugifier) and assert it in Task 5. If a filename truly cannot produce a safe URL slug, document the behaviour rather than crashing the build.
-  - [ ] Confirm none of these edge fixtures collide with the route at `/` (see the `index.astro` collision note in Dev Notes).
-- [ ] **Task 5 — Establish a Playwright + build verification harness and assert the ACs** (AC: 1, 2, 3, 5, 6)
-  - [ ] Add the test tooling the repo does not yet have: `cd web && npm install -D @playwright/test`, add a `playwright.config.ts` in `web/`, and a `test`/e2e npm script. The project verification command is `cd web && npx playwright test` — wire the config so that command runs. Use Playwright's `webServer` to `npm run preview` (serves the built `dist/`) or run assertions against the static build output.
-  - [ ] Build first (`cd web && npm run build`), then assert: (a) `web/dist/x/index.html` exists and is non-empty; (b) it contains the expected semantic elements — `<h1>`, `<strong>`/`<em>`, `<ul>`+`<ol>`+`<li>`, `<code>`+`<pre>`, and `<table>`+`<th>`+`<td>`; (c) the article body text is present in the **raw HTML** (parse the file / `page.content()` with JS disabled), proving no client-render dependency (AC2/AC3).
-  - [ ] Add a JS-disabled assertion: load the page with `javaScriptEnabled: false` in a Playwright context and confirm the body content is still visible/readable (AC2).
-  - [ ] (Optional but recommended) Run an HTML well-formedness check (e.g. assert a single `<html lang>`, presence of `<head>`/`<title>`/`<meta charset>`, no obviously unclosed structural tags) to back AC3.
-  - [ ] Assert AC6 GFM-extension + escaping: the rendered HTML contains `<del>`/`<s>` (strikethrough), a task-list `<li>` with `<input type="checkbox">`, an `<a href>` for the bare autolink, AND that the special-character case is escaped (the raw HTML contains `&lt;`/`&amp;` — NOT an unescaped `<tags>` that would corrupt the document for a crawler).
-  - [ ] Assert AC5 edge cases: the near-empty fixture builds to a valid non-crashing `dist/.../index.html` with a complete document shell; and the slug-edge fixture(s) emit at the deterministic Astro-derived path (assert the exact slug, e.g. `dist/my-notes/index.html` and `dist/sub/page/index.html`). The whole `npm run build` must still exit 0 with these fixtures present.
-- [ ] **Task 6 — Ensure the deploy pipeline still builds the content-driven site (no regression)** (AC: 1, 4)
-  - [ ] Confirm `.github/workflows/deploy-web.yml` still works: it runs `npm ci` + `npm run build` in `web/` and uploads `web/dist`. Because the vault is at `../content` (one level above `web/`), verify the GitHub Actions checkout (full repo) makes `content/` available to the build — the relative `base: '../content'` must resolve in CI exactly as locally. If the build can't see `content/` in CI, fix the path resolution (Task 2), do NOT special-case CI.
-  - [ ] Verify `web/node_modules/`, `web/dist/`, and `web/.astro/` are NOT staged (all already covered by the root `.gitignore`). Commit `web/package-lock.json` updates so CI `npm ci` stays reproducible (pattern established in Story 1.1/1.3).
-- [ ] **Task 7 — Final verification against ACs (Definition of Done)** (AC: 1, 2, 3, 4, 5, 6)
-  - [ ] `cd web && npm run build` exits 0 and emits `dist/x/index.html` (route `/x`) plus a page per `content/*.md` (AC1, AC4).
-  - [ ] The built HTML renders all six GFM feature classes as correct semantic elements (AC1).
-  - [ ] The page is readable with JS disabled and content lives in the static HTML payload (AC2).
-  - [ ] HTML is well-formed and crawlable: valid document shell, semantic container, no client-render dependency for content (AC3).
-  - [ ] Pages are sourced from the repo-root `content/` vault, not a copy in `web/` — adding a new `content/<name>.md` and rebuilding yields `/<name>` with no code change (AC4).
-  - [ ] Edge cases hold: empty/near-empty file builds to a valid document, and slug-edge/nested filenames produce deterministic Astro-derived slugs with a 0-exit build (AC5).
-  - [ ] GFM extensions render correctly (strikethrough → `<del>`, task list → checkbox `<li>`, bare autolink → `<a>`) and special chars are HTML-escaped, not injected raw (AC6).
-  - [ ] `cd web && npx playwright test` passes; `cd web && npx astro check` passes (typecheck gate).
-  - [ ] Scope discipline held: NO GitHub theme/design tokens, NO Shiki palette customization, NO `site-header`/`pitch-card`, NO inter-file `.md` link resolution, NO media embedding (those are Stories 2.2/2.3/2.4/2.6).
+- [x] **Task 1 — Add GFM markdown processing to the Astro config** (AC: 1, 2, 3)
+  - [x] In `web/`, install the GFM remark plugin: `remark-gfm` (Astro already bundles `remark`/`rehype`; `remark-gfm` adds tables, strikethrough, task lists, autolinks). Run `cd web && npm install remark-gfm` so it lands in `web/package.json` + `web/package-lock.json`.
+  - [x] Update `web/astro.config.mjs`: under `markdown`, set `gfm: true` (Astro default) and register `remarkPlugins: [remarkGfm]`. Do NOT add Shiki theme tokens, a custom syntax theme, or the GitHub stylesheet here — code highlighting polish and the GitHub-style theme are **Story 2.2** scope. Astro's built-in Shiki default may run, but styling/contrast/palette is explicitly out of scope for 2.1.
+  - [x] Keep the config minimal and additive: no integrations (Tailwind, MDX, sitemap, etc.), no `client:*` islands. Content must be pure server-rendered static HTML (FR-5/FR-7).
+- [x] **Task 2 — Route `content/*.md` → `/*` via an Astro Content Collection (glob loader)** (AC: 1, 4)
+  - [x] Define a content collection in `web/src/content.config.ts` (Astro 5 Content Layer API) using the `glob()` loader from `astro/loaders`, pointing `base` at the repo-root vault: `base: '../content'`, `pattern: '**/*.md'` (the vault lives one level up from `web/`). This makes `content/` the source — do NOT copy `.md` files into `web/src/pages/` (would violate the single-source-of-truth boundary, AC4).
+  - [x] Create the dynamic route `web/src/pages/[...slug].astro` that calls `getCollection(...)` + `getStaticPaths()` to emit one page per `.md` file, and renders each entry's body via `render(entry)` → `<Content />`. The slug must map `content/x.md` → `/x` (drop the `.md` extension; `index.md` → `/`). Verify the emitted path is `dist/x/index.html`.
+  - [x] Confirm the glob `base` resolves correctly given that `node_modules`/build run from `web/` but the vault is at `../content`. If a relative `base` proves brittle in the Astro 5 loader, resolve an absolute path from `import.meta.url`/`fileURLToPath` instead — but keep the source pointed at the repo-root `content/`, never a duplicate.
+- [x] **Task 3 — Provide a minimal page layout / HTML document shell** (AC: 2, 3)
+  - [x] Author a minimal layout (e.g. `web/src/layouts/Page.astro`) that wraps rendered content in a valid HTML5 document: `<!doctype html>`, `<html lang="en">`, `<head>` with `<meta charset="utf-8">`, `<meta name="viewport" ...>`, and a `<title>` (derive from the page's `# H1` or filename), and `<body>` with the article body inside a semantic `<main>`/`<article>`. The `[...slug].astro` route renders `<Content />` inside this layout.
+  - [x] Make `<title>` derivation total: if a page has no `# H1` and no front-matter title (the empty-file edge case, AC5), fall back to the slug/filename so `<title>` is never empty. The document shell must stay valid even when the body is empty.
+  - [x] Do NOT add the GitHub-style stylesheet, design tokens, `site-header`, or `pitch-card` — those are Stories 2.2 / 2.6. A bare (or near-bare) document is correct for 2.1; the only requirement is well-formed, semantic, JS-free HTML. A tiny amount of unopinionated base CSS is acceptable only if needed for legibility, but the themed look is explicitly deferred.
+  - [x] Ensure no `client:*` directive is used anywhere on the content path — content must render server-side so it survives JS-disabled (AC2).
+- [x] **Task 4 — Add a representative seed `.md` file to the vault that exercises every required GFM feature** (AC: 1, 6)
+  - [x] Add a content file under `content/` (e.g. `content/x.md` to mirror the AC literally, or a real seed page) containing: multiple heading levels, **bold** and _italic_, an ordered list and an unordered list, inline `code` and a fenced ```code block``` with a language tag, and a GFM `| table |` with a header row. This is the build fixture proving AC1. (If a richer dogfood page like `the-markdown-web.md` is preferred per the architecture's seed-vault note, ensure it still covers all six feature classes.)
+  - [x] Also include the GFM-extension + escaping cases for AC6: a `~~strikethrough~~`, a task list (`- [ ] todo` / `- [x] done`), a bare autolink URL (e.g. `https://themarkdownweb.com`), and at least one special character / HTML-escaping case (literal `<`, `&`, and an inline `` `code with <tags> & ampersand` ``). These prove correct `<del>`/checkbox/`<a>` rendering and that `<`/`&` are escaped in the output HTML.
+  - [x] Keep media/images OUT of this file — image embedding is **Story 2.4**. Keep cross-file `[links](other.md)` OUT — inter-file linking/navigation is **Story 2.3**. (Plain inline content + bare autolink only for 2.1; an autolinked bare URL is GFM text rendering, NOT the inter-file `.md` link resolution that 2.3 owns.)
+- [x] **Task 4b — Add edge-case fixtures proving slug determinism and empty-file safety** (AC: 5)
+  - [x] Add a near-empty file (e.g. `content/empty.md` with only a single `# Heading` or only front matter) to prove an empty/content-light body builds to a valid document, not a crash or broken shell.
+  - [x] Add at least one slug-edge fixture: a filename with a space/uppercase (e.g. `content/My Notes.md`) and/or a nested file (`content/sub/page.md`). Capture the actual slug Astro's `glob()` loader produces (do NOT hand-roll a custom slugifier) and assert it in Task 5. If a filename truly cannot produce a safe URL slug, document the behaviour rather than crashing the build.
+  - [x] Confirm none of these edge fixtures collide with the route at `/` (see the `index.astro` collision note in Dev Notes).
+- [x] **Task 5 — Establish a Playwright + build verification harness and assert the ACs** (AC: 1, 2, 3, 5, 6)
+  - [x] Add the test tooling the repo does not yet have: `cd web && npm install -D @playwright/test`, add a `playwright.config.ts` in `web/`, and a `test`/e2e npm script. The project verification command is `cd web && npx playwright test` — wire the config so that command runs. Use Playwright's `webServer` to `npm run preview` (serves the built `dist/`) or run assertions against the static build output.
+  - [x] Build first (`cd web && npm run build`), then assert: (a) `web/dist/x/index.html` exists and is non-empty; (b) it contains the expected semantic elements — `<h1>`, `<strong>`/`<em>`, `<ul>`+`<ol>`+`<li>`, `<code>`+`<pre>`, and `<table>`+`<th>`+`<td>`; (c) the article body text is present in the **raw HTML** (parse the file / `page.content()` with JS disabled), proving no client-render dependency (AC2/AC3).
+  - [x] Add a JS-disabled assertion: load the page with `javaScriptEnabled: false` in a Playwright context and confirm the body content is still visible/readable (AC2).
+  - [x] (Optional but recommended) Run an HTML well-formedness check (e.g. assert a single `<html lang>`, presence of `<head>`/`<title>`/`<meta charset>`, no obviously unclosed structural tags) to back AC3.
+  - [x] Assert AC6 GFM-extension + escaping: the rendered HTML contains `<del>`/`<s>` (strikethrough), a task-list `<li>` with `<input type="checkbox">`, an `<a href>` for the bare autolink, AND that the special-character case is escaped (the raw HTML contains `&lt;`/`&amp;` — NOT an unescaped `<tags>` that would corrupt the document for a crawler).
+  - [x] Assert AC5 edge cases: the near-empty fixture builds to a valid non-crashing `dist/.../index.html` with a complete document shell; and the slug-edge fixture(s) emit at the deterministic Astro-derived path (assert the exact slug, e.g. `dist/my-notes/index.html` and `dist/sub/page/index.html`). The whole `npm run build` must still exit 0 with these fixtures present.
+- [x] **Task 6 — Ensure the deploy pipeline still builds the content-driven site (no regression)** (AC: 1, 4)
+  - [x] Confirm `.github/workflows/deploy-web.yml` still works: it runs `npm ci` + `npm run build` in `web/` and uploads `web/dist`. Because the vault is at `../content` (one level above `web/`), verify the GitHub Actions checkout (full repo) makes `content/` available to the build — the relative `base: '../content'` must resolve in CI exactly as locally. If the build can't see `content/` in CI, fix the path resolution (Task 2), do NOT special-case CI.
+  - [x] Verify `web/node_modules/`, `web/dist/`, and `web/.astro/` are NOT staged (all already covered by the root `.gitignore`). Commit `web/package-lock.json` updates so CI `npm ci` stays reproducible (pattern established in Story 1.1/1.3).
+- [x] **Task 7 — Final verification against ACs (Definition of Done)** (AC: 1, 2, 3, 4, 5, 6)
+  - [x] `cd web && npm run build` exits 0 and emits `dist/x/index.html` (route `/x`) plus a page per `content/*.md` (AC1, AC4).
+  - [x] The built HTML renders all six GFM feature classes as correct semantic elements (AC1).
+  - [x] The page is readable with JS disabled and content lives in the static HTML payload (AC2).
+  - [x] HTML is well-formed and crawlable: valid document shell, semantic container, no client-render dependency for content (AC3).
+  - [x] Pages are sourced from the repo-root `content/` vault, not a copy in `web/` — adding a new `content/<name>.md` and rebuilding yields `/<name>` with no code change (AC4).
+  - [x] Edge cases hold: empty/near-empty file builds to a valid document, and slug-edge/nested filenames produce deterministic Astro-derived slugs with a 0-exit build (AC5).
+  - [x] GFM extensions render correctly (strikethrough → `<del>`, task list → checkbox `<li>`, bare autolink → `<a>`) and special chars are HTML-escaped, not injected raw (AC6).
+  - [x] `cd web && npx playwright test` passes; `cd web && npx astro check` passes (typecheck gate).
+  - [x] Scope discipline held: NO GitHub theme/design tokens, NO Shiki palette customization, NO `site-header`/`pitch-card`, NO inter-file `.md` link resolution, NO media embedding (those are Stories 2.2/2.3/2.4/2.6).
 
 ## Dev Notes
 
@@ -157,11 +157,31 @@ claude-opus-4-8[1m]
 
 ### Debug Log References
 
+- `cd web && npm run build` → exit 0; emits `dist/{x,empty,my-notes,sub/page,readme}/index.html` + `/` (placeholder).
+- `cd web && npx playwright test` → 18/18 passing.
+- `cd web && npx astro check` → 0 errors / 0 warnings / 0 hints (after adding `@astrojs/check`, `typescript`, `@types/node` devDeps).
+
 ### Completion Notes List
 
 - Ultimate context engine analysis completed — comprehensive developer guide created.
+- Implemented the Astro 5 Content Layer render path: `remark-gfm` GFM config, a `glob()` collection sourced from the repo-root `../../content` vault (absolute base resolved via `fileURLToPath(import.meta.url)` for CI robustness), a `[...slug].astro` dynamic route, and a minimal `Page.astro` HTML5 shell. No `client:*` islands; content is pure server-rendered static HTML.
+- Title derivation is total: front-matter `title` → first `# H1` (from `render().headings`) → humanized slug → raw id, so `<title>` is never empty (covers the `empty.md` edge case).
+- Left the Story 1.1 placeholder `web/src/pages/index.astro` in place: there is no `content/index.md`, so no `/` route collision. The "coming soon" page still serves `/`; it can be retired when a real `content/index.md` lands (Open Question #3).
+- DEVIATION (test): AC6's raw-HTML escaping assertion originally required the literal named entities `&lt;`/`&amp;`. Astro's bundled `rehype-stringify` (hardcoded, no `characterReferences` option exposed, and user rehype plugins cannot override the final compiler due to plugin ordering) emits NUMERIC character references (`&#x3C;`/`&#x26;`) instead — which is equally spec-valid escaping and fully satisfies AC6 ("no raw unescaped `<`/`&`"). Updated `ac6-gfm-extensions.spec.ts` to accept either form (`/&lt;|&#x3[cC];|&#60;/` and `/&amp;|&#x26;|&#38;/`); the "no unescaped `code with <tags>`" guard is unchanged. AC6 intent is preserved; only the entity-encoding over-specification was relaxed.
+- `@types/node` added as a devDependency: `content.config.ts` imports `node:url` and the pre-existing `playwright.config.ts` references `process`, both of which `astro check` flagged without Node types.
 
 ### File List
+
+- `web/astro.config.mjs` (UPDATE — GFM via `remark-gfm`)
+- `web/src/content.config.ts` (NEW — `glob()` collection over `../../content`)
+- `web/src/pages/[...slug].astro` (NEW — dynamic route, title derivation)
+- `web/src/layouts/Page.astro` (NEW — minimal HTML5 document shell)
+- `web/tests/ac6-gfm-extensions.spec.ts` (UPDATE — accept numeric char-refs)
+- `web/package.json` (UPDATE — add `remark-gfm` dep; `@astrojs/check`, `typescript`, `@types/node` devDeps)
+- `web/package-lock.json` (UPDATE — reproducible lockfile for the above)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (UPDATE — 2-1 → review, epic-2 → in-progress)
+
+Note: `content/{x.md, empty.md, My Notes.md, sub/page.md}` fixtures and `web/playwright.config.ts` + the AC1/2/3/5 specs already existed in the repo (RED phase) and were used as-is.
 
 ### Open Questions / Clarifications (for human, non-blocking)
 
