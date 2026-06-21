@@ -1,6 +1,6 @@
 # Story 2.4: Media embedding
 
-Status: review
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -262,3 +262,100 @@ Opus 4.8 (1M context) — claude-opus-4-8[1m]
 - `content/x.md` (UPDATE) — extended the "Media (AC: 2.4)" section with the LITERAL markdown `![markdown embed](media/powder.jpg)` AC1-verbatim case (raw-HTML cases already present from the RED commit).
 - `web/tests/2-4-media.spec.ts` (UPDATE) — added the AC1-verbatim markdown-`![]()`-served-plain-`<img>` spec (the rest of the suite was authored in the RED commit).
 - `content/media/powder.jpg`, `content/sub/diagram.png` (fixtures, present from the RED commit — committed binaries).
+
+## Review Findings
+
+**Consolidated adversarial code review (2026-06-21)** — three parallel layers: Blind Hunter (diff-only adversarial), Edge Case Hunter (boundary enumeration + project read), Acceptance Auditor (diff vs 7 ACs + empirical build). Non-interactive (yolo) run. All claimed-critical findings were independently verified by the reviewer (script repro + a real `npm run build`). No layer failed.
+
+**Verdict: CHANGES REQUESTED.** The core path (AC1 same-dir image render + verbatim served copy + astro:assets bypass) is correct, well-tested, and the 2.3 extraction is drift-free. But one CRITICAL latent correctness bug (slug-vs-verbatim path mismatch for assets under non-slug-stable directories) and two HIGH items keep this from `done` as-is. Critical/High: **3** (1 CRITICAL, 2 HIGH). Total actionable items: **8** (1 critical-class patch, 2 high patches, 4 medium, plus deferrals); 6 dismissed as noise/documented.
+
+### Decision-needed
+
+- [ ] [Review][Decision] **`rehype-raw` enabled with no sanitizer — raw-HTML/script passthrough + scope expansion** [web/astro.config.mjs:4,59] — `rehypeRaw` is added as the FIRST rehype plugin (and a new direct dep) to parse raw `<video>/<audio>/<source>` into live HAST before the media visitor. No `rehype-sanitize` is wired anywhere (only transitive in the lock file), so any vault `.md` can emit `<script>`, `<img onerror>`, `<iframe>`, `javascript:` etc. into every rendered page. For a TRUSTED single-author vault this is low risk (Astro already serialized raw HTML before; the effective surface is ~unchanged), but: (a) it was not contemplated by the spec/Tasks (which assumed Astro's existing passthrough) → a scope expansion taken without an explicit decision note; (b) if the vault ever becomes multi-author/user-contributed it is stored XSS. DECISION: accept as-is (trusted vault, documented), OR add `rehype-sanitize` with a media-allowlist after `rehypeRaw`. Sources: blind, auditor.
+- [ ] [Review][Decision] **astro:assets bypass is brittle to undocumented Astro internals** [web/astro.config.mjs:59; web/src/lib/rehype-md-media.mjs:165-168] — The AC6 "never crash" guarantee rests on (1) user rehype plugins running BEFORE Astro's internal `rehypeImages`, and (2) mutating undocumented `file.data.astro.localImagePaths`/`remoteImagePaths`. If a future Astro reorders those or `file.data.astro` is absent/renamed, the `if (file && file.data && file.data.astro)` guard SILENTLY no-ops while `rehypeImages` stays live → its unconditional `decodeURI` throws on `bad%zz.jpg` / `ImageNotFound` crashes on `media/missing.jpg`, re-introducing the exact AC6 build crash with NO warning (unlike `resolveSourcePath`, this seam emits no degrade warn). Empirically the bypass works today (no `dist/_astro`, markdown `![]()` → verbatim `/media/powder.jpg`). DECISION: accept (pin Astro minor) OR add defense-in-depth (an explicit no-op image service override + a warn when the astro seam is missing). Sources: blind, edge.
+
+### Patches
+
+- [ ] [Review][Patch] **CRITICAL — slug-vs-verbatim path-coherence mismatch: assets under a non-slug-stable page directory 404** [web/src/lib/rehype-md-media.mjs:188,128 + web/src/lib/copy-vault-media.mjs:53-93] — The rewrite resolves the relative asset against `pageDirSlugFromSource()`, which SLUGS the page's directory (`content/My Dir/page.md` → page dir slug `my-dir`), so a same-dir/sibling embed emits `src="/my-dir/pic.jpg"`. But the copy step walks `content/` and preserves directory names VERBATIM → `dist/My Dir/pic.jpg` (served `/My Dir/pic.jpg`). The two disagree → every such asset 404s, directly breaking the documented path-coherence invariant and AC2 "the asset is copied to / served at the SAME resolved path." Verified by repro: `pageDirSlugFromSource('content/My Dir/page.md') = "my-dir"` while the copy lands `dist/My Dir/pic.jpg` → no match. The shipped fixtures only use `media/` and `sub/` (coincidentally slug-stable), so the 92-green suite does NOT catch it. Fix: make the two sides agree — either resolve the asset against the page's VERBATIM directory (not the slugged one) for media (assets aren't routes), or slug the copy destination directories to match (riskier — desyncs from on-disk names). Add a mixed-case-dir fixture+test. Sources: edge (verified by reviewer).
+- [ ] [Review][Patch] **HIGH — `log.warn` selector ternary is inverted: bypasses the injected logger and throws on a falsy-non-undefined `warn`** [web/src/lib/copy-vault-media.mjs:128] — `(log.warn || log.warn === undefined ? console.warn : log.warn)(...)` evaluates as `log.warn || (log.warn === undefined ? console.warn : log.warn)`: when `log.warn` is a function it returns `console.warn` (silently bypassing the Astro logger), and when `log.warn` is a DEFINED-but-falsy value (`null`/`0`/`''`) it returns that falsy value and then CALLS it → `TypeError` mid-build, violating the stated never-throw floor — on the dir-collision branch. Verified by repro. Fix: `const warn = (log && typeof log.warn === 'function') ? log.warn : console.warn;` and use `warn(...)`. Sources: blind, edge (verified).
+- [ ] [Review][Patch] **HIGH — missing-asset build warning is dead code; Dev Notes claim is false** [web/src/lib/copy-vault-media.mjs:32,154-165 ↔ web/src/lib/rehype-md-media.mjs:77,212] — The copy hook diffs `getReferencedAssets()` (a module-level `Set` in `rehype-md-media.mjs`) against present files to `console.warn` referenced-but-missing assets. But Astro processes markdown in a separate Vite module graph from the integration, so the integration's instance of `referencedAssets` is EMPTY at `astro:build:done`. Empirically confirmed: a clean `npm run build` prints only `Copied 2 vault media asset(s)` and NO missing-asset warning — yet Dev Notes (lines 239, 247) explicitly claim the build warns `media/missing.jpg, media/clip.mp4, media/clip.mp3`. AC6's hard floor (never crash, 404) still holds, but the documented AC6 visibility decision does not actually exist → typo'd asset refs are silent. Fix: derive "referenced" from a source the integration can actually see (e.g. write the set to `file.data`/a shared on-disk manifest, or scan emitted HTML in the hook), or correct the Dev Notes + drop the dead-warn claim. Sources: blind, edge, auditor (verified by build).
+- [ ] [Review][Patch] **MEDIUM — size-equality clobber heuristic can overwrite real Astro/public output** [web/src/lib/copy-vault-media.mjs:121-141] — When a vault asset's dist destination already exists, the code uses byte-SIZE equality as the sole "this is my own prior copy → safe to overwrite" test. If a legitimately-emitted Astro HTML/public file sits at that path and happens to equal the vault asset's size, the vault bytes OVERWRITE genuine build output (silent clobber) — the very thing the existsSync guard claims to prevent. Fix: namespace vault media (reserved prefix) or compare a content hash / provenance, not size. Sources: blind, edge.
+- [ ] [Review][Patch] **MEDIUM — `collectAssets` has no symlink-cycle/depth guard → stack overflow** [web/src/lib/copy-vault-media.mjs:53-93] — In-vault directory symlinks are followed (statSync + recurse) with no visited-set/depth cap. A cyclic symlink chain wholly inside `content/` (passes the "escapes content/" guard) causes unbounded recursion → `RangeError: Maximum call stack size`, and the never-throw try/catch only wraps the per-file copy loop, not `collectAssets` → the `astro:build:done` hook (and build) goes down. Fix: track visited realpaths or cap depth. Sources: edge.
+
+### Deferred
+
+- [x] [Review][Defer] AC2 edge-table rows 5/17/18 (filename with spaces / case-only mismatch / non-ASCII) have neither fixture nor test [web/tests/2-4-media.spec.ts] — the "byte-for-byte / case + spaces preserved" claim is verified only for the lowercase same-dir case; the re-encode-per-segment logic is plausibly correct but unproven on the hard rows. Coverage gap, not a core-AC failure. Sources: auditor.
+- [x] [Review][Defer] AC2 edge-table rows 11/15/16/19 (`../escape`, `?query` strip, `#fragment`, trailing-slash dir) are code-only, untested on the media path [web/tests/2-4-media.spec.ts] — robustness branches with tested 2.3 link-side analogues; minor coverage gap. Sources: auditor.
+- [x] [Review][Defer] Case-only filename collision on a case-insensitive dev FS (`Logo.png` + `logo.png`) silently clobbers in the copy [web/src/lib/copy-vault-media.mjs:60-91] — documented hazard; Linux CI/Azure (case-sensitive) is the source of truth, so the deploy artifact is fine. No detection/warn for the dev case. Sources: edge.
+
+### Dismissed (noise / documented / out-of-scope) — 6
+
+- `srcset` (img/source) and `<track src>` (.vtt) unhandled — explicitly documented deferrals, beyond the epic's image/video wording. (blind, edge)
+- A literal `#` in a real on-disk filename / SVG `sprite.svg#icon` left unrewritten — the row-16 `#`→unrewritten decision; documented. (blind, edge)
+- `<img src="notes.md">` rewritten but never copied (`.md` excluded) — non-standard authoring; benign 404. (blind)
+- `+` / Unicode NFC-vs-NFD re-encode round-trip divergence — platform-normalization edge, not triggered by ASCII fixtures. (blind)
+- Preview server `URIError: URI malformed` on the unrewritten smuggle srcs — `astro preview` harness artifact (the suite never GETs them; Azure SWA would 404 statically), not an app defect. (auditor)
+- `remoteImagePaths` cleared though remote media already passes through — over-broad but harmless mutation, no crash. (blind)
+
+### Positive confirmations (flagged risks that held up)
+
+- **astro:assets bypass PROVEN:** no `dist/_astro/` after build; literal markdown `![markdown embed](media/powder.jpg)` renders as verbatim `<img src="/media/powder.jpg">`, not `/_astro/*.webp`; AC6 missing-asset build exits 0. (auditor, empirical)
+- **`page-path.mjs` extraction is behavior-preserving for 2.3 — NO drift:** `resolveSourcePath`/`pageDirSlugFromSource`/`contentDir` lifted verbatim; `rehype-md-links.mjs` rewrite logic untouched; all 2.3 link rewrites + smuggle-guards + `report.pdf` pass-through identical; 66 prior specs green. (auditor)
+
+### AC verification (7 ACs)
+
+- **AC1 — CONFIRMED.** Relative image renders inline as plain `<img src="/media/powder.jpg">`, asset copied + served 200 (image/*), no `_astro` optimisation; markdown `![]()` AND raw-HTML both covered; build-time + JS-free proven.
+- **AC2 — PARTIAL.** Core resolution (same-dir, `../`, `./`, sibling-nested, no-slug lowercase) + F1 smuggle guards (rows 12-14) coded, tested, green. BUT (a) **CRITICAL** slug-vs-verbatim mismatch breaks resolution for assets under non-slug-stable page directories (uncaught by fixtures); (b) rows 5/17/18/11/15/16/19 untested.
+- **AC3 — CONFIRMED.** External https / protocol-relative `//` / `data:` / root-absolute `/` all pass through unchanged and are not copied; `<a>` links untouched; `report.pdf` left alone.
+- **AC4 — CONFIRMED.** `alt` (incl. empty `alt=""`), `title`, `width`, `height` all survive the rewrite; tested.
+- **AC5 — CONFIRMED (documented serving-deferral).** `<video poster>`, `<source src>`, `<audio src>` all rewrite to `/media/…`; mp4/mp3 byte-serving deferred (absent fixtures), copy-path proven identical via the real poster image 200.
+- **AC6 — PARTIAL.** Hard floor holds (build exits 0, missing embed rewrites to `/media/missing.jpg`, 404s, never crashes — tested). BUT the documented missing-asset WARNING is dead code (cross-module Set empty at `astro:build:done`) and the Dev Record's "it warns" claim is false → silent typos.
+- **AC7 — CONFIRMED (caveat).** All 92 specs pass (66 prior + 26 new), `astro check` clean, 12 pages, theme/links/404 intact, no `<h1>`/`<table>` regression. Caveat: not strictly additive — a new direct dep (`rehype-raw`) + a site-wide early raw-HTML parse pass were added beyond the spec's assumed approach (no behavioral regression observed).
+
+### Edge-case JSON (unhandled critical/high edges)
+
+```json
+[
+  {
+    "id": 1,
+    "severity": "CRITICAL",
+    "location": "web/src/lib/rehype-md-media.mjs:188 + web/src/lib/copy-vault-media.mjs:53-93",
+    "trigger_condition": "A markdown page lives in a vault subdirectory whose name is not already slug-stable (uppercase/space/etc., e.g. content/My Dir/page.md) and references a same-dir or sibling relative asset (e.g. <img src=\"pic.jpg\">).",
+    "guard_snippet": null,
+    "potential_consequence": "Rewrite emits src=\"/my-dir/pic.jpg\" (page dir SLUGGED) but the copy lands dist/My Dir/pic.jpg (dir VERBATIM); served URL != copied path -> 404. Breaks the documented path-coherence invariant and AC2; uncaught because all shipped fixtures use slug-stable dirs (media/, sub/)."
+  },
+  {
+    "id": 2,
+    "severity": "HIGH",
+    "location": "web/src/lib/copy-vault-media.mjs:128",
+    "trigger_condition": "A dist-path collision occurs AND the Astro logger's .warn is a defined-but-falsy value (null/0/'').",
+    "guard_snippet": "(log.warn || log.warn === undefined ? console.warn : log.warn)(...)",
+    "potential_consequence": "Inverted selector: with a function logger it silently bypasses the injected logger; with a falsy-non-undefined .warn it returns that value and calls it -> TypeError thrown mid-build, violating the never-throw floor."
+  },
+  {
+    "id": 3,
+    "severity": "HIGH",
+    "location": "web/src/lib/copy-vault-media.mjs:154-165 <-> web/src/lib/rehype-md-media.mjs:77",
+    "trigger_condition": "Any build with a referenced-but-missing asset, when rehype and the integration run in separate Vite module instances (the normal Astro build).",
+    "guard_snippet": null,
+    "potential_consequence": "getReferencedAssets() is empty in the integration's module instance at astro:build:done -> the missing-asset warn NEVER fires (empirically confirmed) -> referenced-but-missing typos are silent, contradicting the recorded AC6 visibility decision and the Dev Notes claim."
+  },
+  {
+    "id": 4,
+    "severity": "HIGH",
+    "location": "web/astro.config.mjs:59 + web/src/lib/rehype-md-media.mjs:165-168",
+    "trigger_condition": "A future Astro reorders internal rehypeImages before user plugins, or file.data.astro is absent/renamed.",
+    "guard_snippet": "if (file && file.data && file.data.astro) { file.data.astro.localImagePaths = []; ... }",
+    "potential_consequence": "The bypass silently no-ops (guard false / wrong order) while rehypeImages stays live -> decodeURI throws on bad%zz.jpg and ImageNotFound crashes on media/missing.jpg, re-introducing the AC6 build crash with no warning."
+  },
+  {
+    "id": 5,
+    "severity": "MEDIUM",
+    "location": "web/src/lib/copy-vault-media.mjs:53-93",
+    "trigger_condition": "A cyclic directory-symlink chain wholly inside content/ (passes the escapes-content/ guard).",
+    "guard_snippet": null,
+    "potential_consequence": "collectAssets recurses with no visited-set/depth cap -> RangeError: Maximum call stack size; the never-throw try/catch only wraps the per-file copy loop, so the astro:build:done hook (and the build) crashes."
+  }
+]
+```
+
