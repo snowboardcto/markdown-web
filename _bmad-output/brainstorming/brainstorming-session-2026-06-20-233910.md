@@ -145,3 +145,9 @@ _Concept_: Agreed sequencing:
   2. **HTML Renderer** — browser hits the URL → clean server-rendered HTML (the "born compatible" path).
   3. **Native MD Client** — a client that renders markdown *without HTML* — the reader's agent drives native presentation directly (the purest expression of Zero Shared Pixels / Client Sovereignty).
 _Novelty_: Foundation → compatibility → magic. Each stage ships independent value and de-risks the next; HTML is built before the native client so adoption/reach exists before the differentiated experience.
+
+**[Pending Decision]:** Stage-1 serving path not yet chosen — Path 1 (thin server / content negotiation), Path 2 (static + pre-built HTML), or Path 3 (static now, server later). Linking (relative `.md` links) and media (markdown embeds alongside files in Azure) accepted as defaults.
+
+## Naming Thread — brainstorming a name + registerable domain
+
+Goal: name the whole paradigm/product so naethyn can register a domain. The `.md` TLD (Moldova, widely used for markdown) is an on-theme domain-hack option.
