@@ -199,3 +199,26 @@ The product/paradigm now has its name and home: **The Markdown Web** → themark
 **Still open / next up:**
 - ⏸️ Stage-1 serving path decision: Path 1 (thin server / content negotiation) · Path 2 (static + pre-built HTML) · Path 3 (static now, server later).
 - Untouched map gaps: 💰 business model · 🔍 identity & discovery.
+
+## Phase 4 — Action Plan (Dream → v0.1)
+
+**Stage-1 serving decision RESOLVED:** Path 3 framing, built as Path 2 for v0.1 — "static now, smart server later." Pre-build `.md` → HTML at deploy time; host static on **Azure Static Web Apps** at themarkdownweb.com. Add content-negotiation server (Path 1) + native client in later stages. Rationale: matches the proven snowboardcto.com model, born SEO/crawler-friendly (own the category), cheapest, fastest path to customer-zero value.
+
+### The Backwards Bridge (Dream Fusion)
+- **The Dream:** the whole web is `.md`; every user's local agent renders it for them.
+- **v1.0:** native `.md` client (agent-rendered, no HTML) + content negotiation + sharing/feed network.
+- **v0.5:** server-side `.md`→HTML rendering with content negotiation ("born compatible"); themarkdownweb.com as the public showcase + manifesto.
+- **v0.2:** hosted vault — drop a folder of `.md`+media, get a browsable beautiful site; inter-file linking works; one toggle = public.
+- **v0.1 (THIS WEEK):** naethyn's own BMAD output `.md` files → rendered beautifully → browsable site w/ navigation + media → deployed at themarkdownweb.com on Azure. Customer zero = naethyn. (This very brainstorming doc is the first page.)
+
+### v0.1 — Concrete Build Steps
+1. **Repo + content folder:** a `content/` dir holding `.md` files + media (images/video). Seed it with the BMAD outputs (incl. this session).
+2. **Renderer (build step):** markdown → HTML via a markdown engine (e.g. markdown-it / Astro / Eleventy — off-the-shelf for v0.1; swap for a custom engine as the product matures). One `.md` = one page (the snowboardcto.com rule).
+3. **Linking:** rewrite relative `[x](x.md)` links → site routes at build time, so you can browse around.
+4. **Media:** images/video referenced relatively in markdown, copied to output — embeds just work.
+5. **Beautiful default theme:** clean typography, good defaults — satisfies the "look awesome" requirement. This is the v0.1 differentiator.
+6. **Deploy:** Azure Static Web Apps + custom domain themarkdownweb.com + free SSL + GitHub Actions CI/CD. Push a new `.md` → site auto-updates (the original snowboardcto.com magic, now at the category domain).
+7. **Seed & smoke-test:** publish the BMAD outputs as the first pages; confirm linking, media, and mobile all feel good.
+
+### Open follow-ons (post-v0.1)
+- 💰 business model · 🔍 identity & discovery · content-negotiation server (Path 1) · the native agent client (Stage 3).
