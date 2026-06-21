@@ -1,5 +1,5 @@
 ---
-stepsCompleted: [1, 2, 3]
+stepsCompleted: [1, 2, 3, 4]
 inputDocuments:
   - _bmad-output/planning-artifacts/prds/prd-the-markdown-web-2026-06-21/prd.md
   - _bmad-output/planning-artifacts/architecture.md
