@@ -13,6 +13,14 @@
  * Token source: DESIGN.md frontmatter lines 10–41.
  */
 
+/* Border-box everywhere so the 760px measure is the RENDERED (border-box)
+   column width — padding is drawn inside the measure, not added on top. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 :root {
   /* colors */
   --md-surface: #ffffff;
@@ -153,14 +161,23 @@ article :not(pre) > code {
  * WCAG AA (4.5:1) on the DESIGN code-bg #f6f8fa:
  *   - keyword red   #D73A49 = 4.30:1  (below floor)
  *   - orange/entity #E36209 = 3.28:1  (well below floor)
- * Per the story, darken JUST those tokens (minimal CSS override on the emitted
- * inline color) rather than shipping a failing token. The other emitted tokens
- * (#005CC5 5.91, #032F62 12.43, #24292E 13.78, #6F42C1 6.12) already pass.
+ * Per the story, darken JUST those tokens rather than shipping a failing one.
+ *
+ * Robustness: the match uses the case-insensitive attribute flag (` i`) so the
+ * correction survives a Shiki/Astro bump that emits the hex in ANY casing
+ * (#d73a49, #D73A49, …). (Shiki's `colorReplacements` is the lower-coupling
+ * alternative, but Astro's markdown integration does not forward it from
+ * `shikiConfig` to the highlighter — only theme/themes/langs/transformers are
+ * plumbed — so the emitted-color override is the working mechanism here.)
+ * The `article` ancestor scope is intentionally dropped: `pre.astro-code`
+ * already targets only Shiki output, so the fix is not coupled to DOM ancestry.
+ * The other emitted tokens (#005CC5 5.91, #032F62 12.43, #24292E 13.78,
+ * #6F42C1 6.12) already pass.
  */
-article pre.astro-code span[style*='color:#D73A49'] {
+pre.astro-code span[style*='color:#d73a49' i] {
   color: #cf222e !important; /* DESIGN keyword — 5.03:1 on #f6f8fa */
 }
-article pre.astro-code span[style*='color:#E36209'] {
+pre.astro-code span[style*='color:#e36209' i] {
   color: #953800 !important; /* darker orange — 6.94:1 on #f6f8fa */
 }
 

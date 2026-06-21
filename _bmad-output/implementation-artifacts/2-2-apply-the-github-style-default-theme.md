@@ -1,6 +1,6 @@
 # Story 2.2: Apply the GitHub-style default theme
 
-Status: in-progress
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -169,6 +169,8 @@ This story is the **reading/typography theme + light code highlighting + AA cont
 **Consolidated code review — 2026-06-21 (Blind Hunter + Edge Case Hunter + Acceptance Auditor).**
 Verdict: **PASS WITH ITEMS.** All 5 ACs confirmed implemented; gates green (build 0, 38/38 Playwright, astro check clean). 0 critical, 0 decision-needed. 4 patch items (1 HIGH, 3 MEDIUM/test-quality) + 5 deferred test-coverage/cosmetic gaps. No defect blocks ship; the HIGH item is a future-proofing hardening, not a current failure (the override matches today's emitted output and the AC3 contrast loop backstops it).
 
+> **Patch update 2026-06-21:** all 4 patch items have been APPLIED (see "Patch action items (RESOLVED)" below). The AA override is now case/format-robust (case-insensitive `i` flag + a dedicated lowercase-hex robustness test), the phantom-token tests pin the actually-emitted `#6F42C1`/`#cf222e`, the `article` coupling and broad link selectors are dropped, and `box-sizing:border-box` makes 760px the rendered measure. Gates re-verified: build exit 0 (7 pages), **39/39 Playwright** (+1 robustness test), `astro check` 0 errors. The 5 deferred items are left as-is in `deferred-work.md`.
+
 Key positive resolution: the case-sensitive Shiki override `span[style*='color:#D73A49']` **does** match the emitted `style="color:#D73A49"` (uppercase, no space, Astro preserved inner casing). AC3 is LIVE, not silently dead. The only two sub-AA github-light tokens (#D73A49 = 4.30:1, #E36209 = 3.28:1) are both corrected; no other emitted token drops below 4.5:1.
 
 ### Findings table
@@ -188,12 +190,12 @@ Key positive resolution: the case-sensitive Shiki override `span[style*='color:#
 - [x] [Review][Defer] `:not(pre) > code` breadth (inline code in heading/link/table-cell/list-item) only exercised for the `<p>` case in the fixture [content/x.md] — deferred, selector is structurally correct; add fixture rows to lock breadth.
 - [x] [Review][Defer] Stacked h1/h2 hairlines and inline-code-in-other-contexts are cosmetically fine but unasserted — deferred, no behavior risk.
 
-### Patch action items (left as action items per non-interactive review — NOT fixed in this step)
+### Patch action items (RESOLVED — applied 2026-06-21)
 
-- [ ] [Review][Patch] Harden Shiki AA override against case/format drift (add `i` flag or use Shiki `colorReplacements`) [web/src/styles/github.css:160-165]
-- [ ] [Review][Patch] Fix tautological/phantom-token contrast tests; pin emitted `#6F42C1` not phantom `#8250df` [web/tests/2-2-theme.spec.ts:209-217,249-267]
-- [ ] [Review][Patch] Drop redundant `article` scope on AA override; narrow `article a, main a, a` link selector to `article a` [web/src/styles/github.css:160; web/tests/2-2-theme.spec.ts:133,228,547]
-- [ ] [Review][Patch] Add `box-sizing:border-box` (or document 760px as content-box measure) [web/src/styles/github.css:45-57]
+- [x] [Review][Patch] **#1 RESOLVED** — Hardened the Shiki AA override against case/format drift. Added the case-insensitive attribute flag: `pre.astro-code span[style*='color:#d73a49' i]` / `[style*='color:#e36209' i]`, so the correction now matches the emitted hex in ANY casing (#D73A49 / #d73a49). (Note: the Shiki `colorReplacements` route was attempted but Astro's markdown integration does NOT forward `colorReplacements` from `shikiConfig` to the highlighter — only theme/themes/langs/langAlias/transformers are plumbed via `rehype-shiki.js` — so the case-insensitive emitted-color override is the working mechanism; documented inline in `github.css`.) A new test (`the AA override is case/format-robust — corrects a LOWERCASE-hex emit too`) injects a lowercase `#d73a49` span and asserts the computed color is the corrected `#cf222e` (≥4.5:1), so the robustness is now CI-guarded. [web/src/styles/github.css; web/astro.config.mjs; web/tests/2-2-theme.spec.ts]
+- [x] [Review][Patch] **#2 RESOLVED** — Fixed the phantom/tautological contrast tests. The tight-pairing guard now pins the **actually-emitted** function token `#6F42C1` (read from the rendered token spans, 6.12:1) and the source-corrected keyword `#cf222e` (read from the rendered spans), and asserts the raw sub-AA hexes (#D73A49, #E36209) are corrected away — instead of the never-emitted phantom `#8250df`. The generic per-token contrast loop (the real palette-agnostic guard) is kept. The constants-vs-constants "reproduces reference ratios" self-test was curtailed to a minimal 2-point helper sanity-anchor (black-on-white 21:1 + fg 15.80:1), removing the tautology. [web/tests/2-2-theme.spec.ts]
+- [x] [Review][Patch] **#3 RESOLVED** — Dropped the redundant `article` ancestor scope on the AA override (now `pre.astro-code span[...]`, which already targets only Shiki output). Narrowed the link test selectors from `article a, main a, a` to `article a` (two occurrences). [web/src/styles/github.css; web/tests/2-2-theme.spec.ts]
+- [x] [Review][Patch] **#4 RESOLVED** — Added `*, *::before, *::after { box-sizing: border-box }` globally so 760px is the RENDERED (border-box) outer column width (24px page padding drawn inside the measure). Updated the measure test to assert the body border-box width ≤ 760px (outer measure) and the inner article content box ≤ 760px, self-consistent with the new box model. [web/src/styles/github.css; web/tests/2-2-theme.spec.ts]
 
 ### Edge-case findings (unhandled critical edges)
 

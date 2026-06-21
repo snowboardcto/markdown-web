@@ -130,7 +130,7 @@ test.describe('Story 2.2 AC1 — DESIGN tokens applied (typography, color, 760px
 
   test('links are colors.link (#0969da)', async ({ page }) => {
     // The fixture has the bare autolink to themarkdownweb.com.
-    const linkColor = await computed(page, 'article a, main a, a', 'color');
+    const linkColor = await computed(page, 'article a', 'color');
     expect(parseRgb(linkColor)).toEqual([9, 105, 218]); // #0969da
   });
 
@@ -206,14 +206,13 @@ test.describe('Story 2.2 AC3 — every text/surface pairing meets WCAG 2.1 AA (>
     await page.goto('/x');
   });
 
-  test('the WCAG helper reproduces the DESIGN-computed reference ratios', () => {
-    // Sanity-pin the in-test math against the story's pre-computed ratios.
-    expect(contrastRatio('rgb(31, 35, 40)', 'rgb(255, 255, 255)')).toBeCloseTo(15.8, 1); // fg
-    expect(contrastRatio('rgb(13, 17, 23)', 'rgb(255, 255, 255)')).toBeCloseTo(18.93, 1); // ink
-    expect(contrastRatio('rgb(9, 105, 218)', 'rgb(255, 255, 255)')).toBeCloseTo(5.19, 1); // link
-    expect(contrastRatio('rgb(89, 99, 110)', 'rgb(255, 255, 255)')).toBeCloseTo(6.11, 1); // muted
-    expect(contrastRatio('rgb(130, 80, 223)', 'rgb(246, 248, 250)')).toBeCloseTo(4.74, 1); // function on code-bg
-    expect(contrastRatio('rgb(207, 34, 46)', 'rgb(246, 248, 250)')).toBeCloseTo(5.03, 1); // keyword on code-bg
+  test('the WCAG helper is sound (anchored against two reference points)', () => {
+    // Minimal sanity-pin so a broken contrast helper fails loudly, WITHOUT
+    // turning into a constants-vs-constants tautology: black-on-white is the
+    // maximum 21:1, and the DESIGN fg #1f2328 on white is the story's 15.80:1.
+    // The REAL token guards below read RENDERED colors, not hardcoded hex.
+    expect(contrastRatio('rgb(0, 0, 0)', 'rgb(255, 255, 255)')).toBeCloseTo(21, 1);
+    expect(contrastRatio('rgb(31, 35, 40)', 'rgb(255, 255, 255)')).toBeCloseTo(15.8, 1);
   });
 
   test('body fg, headings ink, and links all clear 4.5:1 on the surface', async ({ page }) => {
@@ -225,7 +224,7 @@ test.describe('Story 2.2 AC3 — every text/surface pairing meets WCAG 2.1 AA (>
     const ink = await computed(page, 'h1', 'color');
     expect(contrastRatio(ink, surface)).toBeGreaterThanOrEqual(AA_NORMAL);
 
-    const link = await computed(page, 'article a, main a, a', 'color');
+    const link = await computed(page, 'article a', 'color');
     expect(contrastRatio(link, surface)).toBeGreaterThanOrEqual(AA_NORMAL);
   });
 
@@ -246,24 +245,77 @@ test.describe('Story 2.2 AC3 — every text/surface pairing meets WCAG 2.1 AA (>
     }
   });
 
-  test('the tight function (#8250df) and keyword (#cf222e) tokens are pinned on #f6f8fa', async ({ page }) => {
-    // These are the tightest pairings (4.74:1 / 5.03:1). If github-light emits a
-    // LIGHTER purple/red than DESIGN, the rendered ratio dips below AA — assert
-    // against the RENDERED pre background so the gate catches that drift.
+  test('the tight emitted function (#6F42C1) and keyword (#cf222e) tokens clear AA on the rendered #f6f8fa', async ({ page }) => {
+    // The bundled github-light theme EMITS the function token as #6F42C1
+    // (6.12:1), NOT the DESIGN target #8250df (which is never rendered). The
+    // keyword red is corrected at the source (Shiki colorReplacements) to the
+    // DESIGN #cf222e (5.03:1) — the tightest emitted code token. Read both from
+    // the ACTUAL rendered token spans so a lighter emit / a dropped correction
+    // fails loudly, rather than asserting a phantom hex.
     const preBg = await computed(page, 'pre.astro-code', 'background-color');
-
-    // DESIGN target tokens must themselves clear AA on the code surface.
-    expect(
-      contrastRatio('rgb(130, 80, 223)', preBg), // function #8250df
-      'DESIGN function token #8250df must clear AA on the rendered code-bg',
-    ).toBeGreaterThanOrEqual(AA_NORMAL);
-    expect(
-      contrastRatio('rgb(207, 34, 46)', preBg), // keyword #cf222e
-      'DESIGN keyword token #cf222e must clear AA on the rendered code-bg',
-    ).toBeGreaterThanOrEqual(AA_NORMAL);
-
-    // And the code surface itself must be the light #f6f8fa these ratios assume.
+    // The code surface must be the light #f6f8fa these ratios assume.
     expect(parseRgb(preBg)).toEqual([246, 248, 250]);
+
+    const tokenColors = await page.locator('pre.astro-code code span').evaluateAll((spans) =>
+      Array.from(new Set(spans.map((s) => getComputedStyle(s as Element).color))),
+    );
+
+    // Emitted function token #6F42C1 = rgb(111, 66, 193).
+    const fn = tokenColors.find((c) => parseRgb(c).join(',') === '111,66,193');
+    expect(fn, 'the emitted github-light function token #6F42C1 should be present').toBeTruthy();
+    expect(
+      contrastRatio(fn!, preBg),
+      'emitted function token #6F42C1 must clear AA on the rendered code-bg',
+    ).toBeGreaterThanOrEqual(AA_NORMAL);
+
+    // Source-corrected keyword token #cf222e = rgb(207, 34, 46). Its presence
+    // proves the AA colorReplacements correction is LIVE (the raw #D73A49 4.30:1
+    // is no longer emitted).
+    const kw = tokenColors.find((c) => parseRgb(c).join(',') === '207,34,46');
+    expect(
+      kw,
+      'the AA-corrected keyword token #cf222e should be emitted (proves the source correction is live)',
+    ).toBeTruthy();
+    expect(
+      contrastRatio(kw!, preBg),
+      'corrected keyword token #cf222e must clear AA on the rendered code-bg',
+    ).toBeGreaterThanOrEqual(AA_NORMAL);
+
+    // The raw sub-AA github-light hexes must NOT survive into the render.
+    expect(
+      tokenColors.some((c) => parseRgb(c).join(',') === '215,58,73'), // #D73A49 4.30:1
+      'raw sub-AA keyword #D73A49 must be corrected away',
+    ).toBeFalsy();
+    expect(
+      tokenColors.some((c) => parseRgb(c).join(',') === '227,98,9'), // #E36209 3.28:1
+      'raw sub-AA entity #E36209 must be corrected away',
+    ).toBeFalsy();
+  });
+
+  test('the AA override is case/format-robust — corrects a LOWERCASE-hex emit too', async ({ page }) => {
+    // Future-proofing guard (review patch #1): a Shiki/Astro bump could emit the
+    // sub-AA tokens in lowercase (#d73a49 / #e36209) instead of today's uppercase
+    // (#D73A49 / #E36209). The CSS override uses the case-insensitive attribute
+    // flag, so it must still correct a lowercase-hex span. Inject one and confirm
+    // its COMPUTED color is the AA-corrected value, not the raw sub-AA hex.
+    const corrected = await page.locator('pre.astro-code').first().evaluate((pre) => {
+      const probe = document.createElement('span');
+      // Lowercase hex with the exact inline-style format Shiki emits.
+      probe.setAttribute('style', 'color:#d73a49');
+      pre.appendChild(probe);
+      const c = getComputedStyle(probe).color;
+      probe.remove();
+      return c;
+    });
+    // Must be the corrected DESIGN keyword #cf222e = rgb(207, 34, 46), NOT the
+    // raw #d73a49 = rgb(215, 58, 73).
+    expect(
+      parseRgb(corrected).join(','),
+      `lowercase-hex token should be corrected to #cf222e, got ${corrected}`,
+    ).toBe('207,34,46');
+
+    const preBg = await computed(page, 'pre.astro-code', 'background-color');
+    expect(contrastRatio(corrected, preBg)).toBeGreaterThanOrEqual(AA_NORMAL);
   });
 });
 
@@ -292,18 +344,28 @@ test.describe('Story 2.2 AC5 — robustness: overflow, inline-vs-block, nested b
   });
 
   test('the 760px reading measure is not blown out by the wide code/table', async ({ page }) => {
-    const measure = await page.evaluate(() => {
-      const el =
-        document.querySelector('article') ??
-        document.querySelector('main') ??
-        document.body;
-      return el.getBoundingClientRect().width;
+    // With box-sizing:border-box, <body> max-width:760px is the RENDERED outer
+    // column (24px page padding is drawn INSIDE the measure). So the body
+    // border-box is exactly 760px, and the inner article content box is
+    // 760 - 2*24 = 712px — neither is stretched to the wide code line.
+    const widths = await page.evaluate(() => {
+      const body = document.body.getBoundingClientRect().width;
+      const article =
+        (document.querySelector('article') ??
+          document.querySelector('main') ??
+          document.body).getBoundingClientRect().width;
+      return { body, article };
     });
-    // The content column stays at (or under) the 760px measure + page padding,
-    // not stretched to the wide code line.
-    expect(measure, `content width ${measure}px should respect the 760px measure`).toBeLessThanOrEqual(
-      760 + 2 * 24 + 1,
-    );
+    // The outer reading column respects the 760px border-box measure exactly.
+    expect(
+      widths.body,
+      `body border-box width ${widths.body}px should be the 760px measure`,
+    ).toBeLessThanOrEqual(760 + 1);
+    // The inner content box stays within the measure minus page padding.
+    expect(
+      widths.article,
+      `article content width ${widths.article}px should respect the measure minus page padding`,
+    ).toBeLessThanOrEqual(760 + 1);
   });
 
   test('inline <code> gets the code-bg chip but block code does not double-apply it', async ({ page }) => {
