@@ -1,5 +1,5 @@
 ---
-stepsCompleted: [1, 2, 3, 4, 5]
+stepsCompleted: [1, 2, 3, 4, 5, 6]
 inputDocuments:
   - _bmad-output/planning-artifacts/prds/prd-the-markdown-web-2026-06-21/prd.md
   - _bmad-output/planning-artifacts/prds/prd-the-markdown-web-2026-06-21/addendum.md
@@ -102,3 +102,50 @@ _Confirmed by naethyn, 2026-06-21._
 
 ### Cross-cutting: parser consistency across platforms (future fork)
 Markdig is .NET-only. Future iOS/Android clients need GFM-conformant parsers each (swift-markdown, etc.). When that lands, decide: shared `cmark-gfm` core via FFI vs hold each client to GFM conformance. Windows-first: Markdig is the choice.
+
+## Project Structure & Boundaries
+
+Monorepo layout:
+
+```
+themarkdownweb/
+├── content/                    # the Vault (FR-1–4): seed .md + media; single source of truth
+│   ├── index.md
+│   ├── the-markdown-web.md     # manifesto = page one (dogfood)
+│   └── media/
+├── web/                        # Browser path / HTML client (FR-5–8): Astro + remark/rehype (GFM) + Shiki
+│   ├── astro.config.mjs
+│   ├── src/pages/              # .md → routes
+│   ├── src/layouts/
+│   └── src/styles/github.css   # GitHub-style stylesheet (FR-6)
+├── api/                        # Content negotiation (FR-14): Azure Function — Accept → HTML | raw .md, Vary: Accept
+│   └── negotiate/
+├── clients/
+│   └── windows/                # Native client (FR-9–13): .NET 10 + WPF
+│       ├── TheMarkdownWeb.sln
+│       ├── App/                # shell, window, navigation, fetch raw .md
+│       ├── Rendering/          # BEDROCK: Markdig AST → FlowDocument (pure, no net, no AI)
+│       │   ├── MarkdownToFlowDocument.cs
+│       │   ├── ElementRenderers/
+│       │   └── Highlighting/   # ColorCode
+│       └── Agent/              # AI-personality transform (later; isolated)
+├── infra/staticwebapp.config.json   # Azure SWA config (FR-18)
+├── .github/workflows/
+│   ├── deploy-web.yml          # build Astro → deploy Azure SWA (FR-17)
+│   └── build-windows.yml       # build/test WPF client
+└── _bmad-output/               # existing planning artifacts
+```
+
+### Boundaries
+- **`content/` is the single source of truth** — both `web/` (build time) and the Windows client (runtime via `api/`) consume the same `.md`. No content in code.
+- **`Rendering/` is isolated** from `App/` and `Agent/` — pure, independently testable bedrock (no networking, no AI). `App` and `Agent` depend on it, never the reverse. Lets "render like GitHub" land first and personalities slot in later.
+- **`api/` only negotiates** — browsers → static HTML (Astro/SWA); clients → raw `.md`.
+
+### FR → component map
+| FRs | Lives in |
+|---|---|
+| 1–4 Vault | `content/` (consumed by `web/` & `api/`) |
+| 5–8 HTML client | `web/` (Astro) |
+| 9–13 Native client | `clients/windows/` (App + Rendering + Agent) |
+| 14 Content negotiation | `api/` |
+| 17–18 Publish/host | `.github/workflows/` + `infra/` + Azure SWA |
