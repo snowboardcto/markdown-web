@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-21
-last_updated: 2026-06-21 (2-7 story created — ready-for-dev; content negotiation FR-14, last MVP story of Epic 2)
+last_updated: 2026-06-21 (2-7 code review — CHANGES REQUESTED, 2 Critical; status -> in-progress)
 project: The Markdown Web
 project_key: NOKEY
 tracking_system: file-system
@@ -58,7 +58,8 @@ development_status:
   2-4-media-embedding: done # 7/7 ACs covered + green (94 E2E: 66 prior + 28 media), code review resolved (1 CRITICAL + 2 HIGH + 2 MEDIUM patches applied, 2 decisions documented)
   2-5-browsable-vault-index: done # 7/7 ACs covered + green (121 E2E: 94 prior + 27 index), code review resolved (1 decision + 3 patches applied, 2 deferred pre-existing)
   2-6-site-header-and-pitch-card: done # 7/7 ACs covered + green (157 E2E: 121 prior reconciled + 36 chrome), code review resolved (9 items applied, 3 deferred); AC trace report written
-  2-7-content-negotiation-one-url-two-representations: ready-for-dev
+  2-7-content-negotiation-one-url-two-representations: in-progress # code review: 2 CRITICAL (no page->Function SWA route; .funcignore *.md strips bundled vault) + 1 HIGH (mixed-case false-404); "one URL" NOT MET. 39 api pass/3 skip, web 157 green
+
   epic-2-retrospective: optional
 
   # Epic 3: Read Markdown in the Native Client (Windows)
