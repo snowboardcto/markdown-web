@@ -1,5 +1,5 @@
 ---
-stepsCompleted: [1, 2]
+stepsCompleted: [1, 2, 3]
 inputDocuments:
   - _bmad-output/planning-artifacts/prds/prd-the-markdown-web-2026-06-21/prd.md
   - _bmad-output/planning-artifacts/prds/prd-the-markdown-web-2026-06-21/addendum.md
@@ -71,6 +71,6 @@ _Confirmed by naethyn, 2026-06-21._
 ### Native client bedrock — Windows stack (verified versions, June 2026)
 - **Runtime: .NET 10** (current LTS, supported to Nov 2028).
 - **Parser: Markdig 1.3.1** — fast, CommonMark 0.31.2 + GFM (tables, task lists, etc.), produces an AST. The de-facto .NET markdown processor.
-- **UI: WPF (FlowDocument)** *(recommended — see trade-off)* — native rendering (no webview), and FlowDocument is a mature document model that maps almost 1:1 to the markdown AST (Paragraph/Run/Bold, headings, List/ListItem, Table, Image, mono code).
+- **UI: WPF (FlowDocument)** *(CONFIRMED — WinUI 3 considered and rejected: no FlowDocument, more DIY for tables/rich docs)* — native rendering (no webview), and FlowDocument is a mature document model that maps almost 1:1 to the markdown AST (Paragraph/Run/Bold, headings, List/ListItem, Table, Image, mono code).
 - **Render path:** Markdig AST → WPF FlowDocument. Prior art to reuse/learn from: `markdig.wpf`, `Markdig.FlowDocument`, `MdXaml`.
-- **Open trade-off:** WPF vs WinUI 3 (see below).
+
