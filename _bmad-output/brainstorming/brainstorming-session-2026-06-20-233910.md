@@ -98,3 +98,37 @@ _Novelty_: Sidesteps the censorship/distortion fear entirely. You're not trustin
 **[Use Case #24 — Customer Zero: Beautiful BMAD Output Vault]**
 _Concept_: naethyn's own grounded need — save his BMAD-generated markdown output files (brainstorming sessions, briefs, PRDs, architecture, retrospectives) somewhere for later viewing, and have them *look awesome*. The output of his AI-driven workflow is markdown; he wants a beautiful home and reader for it.
 _Novelty_: Perfect dogfooding wedge — the artifacts this very methodology produces are the first content for the Markdown Web client. The session document being written right now is itself the first test file. Self-referential, immediately useful, zero cold-start.
+
+## Phase 2 — Pattern Recognition (Mind Map)
+
+Central node: **THE MARKDOWN WEB** — URLs to `.md`; author publishes meaning, reader's local agent owns presentation.
+
+**Cluster A — The Thesis (why it's different & why it's safe)**
+- #1 Zero Shared Pixels · #2 Total Client Sovereignty · #17 Trust = Your Own Local Agent · #23 The Portable Lens
+- *Through-line:* decouple content from presentation; hand presentation to the reader's own local agent. Trust comes from ownership/locality, not author constraint.
+
+**Cluster B — The Wedge / Customer Zero (what we build first)**
+- #3 Personal Markdown Vault · #24 Beautiful BMAD Output Vault · #6 Drop-a-Folder, Get-a-World
+- *Through-line:* a selfish-useful personal tool — store, view, enjoy your own `.md` (incl. BMAD outputs) and make them look awesome. Delights a single user before any network.
+
+**Cluster C — Sharing & Social / Distribution**
+- #5 The Living Link · #7 Markdown as "Send-the-Doc" · #8 The Markdown Feed · #9 Portable & Sovereign sharing
+- *Through-line:* personal vault turned outward; same link delights every recipient differently; no platform lock-in.
+
+**Cluster D — Adoption / The HTML Bridge**
+- #10 Born Compatible · #11 Content Negotiation at the URL · #12 Crawlable & Unfurlable · #13 The Upgrade Moment · #14 Dual-Path Architecture · #15 The Handoff
+- *Through-line:* browser → clean server HTML (works everywhere, crawlable); agent path → our client. Every HTML page is a doorway that advertises the client.
+
+**Cluster E — The Client (biggest open question)**
+- #14 Dual-Path (client side) · #16 "Works Everywhere" requirement
+- *Through-line:* form factor undecided (extension / app / OS-agent / CLI / web app); must run the user's local agent AND work everywhere. Real design tension.
+
+**Cluster F — Killer Use-Cases / What It Unlocks**
+- #18 Free Accessibility & Translation (mission-grade) · #19 Skill-Adaptive Docs · #20 The Reshaping Resume · #21 Commerce Your Way · #22 Read-It-For-Me Triage
+- *Through-line:* the "holy cow" applications that HTML can't touch.
+
+**Gaps the map reveals (untouched territory):**
+1. **Business model / why this wins** — sustainability, incentives, who pays.
+2. **Identity & Discovery** — how people find each other's markdown spaces (feed hints at it; no mechanism yet).
+3. **The Protocol / Spec** — conventions for `.md` URLs, content negotiation, the "born compatible" standard.
+4. **Author incentive** — why would authors publish `.md` and surrender presentation control?
