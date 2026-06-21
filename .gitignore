@@ -6,6 +6,14 @@ node_modules/
 dist/
 web/dist/
 
+# Story 2.7 — API content-negotiation bundle (Decision A): a verbatim build-time
+# copy of content/**/*.md + a generated slug->file manifest. Both regenerate
+# deterministically from content/ via `cd api && npm run build`; never commit
+# the copy (content/ stays the single source of truth).
+api/negotiate/content/
+api/negotiate/manifest.json
+api/local.settings.json
+
 # Astro
 .astro/
 

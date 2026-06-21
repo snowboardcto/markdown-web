@@ -9,6 +9,8 @@ on:
     branches: [main]
     paths:
       - 'web/**'
+      - 'api/**'
+      - 'content/**'
       - '.github/workflows/deploy-web.yml'
   workflow_dispatch:
 
@@ -47,7 +49,22 @@ jobs:
         working-directory: web
         run: npm run build
 
-      # Upload the prebuilt static output. skip_app_build avoids re-running a build in the action.
+      # Story 2.7 (FR-14): install the API deps and run the content-bundle step so the
+      # negotiation Function ships with a verbatim copy of content/**/*.md + a generated
+      # slug->file manifest (Decision A). This MUST run before the API is packaged so the
+      # Function can read the raw .md at runtime. Byte-exact copy (no read-as-text) keeps
+      # AC6 fidelity. The web/dist upload is unchanged (still skip_app_build).
+      - name: Install API dependencies
+        working-directory: api
+        run: npm install --no-audit --no-fund
+
+      - name: Bundle content for the API (slug->.md manifest + verbatim copy)
+        working-directory: api
+        run: npm run build
+
+      # Upload the prebuilt static output AND deploy the linked Functions API. skip_app_build
+      # avoids re-running the Astro build in the action; the API at api_location is deployed
+      # alongside web/dist so Accept: text/markdown reaches the negotiate Function.
       - name: Deploy to Azure Static Web Apps
         # SHA-pinned (v1) — this action receives the deployment token, so pin for supply-chain safety.
         uses: Azure/static-web-apps-deploy@1a947af9992250f3bc2e68ad0754c0b0c11566c9 # v1
@@ -58,4 +75,7 @@ jobs:
           # and output_location must be empty (documented prebuilt-app pattern).
           app_location: 'web/dist'
           output_location: ''
+          # Story 2.7 (AC7): deploy the content-negotiation Function alongside the static app.
+          # No secret/subscription-id is hard-coded — the deploy token is the only credential.
+          api_location: 'api'
           skip_app_build: true

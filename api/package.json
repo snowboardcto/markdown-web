@@ -4,8 +4,15 @@
   "private": true,
   "description": "Azure Functions content-negotiation API (FR-14): Accept -> HTML | raw .md, always Vary: Accept. Negotiates only; holds no content of its own.",
   "type": "module",
+  "main": "negotiate/index.mjs",
   "scripts": {
+    "build": "node scripts/build-content.mjs",
+    "prestart": "node scripts/build-content.mjs",
+    "start": "func start",
     "test": "node --test",
     "test:e2e": "RUN_SWA_E2E=1 node --test tests/negotiate.e2e.test.mjs"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.5.0"
   }
 }
