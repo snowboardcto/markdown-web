@@ -226,6 +226,50 @@ test.describe('Story 2.4 AC2 — relative media resolution (assert emitted src),
   });
 });
 
+test.describe('Story 2.4 AC2 / review fix #1 — assets resolve against the page VERBATIM dir, not the slugged route dir', () => {
+  // The page lives at content/My Notes Dir/page.md (route /my-notes-dir/page),
+  // a NON-slug-stable directory. A same-dir embed `<img src="pic.png">` must
+  // resolve against the VERBATIM on-disk dir `My Notes Dir` (the path the copy
+  // step writes to: dist/My Notes Dir/pic.png) -> served src /My%20Notes%20Dir/
+  // pic.png. The pre-fix code resolved against the SLUGGED dir `my-notes-dir`
+  // and emitted /my-notes-dir/pic.png -> a guaranteed 404 (no such copied file).
+  // This test fails on the bug and passes once the rewrite uses the verbatim dir.
+  test('a same-dir embed in a mixed-case/spaced dir rewrites to the verbatim served path', async ({
+    page,
+  }) => {
+    const res = await page.goto('/my-notes-dir/page');
+    expect(res!.status(), '/my-notes-dir/page should return 200').toBe(200);
+    const src = await attrOf(page, 'img[alt="mixed case dir same-dir"]', 'src');
+    expect(
+      src,
+      'pic.png in content/My Notes Dir/ -> /My%20Notes%20Dir/pic.png (verbatim dir, NOT slugged)',
+    ).toBe('/My%20Notes%20Dir/pic.png');
+    // The bug emitted the SLUGGED dir — assert we did NOT.
+    expect(src, 'must NOT slug the asset directory to /my-notes-dir/pic.png').not.toBe(
+      '/my-notes-dir/pic.png',
+    );
+  });
+
+  test('the verbatim-dir asset is actually copied + served at the rewritten path (would-be 200, not 404)', async ({
+    page,
+  }) => {
+    await page.goto('/my-notes-dir/page');
+    const src = await attrOf(page, 'img[alt="mixed case dir same-dir"]', 'src');
+    expect(src).toBe('/My%20Notes%20Dir/pic.png');
+    // The served src and the copied dist path agree -> 200 (the fix's whole point).
+    const served = await page.request.get(src!);
+    expect(
+      served.status(),
+      'the copied dist path must match the rewritten src exactly (review fix #1)',
+    ).toBe(200);
+    expect(served.headers()['content-type'], 'served as an image').toMatch(/^image\//);
+    // The SLUGGED path the bug would have emitted must 404 (proves the asset is
+    // NOT at the slugged location — the fix is load-bearing).
+    const slugged = await page.request.get('/my-notes-dir/pic.png');
+    expect(slugged.status(), 'no asset at the slugged dir path').toBe(404);
+  });
+});
+
 test.describe('Story 2.4 AC3 — non-relative / external media passes through unchanged', () => {
   test.beforeEach(async ({ page }) => {
     const res = await page.goto('/x');

@@ -64,3 +64,29 @@ export function pageDirSlugFromSource(sourcePath) {
   const relDirPosix = lastSlash === -1 ? '' : relPosix.slice(0, lastSlash);
   return relDirPosix === '' ? '' : pathToSlug(relDirPosix);
 }
+
+/**
+ * Derive the current page's VERBATIM directory (relative to `content/`) from its
+ * absolute source path — the on-disk directory name(s), NOT slugged.
+ *
+ * Story 2.4 review fix #1 (CRITICAL): media assets are NOT routes, so a media
+ * reference must resolve against the page's REAL on-disk directory, not its
+ * slugged route directory. The copy step (`copy-vault-media.mjs`) walks
+ * `content/` and writes assets to `dist/` VERBATIM (e.g. `content/My Dir/pic.png`
+ * -> `dist/My Dir/pic.png`). If the media rewrite resolved against the SLUGGED
+ * dir (`my-dir`) it would emit `src="/my-dir/pic.png"` while the file lives at
+ * `dist/My Dir/pic.png` -> a guaranteed 404. Resolving against this verbatim dir
+ * keeps the rewritten `src` and the copied file path in lock-step.
+ *
+ * Unlike `pageDirSlugFromSource`, this is for the MEDIA plugin only — `.md`
+ * links DO slug (they target routes), media does not (it targets files).
+ *
+ * @param {string} sourcePath an absolute path inside `content/`
+ * @returns {string} the page's verbatim directory (POSIX, no leading/trailing
+ *   `/`), `''` at the vault root
+ */
+export function pageDirFromSource(sourcePath) {
+  const relPosix = path.relative(contentDir, sourcePath).split(path.sep).join('/');
+  const lastSlash = relPosix.lastIndexOf('/');
+  return lastSlash === -1 ? '' : relPosix.slice(0, lastSlash);
+}

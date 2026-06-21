@@ -41,17 +41,22 @@
 //     segment; reject if a decoded segment manufactures a `/` or a leading-slash/
 //     scheme (an encoded-separator smuggle), or if a `%`-escape is malformed —
 //     leave UNREWRITTEN, never throw. (AC2 rows 12-14.)
-//   - Resolve the decoded relative path against the page's directory slug via
-//     `path.posix` join+normalize; a `..` that escapes the vault root, or a
-//     leading `/`, leaves the value UNREWRITTEN (no clamp). A directory/empty
-//     basename (trailing `/`) is not a servable asset -> UNREWRITTEN. (rows 11/19.)
+//   - Resolve the decoded relative path against the page's VERBATIM directory
+//     (relative to content/, NOT slugged — assets are files, not routes; review
+//     fix #1) via `path.posix` join+normalize; a `..` that escapes the vault
+//     root, or a leading `/`, leaves the value UNREWRITTEN (no clamp). A
+//     directory/empty basename (trailing `/`) is not a servable asset ->
+//     UNREWRITTEN. (rows 11/19.) Resolving against the verbatim (not slugged)
+//     page dir is what keeps the emitted src in lock-step with the verbatim copy:
+//     a page in `content/My Dir/` references `pic.png` -> `/My Dir/pic.png`, the
+//     exact path the copy hook writes — a SLUGGED `my-dir` would 404.
 //   - Emit `'/' + segments.map(encodeURIComponent).join('/')` — root-absolute,
 //     with the verbatim (decoded) on-disk segments re-encoded URL-safely.
 //   - Existence is NOT checked: a missing asset rewrites to its would-be path
 //     and 404s (broken image), never a build crash. (AC6.)
 import { visit } from 'unist-util-visit';
 import path from 'node:path';
-import { resolveSourcePath, pageDirSlugFromSource } from './page-path.mjs';
+import { resolveSourcePath, pageDirFromSource } from './page-path.mjs';
 
 // Media elements + the attribute(s) on each that carry a (possibly relative)
 // served-asset reference. `<video>` carries BOTH `src` and `poster` (rewrite
@@ -70,6 +75,14 @@ const MEDIA_ATTRS = {
 // skipped). Surfaced so a future Astro VFile-shape change is a visible no-op.
 const unresolvedPages = new Set();
 
+// Pages where the astro:assets bypass seam (`file.data.astro`) was absent or
+// shape-changed (review fix #4): if this seam disappears, Astro's internal
+// `rehypeImages` stays live and its unconditional `decodeURI`/`getImage` would
+// re-introduce the AC6 build crash on a malformed/missing reference. We warn
+// once per page so a silent re-crash regression is visible, and the plugin
+// no-ops the bypass safely rather than throwing.
+const bypassSeamMissing = new Set();
+
 // The set of relative asset paths (relative to content/, verbatim) the rewrite
 // emitted a served URL for, deduped across pages. The `astro:build:done` copy
 // hook can diff this against what actually exists in `content/` to warn (once)
@@ -81,10 +94,11 @@ const referencedAssets = new Set();
  * or return null to leave it UNREWRITTEN (pass-through / smuggle / escape).
  *
  * @param {string} value the authored attribute value
- * @param {string} pageDirSlug the current page's directory slug
+ * @param {string} pageDir the current page's VERBATIM directory (relative to
+ *   content/, NOT slugged — assets are files, not routes; review fix #1)
  * @returns {string|null} the served `/…` path, or null to leave as-is
  */
-function resolveMediaRef(value, pageDirSlug) {
+function resolveMediaRef(value, pageDir) {
   // Pass-throughs: scheme (http:/https:/data:/…), protocol-relative, root-absolute.
   if (
     /^[a-z][a-z0-9+.-]*:/i.test(value) ||
@@ -123,9 +137,12 @@ function resolveMediaRef(value, pageDirSlug) {
   // a smuggled separator/scheme slipped past the still-encoded pass-through guards.
   if (decoded.startsWith('/') || /^[a-z][a-z0-9+.-]*:/i.test(decoded)) return null;
 
-  // Resolve against the page's directory (POSIX). Assets are NOT slugged — only
-  // `./`/`..`/nested-dir is resolved; the segments stay verbatim.
-  const joined = path.posix.normalize(path.posix.join(pageDirSlug, decoded));
+  // Resolve against the page's VERBATIM directory (POSIX). Assets are NOT slugged
+  // and the page dir is NOT slugged either (review fix #1): the copy step writes
+  // assets to dist/ at their verbatim content/-relative path, so the served `src`
+  // must use the same verbatim directory or it 404s. Only `./`/`..`/nested-dir is
+  // resolved; the segments stay byte-for-byte.
+  const joined = path.posix.normalize(path.posix.join(pageDir, decoded));
 
   // A `..` that escapes the vault root -> leave unrewritten (no clamp).
   if (joined === '..' || joined.startsWith('../')) return null;
@@ -162,9 +179,36 @@ export default function rehypeMdMedia() {
     // served `<img src="/media/x.jpg">` (AC1 verbatim), and a missing/malformed
     // reference never takes the build down via the assets pipeline (AC6). This is
     // the cleanest Astro-5 bypass — no `<Image>`/image-service override needed.
-    if (file && file.data && file.data.astro) {
-      file.data.astro.localImagePaths = [];
-      file.data.astro.remoteImagePaths = [];
+    //
+    // Resilience (review fix #4): this seam is undocumented Astro internals. If
+    // `file.data.astro` is absent or its shape changes, the bypass silently
+    // no-ops while `rehypeImages` stays live -> the exact AC6 build crash could
+    // return with no warning. Guard so we NEVER throw here, and warn once per
+    // page if the seam is missing so a re-crash regression is visible rather than
+    // silent. (We can only no-op safely; we cannot synthesise the seam.)
+    try {
+      const astroData = file && file.data && file.data.astro;
+      if (astroData && typeof astroData === 'object') {
+        astroData.localImagePaths = [];
+        astroData.remoteImagePaths = [];
+      } else {
+        const seamId =
+          (file && (file.path || (file.history && file.history[0]))) || '<unknown>';
+        if (!bypassSeamMissing.has(String(seamId))) {
+          bypassSeamMissing.add(String(seamId));
+          console.warn(
+            `[rehype-md-media] astro:assets bypass seam (file.data.astro) was absent for ` +
+              `"${String(seamId)}". The media src rewrite still runs, but Astro's internal ` +
+              'rehypeImages was NOT neutralised — if the Astro VFile contract changed, a ' +
+              'malformed/missing markdown image reference could crash the build (AC6 regression).',
+          );
+        }
+      }
+    } catch (err) {
+      // Never let the bypass itself take the build down.
+      console.warn(
+        `[rehype-md-media] astro:assets bypass step threw and was ignored: ${err && err.message}`,
+      );
     }
 
     const sourcePath = resolveSourcePath(file);
@@ -185,7 +229,10 @@ export default function rehypeMdMedia() {
       return;
     }
 
-    const pageDirSlug = pageDirSlugFromSource(sourcePath);
+    // Verbatim page directory (NOT slugged) — assets are files, not routes
+    // (review fix #1). The copy step preserves on-disk dir names; the rewrite
+    // must too, or the served `src` won't match the copied path.
+    const pageDir = pageDirFromSource(sourcePath);
 
     visit(tree, 'element', (node) => {
       if (!node.properties) return;
@@ -196,7 +243,7 @@ export default function rehypeMdMedia() {
         // Attribute-value-shape defensiveness: HAST can carry non-string/array
         // property values; only process a non-empty string.
         if (typeof value !== 'string' || value === '') continue;
-        const resolved = resolveMediaRef(value, pageDirSlug);
+        const resolved = resolveMediaRef(value, pageDir);
         if (resolved !== null) node.properties[attr] = resolved;
       }
     });
