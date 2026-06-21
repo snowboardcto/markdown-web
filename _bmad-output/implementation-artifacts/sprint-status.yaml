@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-21
-last_updated: 2026-06-21 (3-2 marked done — 7/7 ACs covered, Windows CI green 78/78 on windows-latest; address bar + fetch; review APPROVED)
+last_updated: 2026-06-21 (3-3 marked done — 12 ACs covered, Windows CI green on windows-latest; Markdig AST -> FlowDocument render; review APPROVED after 1 fix)
 project: The Markdown Web
 project_key: NOKEY
 tracking_system: file-system
@@ -66,7 +66,7 @@ development_status:
   epic-3: in-progress
   3-1-wpf-app-shell-with-toolbar: done # 5/5 ACs covered + GREEN on windows-latest (run #6, 7c771c3, 14/14 tests); review APPROVED (no action items); 2 test-harness bugs from run #4 fixed (ColumnDefinition tree-walk, assembly-elision boundary check); no-Chromium guard (csproj + runtime tiers) green
   3-2-md-only-address-bar-and-fetch: done # 7/7 ACs covered + GREEN on windows-latest (run #11, 5565897, 78/78 tests); review APPROVED (only MINOR, 1 applied); CI #9 caught a WPF System.IO.Packaging test-parallelism race -> fixed via DisableTestParallelization; fetch-target = typed .md URL as-is with Accept: text/markdown, URL->/api/negotiate/<slug> mapping deferred to 3.3+
-  3-3-markdig-ast-flowdocument-rendering: backlog
+  3-3-markdig-ast-flowdocument-rendering: done # 12 ACs covered + GREEN on windows-latest (run #16, c91e403); review CHANGES-REQUESTED->fixed (test-helper missing using System.Windows.Automation; D5 link assert OriginalString vs ToString slash); FlowDocumentRenderer pure (Markdig + System.Windows only); image = record source no fetch; colors/nav/display deferred to 3.4/3.5/3.6
   3-4-code-syntax-highlighting: backlog
   3-5-in-client-links-media-navigation: backlog
   3-6-basic-faithful-default-render: backlog

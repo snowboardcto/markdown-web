@@ -1,6 +1,6 @@
 # Story 3.3: Markdig AST → FlowDocument rendering
 
-Status: ready-for-review
+Status: done
 
 <!-- VALIDATION (vs epics.md Story 3.3, lines 312–323; FR-6, GFM bedrock): RESULT = PASS.
   - AC↔epic alignment: the epic "Then" is one compound render clause + an "And". Mapped exhaustively:
@@ -430,8 +430,32 @@ _(to be filled by the dev agent — WPF builds/runs Windows-only; verification i
 
 ### CI Verification
 
-_(to be filled by the dev agent — record the authoritative green `Build Windows Client` run id.)_
+**CI run #14** (`a1eceed`, impl): build FAILED — `FlowDocumentTestHelpers.cs:343` used `AutomationProperties` without `using System.Windows.Automation;` (CS0103), so the whole `Rendering.Tests` assembly didn't compile and no tests ran. **Not a renderer defect** (a test-helper import omission). Consolidated review (Step 7) independently flagged the same plus a 2nd red: the two D5 link asserts used `NavigateUri.ToString()`, which canonicalizes `https://example.com` → `https://example.com/`.
 
-### AC → Test Trace
+**Fix** (`c91e403`): added the `using`; switched the D5 link asserts to `NavigateUri.OriginalString` (preserves the verbatim href; the renderer already records the URL raw — impl unchanged).
 
-_(to be filled by the dev agent after the green CI run.)_
+**CI run #16** (`c91e403`): **GREEN** on windows-latest (run id 27915107613) — Restore ✓ Build ✓ Test ✓. The full FlowDocument render suite (all element families + D1–D9 edge cases) passes; the existing `MarkdownRendererTests` + App.Tests stay green. Authoritative verification.
+
+### Consolidated Code Review (Step 7) — CHANGES REQUESTED → resolved
+
+Verified the implementation genuinely meets every AC (no false-greens, no vacuous asserts): correct Markdig 1.3.1 API usage (`EmphasisInline.DelimiterChar/Count`, `TaskList.Checked`, `FencedCodeBlock.Info`, `Table/TableRow.IsHeader`, `ListBlock.IsOrdered`, `LinkInline`, `HtmlInline.Tag`, `LineBreakInline.IsHard`), nested `***x***` Bold+Italic via WPF property inheritance, fenced-code single-foreground (no colors), purity (Markdig + System.Windows only). The 1 CRITICAL (D5 link slash) is fixed above. MINOR notes (HtmlInline literal reconstruction; a doc-only task-list example typo) are non-blocking.
+
+### AC → Test Trace (Step 10) — all green on run #16
+
+| AC | Element family / requirement | Test file |
+|----|------------------------------|-----------|
+| AC1 | Render API + pipeline + totality (null→throws; ""/ws→empty; malformed→no-throw) | `FlowDocumentRendererTests` |
+| AC2 | Headings H1–H6 (`Tag`, Bold, monotonic size > body) | `HeadingTests` |
+| AC3 | Bold / italic / strikethrough / nested | `EmphasisTests` |
+| AC4 | Paragraph + inline code (mono) | `ParagraphTests` |
+| AC5 | Fenced code (mono, lang in `Tag`, single foreground = no colors) | `CodeBlockTests` |
+| AC6 | Lists (Disc/Decimal, nested) | `ListTests` |
+| AC7 | GFM task lists (read-only CheckBox) | `TaskListTests` |
+| AC8 | Blockquotes (`Section` + left border, nested) | `BlockquoteTests` |
+| AC9 | GFM tables (`Table`, col/row counts, bold header) | `TableTests` |
+| AC10 | Images (record source + alt, NO network) | `ImageTests` |
+| AC11 | Rendering pure (no System.Net.Http/AI/up-ref) | `RenderingPurityTests` |
+| AC12 | windows-latest CI + STA + no-parallel | CI run #16 green; `AssemblyInfo` DisableTestParallelization |
+| D1–D9 | thematic break→hr, raw HTML→literal, nesting, `#######`→para, fenced corner cases, ragged tables, line break, autolink→inert Hyperlink | `EdgeCaseHardeningTests` |
+
+All 12 ACs + D1–D9 covered by CI-runnable proofs; none relies on "render and look". Trace complete. **Story 3-3 DONE.**
