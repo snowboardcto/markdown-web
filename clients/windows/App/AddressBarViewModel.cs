@@ -147,7 +147,10 @@ public sealed class AddressBarViewModel : INotifyPropertyChanged
         FetchResult result;
         try
         {
-            result = await _fetcher.FetchAsync(input, ct).ConfigureAwait(false);
+            // No ConfigureAwait(false): resume on the captured UI SynchronizationContext so the
+            // post-await PropertyChanged (State/LastFetchedMarkdown) fires on the UI thread for
+            // bindings (Story 3.3 surfaces State visually). MarkdownFetcher keeps ConfigureAwait(false).
+            result = await _fetcher.FetchAsync(input, ct);
         }
         catch (Exception ex)
         {
