@@ -40,7 +40,9 @@ DisableProgramGroupPage=yes
 PrivilegesRequiredOverridesAllowed=dialog
 PrivilegesRequired=lowest
 OutputDir=installer-out
-OutputBaseFilename=TheMarkdownWeb-Setup-{#AppVersion}
+; STABLE filename (no version) so https://github.com/<repo>/releases/latest/download/TheMarkdownWeb-Setup.exe
+; always resolves to the newest installer. The version lives in AppVersion + the Release tag/title.
+OutputBaseFilename=TheMarkdownWeb-Setup
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern

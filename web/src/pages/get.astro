@@ -1,21 +1,64 @@
 ---
-// Story 2.6 — the client-download stub route (Decision A: /get).
+// /get — download the native Windows client.
 //
-// The native Markdown Web client ships in Epic 3 and does not exist yet, so the
-// header "Get the client" CTA and the pitch-card "Get the Markdown Web client"
-// CTA both point at this minimal placeholder. It is a NON-collection Astro route
-// (NOT a content/*.md file), so it never enters the `pages` collection and never
-// appears in the 2.5 vault index listing. Rendered through `Page`, so it
-// inherits the theme + the 2.6 header/pitch chrome and carries its own single
-// <h1> (the chrome adds none).
+// The client ships as a SELF-CONTAINED Windows installer (no .NET runtime required), published as a
+// GitHub Release asset by .github/workflows/release-windows.yml. The download link points at the
+// repo's "latest release" with a STABLE asset name, so it always resolves to the newest installer
+// without editing this page per version. (Anonymous download requires the repo to be public.)
 import Page from '../layouts/Page.astro';
+
+const DOWNLOAD_URL =
+  'https://github.com/snowboardcto/markdown-web/releases/latest/download/TheMarkdownWeb-Setup.exe';
+const RELEASES_URL = 'https://github.com/snowboardcto/markdown-web/releases/latest';
 ---
 
 <Page title="Get the Markdown Web client">
   <h1>Get the Markdown Web client</h1>
+
   <p>
-    The native Markdown Web client is coming with Epic 3. When it ships, this
-    page will link you to the download.
+    The native client is a <strong>browser for the Markdown Web</strong>: type a
+    <code>.md</code> URL and your machine renders it as a clean, native document —
+    no embedded web browser, no HTML. Today it ships the <em>faithful basic</em>
+    render; AI personalities come next.
   </p>
-  <p><a href="/">Back to the web</a></p>
+
+  <p>
+    <a class="download" href={DOWNLOAD_URL} rel="nofollow">⬇ Download for Windows</a>
+  </p>
+
+  <h2>Install</h2>
+  <ol>
+    <li>Run <code>TheMarkdownWeb-Setup.exe</code>.</li>
+    <li>It's <strong>self-contained</strong> — nothing else to install (no .NET runtime needed).</li>
+    <li>
+      The installer isn't code-signed yet, so Windows SmartScreen may say
+      “unknown publisher.” Choose <strong>More info → Run anyway</strong>.
+    </li>
+    <li>
+      Launch <strong>The Markdown Web</strong>, then open a page — e.g. paste a
+      <code>themarkdownweb.com/&hellip;.md</code> URL into the address bar.
+    </li>
+  </ol>
+
+  <p class="muted">
+    Windows 10/11 (x64). Trouble with the button? Grab it from the
+    <a href={RELEASES_URL} rel="nofollow">latest release</a>.
+    macOS and Linux clients are on the roadmap.
+  </p>
+
+  <p><a href="/">← Back to the web</a></p>
 </Page>
+
+<style>
+  .download {
+    display: inline-block;
+    padding: 0.6rem 1.1rem;
+    border-radius: 6px;
+    background: #1f2328;
+    color: #fff;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .download:hover { background: #0d1117; }
+  .muted { color: #59636e; font-size: 0.925rem; }
+</style>

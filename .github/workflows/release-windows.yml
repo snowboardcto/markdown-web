@@ -87,7 +87,7 @@ jobs:
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           $publishAbs = (Resolve-Path 'publish').Path
           & "$iscc" "/DPublishDir=$publishAbs" "/DAppVersion=${{ steps.ver.outputs.numeric }}" $env:ISS
-          $setup = "clients/windows/installer/installer-out/TheMarkdownWeb-Setup-${{ steps.ver.outputs.numeric }}.exe"
+          $setup = "clients/windows/installer/installer-out/TheMarkdownWeb-Setup.exe"
           if (-not (Test-Path $setup)) { throw "installer not found at $setup" }
           "SETUP_PATH=$setup" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "Built installer: $setup ($([math]::Round((Get-Item $setup).Length/1MB,1)) MB)"
