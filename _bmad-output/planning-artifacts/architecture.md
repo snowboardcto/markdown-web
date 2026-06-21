@@ -1,5 +1,5 @@
 ---
-stepsCompleted: [1]
+stepsCompleted: [1, 2]
 inputDocuments:
   - _bmad-output/planning-artifacts/prds/prd-the-markdown-web-2026-06-21/prd.md
   - _bmad-output/planning-artifacts/prds/prd-the-markdown-web-2026-06-21/addendum.md
@@ -24,3 +24,38 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 **FC-2 — Agent output contract:** because the native client draws native UI, the **local agent emits a declarative UI structure (or native primitives), never HTML.** Shape: `markdown + reader context → agent → declarative UI description → native renderer → native widgets`. Candidate pattern to weigh: A2UI-style declarative UI (from market research) — agent emits structured UI, rendered natively per platform.
 
 _Confirmed by naethyn, 2026-06-21._
+
+## Project Context Analysis
+
+### Requirements Overview
+
+**Functional Requirements:** 18 FRs in 6 groups. MVP = FR-1–FR-14 (Vault + HTML client + native client + content negotiation); Sharing (FR-15/16) deferred. Three runtime surfaces:
+- **Static publish path** (FR-1–8, 17–18): markdown → HTML, Azure static hosting, push-to-deploy. Low risk.
+- **Content-negotiation backend** (FR-14): one URL → HTML for browsers / raw markdown for agents+native client. Small, standard.
+- **Native client + local agent** (FR-9–13): non-HTML native rendering driven by the reader's local agent. High novelty — the innovation budget goes here.
+
+**Non-Functional Requirements (architecture drivers):**
+- No embedded browser engine in the native client (FC-1, hard).
+- Cross-platform reach ("works everywhere") without Chromium.
+- Beauty + performance budget; reading experience must not regress (SM-C1).
+- Born-compatibility/SEO: no-agent HTML path stays first-class (SM-C2).
+- Local-agent trust: rendering by the reader's own local agent (FR-12).
+- Accessibility & translation as render outcomes (FR-11), not author work.
+
+### Scale & Complexity
+- Primary domain: full-stack (static web + serverless + native client + agent integration).
+- Complexity: medium overall; high on the native client. No multi-tenancy, compliance, or real-time — surfaces 1–2 stay cheap.
+- Estimated architectural components: ~5 (markdown parse layer, static site builder, content-negotiation function, native client renderer, local-agent integration).
+
+### Technical Constraints & Dependencies
+- Azure hosting; GitHub Actions CI/CD (confirmed shape, addendum).
+- Markdown flavor default GFM + frontmatter-as-metadata (open).
+- No accounts/multi-user/monetization in v1.
+- Domain themarkdownweb.com (owned).
+
+### Cross-Cutting Concerns
+1. Shared markdown parse layer / AST — one parser feeding both render paths to prevent divergence.
+2. Agent-output contract (declarative-UI schema) — linchpin of the native client; define early.
+3. Local-agent integration model — bundled / BYO-key / local model; drives "works everywhere," cost, trust.
+4. Link + media resolution — relative links resolved at build time (HTML) vs render time (native).
+5. Content-negotiation caching — `Vary: Accept` correctness.
