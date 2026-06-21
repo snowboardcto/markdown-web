@@ -59,3 +59,18 @@ _Confirmed by naethyn, 2026-06-21._
 3. Local-agent integration model — bundled / BYO-key / local model; drives "works everywhere," cost, trust.
 4. Link + media resolution — relative links resolved at build time (HTML) vs render time (native).
 5. Content-negotiation caching — `Vary: Accept` correctness.
+
+## Foundation & Stack Decisions
+
+### Confirmed
+- **Canonical content spec: GitHub Flavored Markdown (GFM).** All renderers (browser + every native client) parse GFM identically so "the same `.md`" renders the same structure (intentional per-personality differences come *on top*, never by accident).
+- **Browser path: Astro** (static HTML for browsers that reach us instead of the native client). markdown → remark/rehype (GFM) → HTML, Shiki for code highlighting, GitHub-style stylesheet.
+- **Native client = "the Markdown Web browser":** an own, per-platform native app (Chrome model — its own native build per device), NOT a cross-platform framework, NOT a webview/Chromium. **First platform: Windows.**
+- **AI personalities** = the per-reader rendering layer *inside* the native client, layered on top of the faithful base render (FR-10). Out of bedrock scope; bedrock = faithful GFM rendering first.
+
+### Native client bedrock — Windows stack (verified versions, June 2026)
+- **Runtime: .NET 10** (current LTS, supported to Nov 2028).
+- **Parser: Markdig 1.3.1** — fast, CommonMark 0.31.2 + GFM (tables, task lists, etc.), produces an AST. The de-facto .NET markdown processor.
+- **UI: WPF (FlowDocument)** *(recommended — see trade-off)* — native rendering (no webview), and FlowDocument is a mature document model that maps almost 1:1 to the markdown AST (Paragraph/Run/Bold, headings, List/ListItem, Table, Image, mono code).
+- **Render path:** Markdig AST → WPF FlowDocument. Prior art to reuse/learn from: `markdig.wpf`, `Markdig.FlowDocument`, `MdXaml`.
+- **Open trade-off:** WPF vs WinUI 3 (see below).
