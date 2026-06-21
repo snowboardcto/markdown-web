@@ -1,5 +1,5 @@
 # generated: 2026-06-21
-# last_updated: 2026-06-21
+# last_updated: 2026-06-20
 # project: The Markdown Web
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-21
-last_updated: 2026-06-21
+last_updated: 2026-06-20
 project: The Markdown Web
 project_key: NOKEY
 tracking_system: file-system
@@ -43,8 +43,8 @@ story_location: _bmad-output/implementation-artifacts
 
 development_status:
   # Epic 1: Walking Skeleton — IaC + CI/CD live on Azure
-  epic-1: backlog
-  1-1-scaffold-the-monorepo: backlog
+  epic-1: in-progress
+  1-1-scaffold-the-monorepo: done
   1-2-provision-azure-hosting-via-iac-bicep: backlog
   1-3-deploy-a-placeholder-page-via-github-actions-on-push: backlog
   1-4-bind-custom-domain-themarkdownweb-com-over-https: backlog

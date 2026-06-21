@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+web/dist/
+
+# Astro
+.astro/
+
+# Logs / env
+*.log
+.env
+.env.local
+.DS_Store
