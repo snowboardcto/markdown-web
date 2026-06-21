@@ -1,7 +1,7 @@
 ---
 stepsCompleted: [1, 2]
 inputDocuments: []
-session_topic: 'The Markdown Web — URLs to .md files where each user''s AI agent renders a personalized front-end'
+session_topic: 'The Markdown Web (themarkdownweb.com) — URLs to .md files where each user''s AI agent renders a personalized front-end'
 session_goals: 'Broad divergence across vision/concept, architecture/how, and adoption wedge (option D). Origin: snowboardcto.com where every .md file is a page.'
 selected_approach: 'progressive-flow'
 techniques_used: ['What If Scenarios','Mind Mapping','SCAMPER','Dream Fusion Laboratory']
@@ -189,3 +189,13 @@ Goal: name the whole paradigm/product so naethyn can register a domain. The `.md
 
 **Buy-workflow:** search top pick on GoDaddy → if available & liked → buy → else next.
 **Mary's ranked rec:** 1) prosepage.com  2) themarkdownweb.com  3) vellumweb.com  4) marklace.com  5) mellowmd.com
+
+### ✅ DOMAIN SECURED
+
+**`themarkdownweb.com` — PURCHASED** (registered via GoDaddy, 2026-06-21).
+
+The product/paradigm now has its name and home: **The Markdown Web** → themarkdownweb.com. Owns the category name and is SEO-strong for "what is the markdown web."
+
+**Still open / next up:**
+- ⏸️ Stage-1 serving path decision: Path 1 (thin server / content negotiation) · Path 2 (static + pre-built HTML) · Path 3 (static now, server later).
+- Untouched map gaps: 💰 business model · 🔍 identity & discovery.
