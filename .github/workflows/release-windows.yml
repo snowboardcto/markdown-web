@@ -1,0 +1,113 @@
+name: Release Windows client (installer)
+
+# Builds the native Windows client as a SELF-CONTAINED win-x64 app, wraps it in an Inno Setup
+# installer (TheMarkdownWeb-Setup-<version>.exe), and publishes it as a GitHub Release asset.
+#
+# Triggers:
+#   - push of a tag matching v* (e.g. v0.1.0) -> versioned release
+#   - manual workflow_dispatch (version defaults to 0.1.0-dev.<run_number>)
+#
+# The release asset is built with the repo's GITHUB_TOKEN (no extra secret). Hosting the installer
+# for ANONYMOUS download from themarkdownweb.com is a separate step (Azure Blob or making the repo
+# public) — a private-repo Release asset is only downloadable by authenticated collaborators.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (semver, no leading v)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write   # create the GitHub Release + upload the installer asset
+
+concurrency:
+  group: release-windows-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build_installer:
+    runs-on: windows-latest
+    name: Build self-contained installer
+    timeout-minutes: 25
+    env:
+      APP_PROJECT: clients/windows/App/TheMarkdownWeb.App.csproj
+      ISS: clients/windows/installer/TheMarkdownWeb.iss
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Resolve version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = '${{ github.event.inputs.version }}'
+          if ([string]::IsNullOrWhiteSpace($v)) {
+            if ($env:GITHUB_REF -like 'refs/tags/v*') {
+              $v = $env:GITHUB_REF -replace '^refs/tags/v',''
+            } else {
+              $v = "0.1.0-dev.$($env:GITHUB_RUN_NUMBER)"
+            }
+          }
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          # Inno's AppVersion wants a numeric x.y.z; strip any pre-release suffix for that field.
+          $num = ($v -split '-')[0]
+          "numeric=$num" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Release version: $v (numeric $num)"
+
+      # Self-contained so the end user needs no .NET runtime. WPF cannot be trimmed, so this is a
+      # full runtime copy (~150MB on disk); the installer compresses it (lzma2/max).
+      - name: Publish (self-contained win-x64)
+        shell: pwsh
+        run: |
+          dotnet publish $env:APP_PROJECT `
+            -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=false `
+            -o publish
+          if (-not (Test-Path 'publish/TheMarkdownWeb.App.exe')) {
+            throw 'publish/TheMarkdownWeb.App.exe not found — publish failed'
+          }
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          $publishAbs = (Resolve-Path 'publish').Path
+          & "$iscc" "/DPublishDir=$publishAbs" "/DAppVersion=${{ steps.ver.outputs.numeric }}" $env:ISS
+          $setup = "clients/windows/installer/installer-out/TheMarkdownWeb-Setup-${{ steps.ver.outputs.numeric }}.exe"
+          if (-not (Test-Path $setup)) { throw "installer not found at $setup" }
+          "SETUP_PATH=$setup" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "Built installer: $setup ($([math]::Round((Get-Item $setup).Length/1MB,1)) MB)"
+
+      - name: Upload installer as build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TheMarkdownWeb-Setup-${{ steps.ver.outputs.version }}
+          path: ${{ env.SETUP_PATH }}
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = if ($env:GITHUB_REF -like 'refs/tags/v*') { $env:GITHUB_REF -replace '^refs/tags/','' } else { "v${{ steps.ver.outputs.version }}" }
+          # Create the release if it doesn't exist, then upload (clobber) the installer asset.
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --title "The Markdown Web $tag" --notes "Native Windows client (self-contained, no .NET runtime required). Unsigned — SmartScreen will prompt; choose More info -> Run anyway." --target $env:GITHUB_SHA
+          }
+          gh release upload $tag "$env:SETUP_PATH" --clobber
