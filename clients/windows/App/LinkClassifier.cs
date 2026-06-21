@@ -63,8 +63,11 @@ public static class LinkClassifier
 
     private static Uri? ResolveHref(string href, Uri? basePageUrl)
     {
-        // An already-absolute href stands on its own (no base needed).
-        if (Uri.TryCreate(href, UriKind.Absolute, out Uri? absolute))
+        // An already-absolute href stands on its own (no base needed). EXCEPT a protocol-relative
+        // "//host/path": .NET parses that as an absolute file:// UNC URI, but per web semantics it is
+        // scheme-relative and must adopt the base's scheme — let it fall through to PageUrlResolver.
+        if (!href.StartsWith("//", StringComparison.Ordinal) &&
+            Uri.TryCreate(href, UriKind.Absolute, out Uri? absolute))
         {
             return absolute;
         }

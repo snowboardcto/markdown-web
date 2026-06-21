@@ -25,7 +25,11 @@ public static class ImageResolver
         string trimmed = recordedSource.Trim();
 
         // An already-absolute source (https://, data:, …) stands on its own — no base required.
-        if (Uri.TryCreate(trimmed, UriKind.Absolute, out Uri? absolute))
+        // EXCEPT a protocol-relative "//host/path": .NET parses that as an absolute file:// UNC URI,
+        // but per web semantics it is scheme-relative and must adopt the base's scheme. Let it fall
+        // through to PageUrlResolver (new Uri(base, "//host/path") -> "<base-scheme>://host/path").
+        if (!trimmed.StartsWith("//", StringComparison.Ordinal) &&
+            Uri.TryCreate(trimmed, UriKind.Absolute, out Uri? absolute))
         {
             return absolute;
         }
