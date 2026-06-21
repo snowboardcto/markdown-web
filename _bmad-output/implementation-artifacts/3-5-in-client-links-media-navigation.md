@@ -2,6 +2,15 @@
 
 Status: ready-for-dev
 
+<!-- VALIDATION (Step 3, post-hardening, vs epics.md Story 3.5, lines 338–350; FR-2, FR-3, FR-8, UX-DR8): RESULT = PASS (kept WHOLE; split contract pinned as the safety valve).
+  - Step-2 hardening verified: SlugDeriver parity CORRECTED to byte-exact github-slugger (was a wrong approximation — would have shipped diverging slugs → live-page 404s); link-classification edge matrix, NavigationController transition table, image edge matrix, and explicit decisions (failed-nav history / same-URL / re-entrancy last-wins / broken-image) all added. Scope UNCHANGED (the 3.5 integration set). 5 out-of-scope items logged to the Deferred-Work-Log (non-ASCII slug parity, richer media, same-URL Accept negotiation, button enabled-state, loading affordance) — none expand scope.
+  - AC↔epic alignment (re-confirmed): every epic clause maps to ≥1 AC (display→AC1; relative .md click→fetch+render-in-place→AC2/3/4/9; #anchor→AC5; external→AC6; images inline→AC7; broken→clear-state-never-crash→AC8; Back/Forward/Reload real nav per UX-DR8→AC10). No epic clause is unmapped; no AC is orphaned.
+  - Missing ACs: NONE. Totality/determinism is now explicit on every path (classification, resolution, slug, endpoint, image, history under/overflow, re-entrancy, anchor-miss) — nothing throws on bad input.
+  - Task completeness: each AC has a CI-runnable proof, mostly plain [Fact] (LinkClassifier/PageUrlResolver/PageEndpointResolver/SlugDeriver/ImageResolver/AnchorMatcher/NavigationController incl. re-entrancy) + targeted [StaFact] only for WPF-object hosting/click/scroll/image-load. STA + DisableTestParallelization reused (not re-added). The sole verification surface is windows-latest CI (AC12).
+  - Scope drift: NONE beyond the integration set. Theming/loading-chrome polish = 3.6; personality = Epic 4; richer media + non-ASCII slug parity = Deferred-Work-Log. Each explicitly named in-spec.
+  - SIZE / SPLIT assessment (story is LARGE): RESULT stays PASS — kept WHOLE because every piece plugs into ONE seam (NavigationController) and the value (a browsable client) only exists wired end-to-end; the Task ordering front-loads the 3.5a core (Tasks 1–3) before additive slices (Tasks 4–5). The split contract is pinned and MECHANICAL (no rework): if velocity demands, fracture at 3.5a {AC1/2/3/4/8/9/10/11/12 — loads & browses} | 3.5b {AC5 anchor, AC6 external, AC7 images}. Non-blocking action item to PM: choose whole-vs-split at sprint start; the AC contracts don't change either way.
+  - Non-blocking action items: (1) PM whole-vs-split call; (2) impl MUST embed the github-slugger regex verbatim + add a golden manifest-key cross-check [Fact] (the parity table rows are the assertions); (3) confirm the FlowDocumentScrollViewer routes Hyperlink.RequestNavigate under read-only on first CI run, else fall back to read-only RichTextBox (documented).
+  - ORIGINAL Step-1 mapping retained below for traceability. -->
 <!-- VALIDATION (Step 1, vs epics.md Story 3.5, lines 338–350; FR-2, FR-3, FR-8, UX-DR8): RESULT = PASS.
   - AC↔epic alignment: the epic's one Given/When/Then/And is multi-clause. Mapped exhaustively:
       • (display precondition — "a rendered page in the client") → AC1 (the fetched markdown is rendered into ContentHost via FlowDocumentRenderer; first time content appears on screen — required for every other clause to be observable).
@@ -101,21 +110,21 @@ Stories 3.1–3.4 built the parts in isolation; **3.5 wires them together and is
 
    Proven by `[Fact]`s on `ImageResolver` (relative→absolute, garbage→null, no throw) and an `[StaFact]` that renders `![alt](media/pic.png)` for base `https://themarkdownweb.com/guides/x.md`, hosts it, runs the image post-process with a **stub `IImageLoader`** that records the requested `Uri` and returns a sentinel `ImageSource` → asserts the loader was asked for `https://themarkdownweb.com/guides/media/pic.png` and the `Image.Source` was set to the sentinel; a stub loader that returns `null` (broken) → `Image.Source` stays null, automation/alt name preserved, no throw. No socket. *(AC7 — epics.md line 349 "images resolve from the vault and render inline"; FR-3; 3.3 image decision deferred resolution to 3.5.)*
 
-8. **[Broken link / missing page / failed fetch → clear in-content state, never a crash]** **Given** any navigation (typed address, clicked internal link, Back/Forward, Reload) whose fetch returns `FetchResult.Failure` (non-2xx incl. endpoint 404, non-`text/markdown`, empty/oversized body, network exception, cancellation) OR whose href is `Unsupported` (AC2), **When** the App handles it, **Then** it shows a **clear in-content "page not found / not a markdown page" state inside `ContentHost`** (reusing `AddressBarState.Broken`) and **never throws / never crashes the window**. The Broken state is a clear FlowDocument-or-message (e.g. a small rendered "This page could not be loaded" document or a visible message panel in `ContentHost`), distinct from a successfully rendered page. A failed in-place navigation does NOT corrupt the history stack (the current entry is preserved; no half-pushed entry).
+8. **[Broken link / missing page / failed fetch → clear in-content state, never a crash]** **Given** any navigation (typed address, clicked internal link, Back/Forward, Reload) whose fetch returns `FetchResult.Failure` (non-2xx incl. endpoint 404, non-`text/markdown`, empty/oversized body, network exception, cancellation) OR whose href is `Unsupported` (AC2), **When** the App handles it, **Then** it shows a **clear in-content "page not found / not a markdown page" state inside `ContentHost`** (reusing `AddressBarState.Broken`) and **never throws / never crashes the window**. The Broken state is a clear FlowDocument-or-message (e.g. a small rendered "This page could not be loaded" document or a visible message panel in `ContentHost`), distinct from a successfully rendered page. A failed in-place navigation does NOT corrupt the history stack (the current entry is preserved; **no half-pushed broken entry** — a fresh `NavigateToAsync` that fails leaves `Current`/cursor/history untouched and only signals `onBroken`; Back therefore always returns to a real, previously-rendered page). See Dev Notes "Explicit decisions" (failed-navigation & history) for the Back/Forward/Reload-of-an-existing-entry-that-fails case (cursor has already legitimately moved to that real entry → show Broken for it, do not rewind).
 
    Proven by a `[Fact]` on the `NavigationController` with a fake fetcher returning `Failure` → the controller surfaces a Broken outcome, `Current` is unchanged (no corruption), no throw; an `[StaFact]` asserts the `ContentHost` shows the Broken content (a distinguishable element/message), not a stale page and not an empty crash. An `Unsupported` link dispatch is a no-op (no fetch, no launch, no throw). *(AC8 — epics.md line 350 "a broken link shows a clear state, never a crash"; FR-2; EXPERIENCE.md State Patterns line 49; reuses 3.2 `AddressBarState.Broken`.)*
 
 9. **[URL → `/api/negotiate/<slug>` resolution seam — so LIVE pages actually load (the 3.2 deferred decision lands here)]** **Given** a typed-or-clicked absolute `themarkdownweb.com` `.md` page URL (e.g. `https://themarkdownweb.com/guides/gear-guide.md`), **When** the App prepares to fetch it, **Then** a pure `PageEndpointResolver.ToFetchEndpoint(pageUrl) → Uri` maps it to the **fetchable Function endpoint** `https://themarkdownweb.com/api/negotiate/<slug>`, where `<slug>` is derived by the SAME normalization as the server `pathToSlug` (`api/negotiate/slug.mjs`): **drop the trailing `.md` (case-insensitive); github-slug each `/`-separated path segment (lower-case + slugify); collapse a trailing `/index` and a bare `index` to the parent**. The fetcher then GETs the endpoint URL (not the raw page URL) with `Accept: text/markdown`, so a live `.md` request returns real `text/markdown` (200) instead of HTML → Broken. The mapping is pure, total (never throws), and host-preserving (the endpoint is `<scheme>://<host>/api/negotiate/<slug>` on the SAME origin as the page URL).
-   - A C#-faithful port of `pathToSlug` lives in App (`SlugDeriver.PathToSlug(relPosixPath)`): drop `.md` (case-insensitive), split on `/`, github-style slugify each segment (lower-case; replace runs of non-`[a-z0-9]` with `-`; trim leading/trailing `-`), re-join with `/`, strip a trailing `/index`, map a bare `index` to empty. Mirror the server semantics; cross-check against the live manifest keys (`gear-guide`, `sub/page`, `sub` ← `sub/index.md`, `readme` ← `README.md`, `my-notes-dir/page` ← `My Notes Dir/page.md`).
+   - A C#-faithful port of `pathToSlug` lives in App (`SlugDeriver.PathToSlug(relPosixPath)`). **CRITICAL — port the EXACT github-slugger algorithm, NOT a "replace non-`[a-z0-9]` with `-`" approximation (that approximation is WRONG — see Advanced-elicitation hardening "SlugDeriver parity").** The server (`api/negotiate/slug.mjs`) does, per `/`-segment, exactly: `value.toLowerCase().replace(<github-slugger Unicode regex>, '').replace(/ /g, '-')` — i.e. **(a) invariant-lowercase, (b) DELETE (not replace) every char matched by github-slugger's `regex.js` Unicode class (punctuation/symbols/control: `.`, `,`, `!`, `#`, `&`, `%`, `:`, `/`-in-segment, etc.), (c) replace ONLY the literal space U+0020 with `-`**. No hyphen-run collapsing, no trim. So `a.b.c` → `abc` (dots deleted), `100%` → `100`, `C# & .NET` → `c--net`, `My Notes Dir` → `my-notes-dir`, `--x--` → `--x--` (preserved). Then drop `.md` (case-insensitive) BEFORE slugging, split on `/`, slug each segment, re-join `/`, strip a trailing `/index`, map a bare `index` to empty. The C# port MUST embed the SAME github-slugger Unicode regex (copy `regex.js`'s pattern into a `static readonly Regex`) and use `ToLowerInvariant()`; cross-check against the live manifest keys (`gear-guide`, `sub/page`, `sub` ← `sub/index.md`, `readme` ← `README.md`, `my-notes-dir/page` ← `My Notes Dir/page.md`, `my-notes` ← `My Notes.md`). **Unicode divergence risk** is documented & scoped: see the hardening section's parity table and the Deferred-Work-Log non-ASCII note.
    - Host policy: apply the negotiate mapping for the canonical app host (`themarkdownweb.com`, case-insensitive, incl. `www.`); for any OTHER host the page URL is fetched as-is (the seam is a deterministic, documented host check — NOT a hardcoded single URL). Document the exact host predicate.
 
    Proven by `[Fact]`s mirroring the server: `https://themarkdownweb.com/gear-guide.md` → `…/api/negotiate/gear-guide`; `…/sub/page.md` → `…/api/negotiate/sub/page`; `…/sub/index.md` → `…/api/negotiate/sub`; `…/README.md` → `…/api/negotiate/readme`; `…/My%20Notes%20Dir/page.md` (or `/My Notes Dir/page.md`) → `…/api/negotiate/my-notes-dir/page`; a non-app host `https://other.com/x.md` → unchanged (fetched as-is); all pure, no network, no throw. *(AC9 — DERIVED: epics.md live-load requirement + the 3.2 DEFERRED-WORK LOG line 183 "Story 3.3+ must wire the typed `themarkdownweb.com/<x>.md` → `/api/negotiate/<slug>` mapping" + the 2.7 same-URL deferral; architecture content-negotiation `/api/negotiate/<slug>`.)*
 
 10. **[Back / Forward / Reload actually navigate — a real history stack (3.1's inert handlers made real)]** **Given** the toolbar Back/Forward/Reload buttons and a `NavigationController` holding a navigation history, **When** the reader navigates (types an address, clicks an internal link) and then presses Back/Forward/Reload, **Then** the controller moves through history and **re-fetches+re-renders** the target page: **Back** moves to the previous entry and renders it; **Forward** moves to the next entry; **Reload** re-fetches the current entry. A new navigation from a mid-history position **truncates the forward stack** (browser semantics). The controller exposes `CanGoBack`/`CanGoForward` (the toolbar buttons may reflect enabled state — minimum: the handlers are no-ops at the ends, never throwing). The 3.1 `ShellViewModel.OnBack/OnForward/OnReload` delegate to the controller (keep setting `LastAction` for the existing 3.1 tests; ADD the real behavior).
     - `NavigationController` API (the pinned contract — see Dev Notes): `Task NavigateToAsync(Uri pageUrl)` (push + fetch + render), `Task GoBackAsync()`, `Task GoForwardAsync()`, `Task ReloadAsync()`, `Uri? Current`, `bool CanGoBack`, `bool CanGoForward`. It takes an injectable fetch delegate (over `MarkdownFetcher` + `PageEndpointResolver`) and a render sink (over `FlowDocumentRenderer` + the scroll host) so the whole state machine is `[Fact]`-testable with NO window and NO network.
-    - The history is a list + cursor index; Back at index 0 and Forward at the tip are no-ops (total). Reload at an empty history is a no-op.
+    - The history is a list + cursor index; Back at index 0 and Forward at the tip are no-ops (total). Reload at an empty history is a no-op. **Same-URL `NavigateToAsync(Current)` re-pushes** a new entry (browser semantics); **Reload does NOT push**. **Re-entrancy is last-wins** via a generation token (a stale fetch completion is dropped — no double-render, no history corruption). The full op×outcome matrix is pinned in Dev Notes "NavigationController state-transition table."
 
-    Proven by `[Fact]`s on the `NavigationController` with a fake fetcher: navigate A → B → C, `CanGoBack` true / `CanGoForward` false; `GoBackAsync` → `Current == B`, `CanGoForward` true; `GoForwardAsync` → C; a new `NavigateToAsync(D)` from B truncates C (so `CanGoForward` false, Forward is a no-op); `ReloadAsync` re-invokes the fetcher for `Current`; Back at index 0 / Forward at tip are no-ops (no throw, fetcher behavior asserted). Each transition pushes the rendered markdown to the fake sink. *(AC10 — epics.md UX-DR8 in-client nav; FR-2; 3.1 left Back/Forward/Reload inert "real navigation lands in Story 3.2 / 3.5".)*
+    Proven by `[Fact]`s on the `NavigationController` with a fake fetcher: navigate A → B → C, `CanGoBack` true / `CanGoForward` false; `GoBackAsync` → `Current == B`, `CanGoForward` true; `GoForwardAsync` → C; a new `NavigateToAsync(D)` from B truncates C (so `CanGoForward` false, Forward is a no-op); same-URL `NavigateToAsync(B)` while `Current==B` re-pushes (Count grows, `CanGoForward` false); `ReloadAsync` re-invokes the fetcher for `Current` WITHOUT growing history; Back at index 0 / Forward at tip are no-ops (no throw, fetcher behavior asserted); a **re-entrancy** `[Fact]` (Nav(A) gated, Nav(B) starts, A released late → only B is `Current`, sink saw B last, single tip). Each transition pushes the rendered markdown to the fake sink. *(AC10 — epics.md UX-DR8 in-client nav; FR-2; 3.1 left Back/Forward/Reload inert "real navigation lands in Story 3.2 / 3.5".)*
 
 11. **[`Rendering` stays PURE — link nav + image load + URL/image resolution all live in App; no new package, no net, no webview]** **Given** 3.5 adds navigation, image loading, and URL resolution, **When** the dependency graph + csprojs are inspected, **Then** **`Rendering` gains NO new `PackageReference`** (still `{Markdig, ColorCode.Core}`), adds **no** `System.Net.Http`/sockets, no AI SDK, no webview/Chromium, and no reference to `App`/`Agent`; **all the new I/O (fetch endpoint, image load, `Process.Start` browser launch) lives in `App`**. Concretely:
     - the inherited **`DependencyBoundaryTests.Rendering_DoesNotReference_AppOrAgent` + `App_References_Rendering` stay green** (App still references Rendering; Rendering still references neither App nor Agent);
@@ -135,15 +144,16 @@ Stories 3.1–3.4 built the parts in isolation; **3.5 wires them together and is
 
 - [ ] **Task 1 — Pure URL/link seams: `LinkClassifier`, `PageUrlResolver`, `PageEndpointResolver` + `SlugDeriver` (AC: 2, 3, 9)**
   - [ ] Add `clients/windows/App/PageUrlResolver.cs` — `public static Uri? ResolveAgainst(Uri basePageUrl, string relativeRef)` using `new Uri(baseUri, relativeRef)` semantics; returns `null` (never throws) on garbage; an absolute ref returned as-is. [Source: AC3]
-  - [ ] Add `clients/windows/App/SlugDeriver.cs` — `public static string PathToSlug(string relPosixPath)`: a C# port of `api/negotiate/slug.mjs` `pathToSlug` (drop trailing `.md` case-insensitive; split `/`; github-style slugify each segment — lower-case, replace non-`[a-z0-9]` runs with `-`, trim `-`; re-join `/`; strip trailing `/index`; bare `index`→`""`). Cross-check against `api/negotiate/manifest.json` keys. Total, never throws. [Source: AC9; api/negotiate/slug.mjs lines 25–33]
-  - [ ] Add `clients/windows/App/PageEndpointResolver.cs` — `public static Uri ToFetchEndpoint(Uri pageUrl)`: for the canonical app host (`themarkdownweb.com`/`www.themarkdownweb.com`, case-insensitive) and a `.md` path, build `<scheme>://<host>/api/negotiate/<SlugDeriver.PathToSlug(path)>`; otherwise return `pageUrl` as-is. Pure, total. Document the host predicate. [Source: AC9; api/negotiate/index.mjs route]
+  - [ ] Add `clients/windows/App/SlugDeriver.cs` — `public static string PathToSlug(string relPosixPath)`: a C# port of `api/negotiate/slug.mjs` `pathToSlug` mirroring github-slugger EXACTLY (drop trailing `.md` case-insensitive; split `/`; per segment: `ToLowerInvariant()` → `Regex.Replace(seg, <github-slugger regex>, "")` → replace literal space `' '` with `'-'`; re-join `/`; `.replace(/\/index$/, "")`; `.replace(/^index$/, "")`). **Do NOT collapse hyphen runs and do NOT trim hyphens** (github-slugger does neither). Embed github-slugger's `regex.js` pattern verbatim as a `static readonly Regex`. Cross-check against `api/negotiate/manifest.json` keys. Total, never throws. [Source: AC9; api/negotiate/slug.mjs lines 25–33; node_modules/github-slugger/index.js `slug()` + regex.js]
+  - [ ] Add `clients/windows/App/PageEndpointResolver.cs` — `public static Uri ToFetchEndpoint(Uri pageUrl)`: for the canonical app host (`themarkdownweb.com`/`www.themarkdownweb.com`, case-insensitive) and a `.md` path, take `pageUrl.AbsolutePath`, trim the leading `/`, **`Uri.UnescapeDataString` it ONCE** (mirrors the server's single `decodeURIComponent` so `%20`→space before slugging), then build `<scheme>://<host>/api/negotiate/<SlugDeriver.PathToSlug(decodedPath)>` (rebuild via `UriBuilder` so the slug path is re-escaped safely; query/fragment dropped from the endpoint). Otherwise return `pageUrl` as-is. Pure, total. Document the host predicate. [Source: AC9; api/negotiate/adapter.mjs `decodeURIComponent` once; api/negotiate/index.mjs route]
   - [ ] Add `clients/windows/App/LinkClassifier.cs` — `public static LinkTarget Classify(string? href, Uri? basePageUrl)` returning a `LinkTarget` (a discriminated result: `Kind` ∈ {InternalMarkdown, Anchor, External, Unsupported} + the resolved `Uri?`/fragment). Reuse the `.md` predicate shape from `AddressBarValidation`. Pure, total, scheme/`.md` case-insensitive. Same-host `.md` (after AC3 resolution) → InternalMarkdown; pure `#frag` → Anchor; other absolute `http(s)` → External; mailto:/javascript:/data:/empty/garbage → Unsupported. [Source: AC2]
   - [ ] **`[Fact]` AC2/AC3/AC9:** the tables in AC2/AC3/AC9 (classification, relative resolution, endpoint/slug mapping). NO window, NO network. [Source: AC2, AC3, AC9]
 
 - [ ] **Task 2 — `NavigationController`: the history stack + fetch+render+launch dispatch (AC: 4, 6, 8, 10)**
   - [ ] Add `clients/windows/App/NavigationController.cs` — the pinned API (Dev Notes "Pinned App-side API"): `NavigateToAsync(Uri)`, `GoBackAsync()`, `GoForwardAsync()`, `ReloadAsync()`, `Uri? Current`, `bool CanGoBack`, `bool CanGoForward`. Inject (a) a fetch delegate `Func<Uri, CancellationToken, Task<FetchResult>>` (default = `MarkdownFetcher.FetchAsync` ∘ `PageEndpointResolver.ToFetchEndpoint`), (b) a render sink `Action<string>` / `IContentSink` (default = render via `FlowDocumentRenderer` into the scroll host), (c) the `IUrlLauncher` (for External dispatch), (d) a Broken sink. History = `List<Uri>` + cursor index; a new `NavigateToAsync` from mid-history truncates the forward tail; Back/Forward/Reload at the ends are no-ops. A `Failure` fetch routes to the Broken sink and does NOT mutate `Current`/history (AC8). [Source: AC4, AC8, AC10]
   - [ ] Add `LinkTarget` dispatch: a method (e.g. `DispatchAsync(LinkTarget)`) that routes InternalMarkdown→`NavigateToAsync`, External→`IUrlLauncher.Open`, Anchor→the scroll callback (AC5, attached by the host), Unsupported→no-op. [Source: AC4, AC6, AC8]
-  - [ ] **`[Fact]` AC10:** the history transitions (A→B→C, Back/Forward, truncation, Reload, end no-ops) with a fake fetcher + fake sink. [Source: AC10]
+  - [ ] **`[Fact]` AC10:** the history transitions (A→B→C, Back/Forward, truncation, Reload-no-push, same-URL-re-push, end no-ops) with a fake fetcher + fake sink, asserting the full Dev Notes transition table. [Source: AC10]
+  - [ ] **`[Fact]` AC10 (re-entrancy / last-wins):** with a fetcher whose first call blocks on a gate, start Nav(A) then Nav(B), release A late → assert only B is `Current`, sink saw B last, single tip, no throw (stale-completion dropped via the generation token). [Source: AC10; Dev Notes "Explicit decisions"]
   - [ ] **`[Fact]` AC4:** `NavigateToAsync` success → `Current` updated, sink received markdown, `CanGoBack` reflects history; fetcher called with the RESOLVED endpoint URL (AC9). [Source: AC4]
   - [ ] **`[Fact]` AC6:** External dispatch → fake `IUrlLauncher` recorded the exact `Uri`, fake fetcher NOT invoked. [Source: AC6]
   - [ ] **`[Fact]` AC8:** `Failure` fetch → Broken sink hit, `Current`/history unchanged, no throw; Unsupported dispatch → no fetch/no launch/no throw. [Source: AC8]
@@ -272,15 +282,126 @@ public sealed class NavigationController
     public bool CanGoBack { get; }
     public bool CanGoForward { get; }
 
-    public Task NavigateToAsync(Uri pageUrl, CancellationToken ct = default); // push + fetch + render (truncates fwd)
+    public Task NavigateToAsync(Uri pageUrl, CancellationToken ct = default); // push + fetch + render (truncates fwd; same-URL re-pushes)
     public Task GoBackAsync(CancellationToken ct = default);                  // no-op at index 0
     public Task GoForwardAsync(CancellationToken ct = default);              // no-op at tip
-    public Task ReloadAsync(CancellationToken ct = default);                 // re-fetch Current; no-op if empty
-    public Task DispatchAsync(LinkTarget target, CancellationToken ct = default); // route by Kind
+    public Task ReloadAsync(CancellationToken ct = default);                 // re-fetch Current in place (no push); no-op if empty
+    public Task DispatchAsync(LinkTarget target, CancellationToken ct = default); // route by Kind (Unsupported = no-op)
 }
+// Re-entrancy: an internal monotonic generation token guards every async op (see
+// hardening "Explicit decisions"). History/cursor mutate ONLY on the winning,
+// non-stale Success; a stale fetch completion is dropped (no render, no mutation).
+// Single-threaded on the UI/STA thread; superseded fetches are cancelled.
 ```
 
 The **content host** (App, `[StaFact]` surface — e.g. `ContentHostController` over the `FlowDocumentScrollViewer`/`RichTextBox` in `ContentHost`) owns: `Render(markdown) -> set Document`, the image post-process (Task 5), the **single hyperlink click handler** (`Hyperlink.RequestNavigate` → `LinkClassifier.Classify` → `NavigationController.DispatchAsync`, `e.Handled = true`), the anchor scroll callback (Task 4), and the Broken render. `renderSink`/`onBroken` in the controller are wired to this host.
+
+### Advanced-elicitation hardening applied (this revision)
+
+Methods auto-applied: **edge-case / failure hunting**, **first-principles parity verification** (against the live `slug.mjs` + `regex.js` + `manifest.json`), and **red-team totality** (every path must be total/deterministic — nothing throws on bad input). Scope UNCHANGED (the 3.5 integration set). Deltas:
+
+1. **SlugDeriver parity CORRECTED (was an approximation, now byte-exact).** The pre-hardening text said "replace runs of non-`[a-z0-9]` with `-`, trim `-`" — that is **wrong** and would diverge from the server on real keys. Verified the live `slug()` is `value.toLowerCase().replace(<Unicode regex>,'').replace(/ /g,'-')` (DELETE punctuation, only-space→`-`, no collapse, no trim). Pinned the exact algorithm, the regex-embedding requirement, and a parity table (below). Without this fix `a.b.c`/`100%`/`C# & .NET` slugs would mismatch and live pages would 404→Broken.
+2. **Link-classification edge matrix** added (below) — `../x.md`, `./x.md`, `x.md`, `/abs/x.md`, `x.md#h`, `x.md?a=1`, bare `#h`, `//host/x.md`, `mailto:`/`tel:`/`javascript:`/`data:`, uppercase `.MD`, percent-encoding, whitespace, empty/null — each with a deterministic, total outcome.
+3. **NavigationController transition table** added (below) — Navigate/Back/Forward/Reload × {success, broken, end-of-stack} — pinned so Step-4 tests and Step-5 impl agree exactly.
+4. **Image edge matrix** added (below) — missing/relative/absolute/data-URI/protocol-relative/broken-decode/oversized — broken→empty+alt, never crash; loader stubbed (no decode/socket).
+5. **Explicit decisions recorded** (below) for failed-navigation history, same-URL navigation, re-entrancy / last-wins, and broken-image — previously underspecified.
+
+#### SlugDeriver parity table (server `pathToSlug` → C# `SlugDeriver.PathToSlug` — byte-identical)
+
+`PathToSlug` takes the **decoded** relative POSIX path (no leading `/`). The caller (`PageEndpointResolver`) first takes `pageUrl.AbsolutePath`, trims the leading `/`, and **decodes `%XX` once** (`Uri.UnescapeDataString`, mirroring the server's single `decodeURIComponent`) so `%20`→space BEFORE slugging. Drop `.md` is case-insensitive and happens before per-segment slugging.
+
+| Input path (decoded, no leading `/`) | → slug | Notes / rule exercised | Manifest cross-check |
+|---|---|---|---|
+| `gear-guide.md` | `gear-guide` | drop `.md`, already-slug | ✓ key `gear-guide` |
+| `README.md` | `readme` | invariant-lowercase | ✓ key `readme` |
+| `My Notes.md` | `my-notes` | space→`-`, lowercase | ✓ key `my-notes` |
+| `My Notes Dir/page.md` | `my-notes-dir/page` | per-segment slug, multi-segment | ✓ key `my-notes-dir/page` |
+| `sub/page.md` | `sub/page` | nested | ✓ key `sub/page` |
+| `sub/index.md` | `sub` | trailing `/index` collapse | ✓ key `sub` |
+| `index.md` | `` (empty) | bare `index`→`""` (vault root) | (root) |
+| `x.md` | `x` | single char | ✓ key `x` |
+| `Gear Guide.md` | `gear-guide` | space + case | (= `gear-guide`) |
+| `a.b.c.md` | `abc` | **dots DELETED, not `-`** (drop only trailing `.md`) | parity-critical |
+| `100%.md` | `100` | `%` deleted, no trailing `-` | parity-critical |
+| `C# & .NET.md` | `c--net` | `#`/`&`/`.` deleted, 2 spaces→`--` | parity-critical |
+| `--x--.md` | `--x--` | **no hyphen-collapse, no trim** | parity-critical |
+| `foo_bar.md` | `foo_bar` | `_` preserved (not in regex) | parity-critical |
+| `Hello, World!.md` | `hello-world` | `,`/`!` deleted, space→`-` | — |
+| `Über.md` | `über` (best-effort) | non-ASCII letter preserved | **Unicode parity-risk → Deferred-Work-Log** |
+
+The ASCII rows (all real manifest keys + the punctuation cases) are the **mandatory `[Fact]` assertions**. The non-ASCII row is best-effort and flagged: `String.ToLowerInvariant()` and the embedded regex must match JS `toLowerCase()`/the Unicode class; any residual divergence on non-ASCII vault names is a documented risk (no shipped page uses non-ASCII today — manifest is all-ASCII).
+
+#### NavigationController state-transition table (history = `List<Uri> entries` + `int cursor`; `Current = entries[cursor]` or null)
+
+| Op | Precondition | Fetch outcome | Effect on history / cursor | `Current` after | Side effects |
+|---|---|---|---|---|---|
+| `NavigateToAsync(U)` | any | **Success** | truncate `entries[cursor+1..]`, append `U`, `cursor=Count-1` | `U` | renderSink(md,U) |
+| `NavigateToAsync(U)` | any | **Failure / Unsupported** | **UNCHANGED** (no append, no truncate) | unchanged | onBroken() ; history NOT corrupted |
+| `NavigateToAsync(Current)` (same URL) | `Current==U` | Success | **append a new entry** (browser semantics: re-pushes, truncating any forward tail) — see decision | `U` | renderSink |
+| `GoBackAsync()` | `cursor>0` | Success | `cursor--`; re-fetch `entries[cursor]` | prev | renderSink |
+| `GoBackAsync()` | `cursor>0` | Failure | `cursor--` already moved; show Broken for that entry; **cursor stays moved** (the entry exists, it just failed now) — see decision | the back entry | onBroken |
+| `GoBackAsync()` | `cursor==0` | — | **no-op** (no fetch) | unchanged | none |
+| `GoForwardAsync()` | `cursor<Count-1` | Success | `cursor++`; re-fetch | next | renderSink |
+| `GoForwardAsync()` | `cursor==Count-1` (tip) | — | **no-op** | unchanged | none |
+| `ReloadAsync()` | `Count>0` | Success | cursor/entries UNCHANGED; re-fetch `Current` | unchanged | renderSink |
+| `ReloadAsync()` | `Count>0` | Failure | UNCHANGED | unchanged | onBroken |
+| `ReloadAsync()` | `Count==0` (empty) | — | **no-op** | null | none |
+| `DispatchAsync(External)` | — | (no fetch) | UNCHANGED | unchanged | `launcher.Open(uri)` |
+| `DispatchAsync(Anchor)` | — | (no fetch) | UNCHANGED | unchanged | scroll callback (host) |
+| `DispatchAsync(Unsupported)` | — | (no fetch) | UNCHANGED | unchanged | **no-op** (no fetch/launch/throw) |
+| `DispatchAsync(InternalMarkdown)` | — | → `NavigateToAsync(target)` | per Navigate rows | — | — |
+
+`CanGoBack = cursor > 0`; `CanGoForward = cursor < entries.Count - 1`. All ops total — under/overflow is a no-op, never an exception.
+
+#### Link-classification edge matrix (`LinkClassifier.Classify(href, base)`; base = `https://themarkdownweb.com/guides/gear.md`)
+
+| href | → LinkKind | Resolved payload | Rule |
+|---|---|---|---|
+| `./powder.md` | InternalMarkdown | `…/guides/powder.md` | relative `.md`, same host |
+| `../index.md` | InternalMarkdown | `…/index.md` | `..` resolves to parent dir |
+| `notes.md` | InternalMarkdown | `…/guides/notes.md` | bare relative |
+| `/x.md` | InternalMarkdown | `…/x.md` (host root) | absolute-path `.md` |
+| `powder.MD` | InternalMarkdown | `…/guides/powder.MD` | **`.md` case-insensitive** |
+| `x.md#install` | InternalMarkdown | `…/guides/x.md` (+frag retained on Url.Fragment) | fragment on a cross-page link → navigate, then optionally scroll; classify by the path |
+| `x.md?v=1` | InternalMarkdown | `…/guides/x.md?v=1` | query preserved (endpoint mapper uses path only) |
+| `#install` | Anchor | fragment `install` | pure fragment → scroll, no fetch |
+| ` #top ` (whitespace) | Anchor | `top` | trim before classify |
+| `https://themarkdownweb.com/sub/page.md` | InternalMarkdown | as-is | absolute same-host `.md` |
+| `https://other.com/a.md` | External | `https://other.com/a.md` | `.md` but **different host** → external |
+| `https://themarkdownweb.com/about` | External | that Uri | same host, **no `.md`** → external |
+| `http://example.com/x` | External | that Uri | absolute http(s), non-`.md` |
+| `//host/x.md` (protocol-relative) | InternalMarkdown if host==app else External | resolved via base scheme | `new Uri(base, "//host/x.md")` adopts base scheme; classify by resolved host+`.md` |
+| `mailto:a@b.com` | Unsupported | — | non-http(s) scheme |
+| `tel:+15550123` | Unsupported | — | non-http(s) scheme |
+| `javascript:alert(1)` | Unsupported | — | hostile scheme, **never executed** |
+| `data:text/html,x` | Unsupported | — | data URI |
+| `` (empty) / `   ` (whitespace) / `null` | Unsupported | — | total: no throw |
+| `:://garbage` / `ht tp://x` | Unsupported | — | unparseable → Unsupported, never throws |
+
+Decision — **fragment on a cross-page link** (`x.md#h`): classify as `InternalMarkdown` (navigate to the page); the post-load scroll-to-fragment is best-effort (if `Url.Fragment` non-empty after render, attempt the AC5 scroll; a missing heading is a no-op). A **pure** `#h` (no path) is `Anchor` (no fetch). This keeps same-page anchors fetch-free while cross-page anchored links still navigate.
+
+#### Image edge matrix (`ImageResolver.Resolve(recordedSrc, base)` → load via stub `IImageLoader`; base = `…/guides/x.md`)
+
+| recorded `Image.Tag` source | → resolved Uri | load result | `Image.Source` | alt |
+|---|---|---|---|---|
+| `media/pic.png` | `…/guides/media/pic.png` | stub returns sentinel | sentinel | preserved |
+| `../img/a.png` | `…/img/a.png` | sentinel | sentinel | preserved |
+| `/logo.png` | `…/logo.png` (host root) | sentinel | sentinel | preserved |
+| `https://cdn.x/p.png` | as-is (absolute) | sentinel | sentinel | preserved |
+| `data:image/png;base64,iVBOR…` | the data Uri (absolute) | loader may build BitmapImage; in tests stub returns sentinel/null | sentinel or null | preserved |
+| `//cdn.x/p.png` (protocol-relative) | resolved via base scheme | sentinel | sentinel | preserved |
+| broken / 404 / decode-fail | resolved Uri non-null | stub returns **null** | **null (empty)** | **preserved** — no throw |
+| `` / `   ` / null / `::garbage` | `null` (unresolvable) | not loaded | null (empty) | preserved |
+| huge image | resolved Uri | loader's concern (real `SystemImageLoader` swallows → null); tests stub | sentinel/null | preserved |
+
+Decision — **broken image** = empty `Image` with alt/AutomationProperties.Name preserved, NEVER a crash and never a re-throw. The `SystemImageLoader` wraps `BitmapImage` creation in try/catch → null; `Image.Source` stays unset; rendering continues. Tests use a stub loader (no real decode/socket); the post-process is total over every `Image` element.
+
+#### Explicit decisions (previously underspecified — pinned here)
+
+- **Failed navigation & history:** a `Failure`/`Unsupported` `NavigateToAsync` does **NOT** push, **NOT** truncate, and leaves `Current`/cursor untouched; it routes to `onBroken()` only. There is **no "Broken history entry."** Rationale: Back must always return to a real, previously-rendered page; a half-pushed broken entry would corrupt Back. (For Back/Forward/Reload of an *existing* entry that fails on re-fetch, the cursor has already legitimately moved to that real entry — show Broken for it, do not rewind; the entry stays in history. This is the table's two distinct rows.)
+- **Same-URL navigation:** typing/clicking the URL equal to `Current` **re-pushes a new entry** (and truncates any forward tail), matching browser semantics where re-navigating advances history. (Reload, by contrast, does NOT push — it re-fetches `Current` in place.) Documented so `CanGoForward` after a same-URL nav is deterministically false.
+- **Re-entrancy / rapid navigation — last-wins, single render, no corruption:** `NavigationController` is single-threaded on the UI/STA thread; each async op carries a monotonically increasing **navigation generation token**. When a fetch awaits, on resume it checks `generation == current`; a **stale** completion is **dropped** (no render, no history mutation) — so a fast second click/Back supersedes the first with **no double-render and no history corruption**. The history mutation (append/truncate/cursor move) happens **only on the winning, non-stale Success**. A `CancellationToken` per navigation is passed to the fetch delegate; superseded fetches are cancelled (the fetcher is total on cancellation → `Failure`, which the stale-guard drops anyway). `[Fact]`-tested with a fetcher whose first call blocks on a gate: start Nav(A), start Nav(B), release A late → assert only B is `Current` and the sink saw B last (A's late completion ignored), history has the expected single tip.
+- **Anchor that doesn't exist:** no-op (matcher returns null target) — no scroll, no fetch, no throw.
 
 ### Key decisions to make & document (pin these in the impl)
 
@@ -314,6 +435,14 @@ The **content host** (App, `[StaFact]` surface — e.g. `ContentHostController` 
 - **Totality everywhere.** Classification, resolution, slug derivation, image resolution, history transitions, anchor matching — all deterministic and total; broken/missing/failed/garbage never throws. Back at index 0 / Forward at tip / Reload on empty / Unsupported dispatch are no-ops. A failed fetch never corrupts history.
 - **Windows-only verification, STA + no-parallel.** No .NET SDK on Linux; WPF is Windows-only; headless runner. Pure App logic = `[Fact]`; WPF-object/window/host/click/scroll/image-load = `[StaFact]`. STA package + `DisableTestParallelization` already present — do NOT re-add. No shown `Window`/`Dispatcher` pump/socket/real `Process.Start`/pixels/timing.
 - **Scope: the integration only.** NO 3.6 visual-theme polish (this shows the bedrock FlowDocument). NO personality render/selector (Epic 4). NO video/audio playback controls (images-inline is the AC; richer media is deferred — note in the Deferred-Work-Log if a `<video>`/`<audio>` appears). NO offline caching, NO tabs/multiple windows, NO same-URL Accept negotiation (use the Function endpoint).
+
+### Deferred-Work-Log (out-of-scope items surfaced during hardening — do NOT expand 3.5 scope)
+
+- **Non-ASCII vault-name slug parity (→ revisit if/when a non-ASCII page ships).** Every current `manifest.json` key is ASCII, so `SlugDeriver` parity is byte-exact for all shipped pages. The C# `ToLowerInvariant()` + embedded github-slugger regex are best-effort for non-ASCII (e.g. `Über`→`über`); a residual divergence from JS `String.prototype.toLowerCase()` / V8's Unicode handling on exotic codepoints is a KNOWN, documented risk, NOT fixed here. Action when a non-ASCII page is added: add a golden cross-check test that runs the server `slug()` and asserts the C# output matches (out of scope for 3.5 — no such page exists). [→ Epic-4 / whenever a non-ASCII vault page lands]
+- **Richer media (`<video>`/`<audio>`/iframe) playback.** 3.5 inlines a static `<img>` only (the AC). If Markdig ever emits a `<video>`/`<audio>`/embed, it is NOT wired here — record it and defer playback controls. [→ 3.6+ / Epic-4]
+- **Same-URL `Accept` content-negotiation at the page URL.** Deferred from 2.7 (SWA route rules can't branch on `Accept`); 3.5 uses the `/api/negotiate/<slug>` Function endpoint (AC9). No change. [→ already-deferred, 2.7 log]
+- **Button enabled-state binding (Back/Forward greying).** AC10 minimum is no-op-at-ends; surfacing `CanGoBack`/`CanGoForward` to grey the toolbar buttons is a nice-to-have polish — if not done in 3.5, the handlers remain safe no-ops. [→ 3.6 toolbar polish, optional]
+- **Loading/progress affordance during fetch** (EXPERIENCE.md "Loading — not a blank flash"). 3.5's seam supports it (the controller knows when a fetch is in flight) but the visible spinner/progress is visual polish → 3.6. The bedrock behavior (Idle→Loaded/Broken) is in-scope; the lightweight-progress chrome is not. [→ 3.6]
 
 ### Source tree components to touch
 
