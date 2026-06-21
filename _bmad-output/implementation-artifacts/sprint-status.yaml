@@ -46,7 +46,7 @@ development_status:
   epic-1: in-progress
   1-1-scaffold-the-monorepo: done
   1-2-provision-azure-hosting-via-iac-bicep: done
-  1-3-deploy-a-placeholder-page-via-github-actions-on-push: backlog
+  1-3-deploy-a-placeholder-page-via-github-actions-on-push: done
   1-4-bind-custom-domain-themarkdownweb-com-over-https: backlog
   epic-1-retrospective: optional
 
