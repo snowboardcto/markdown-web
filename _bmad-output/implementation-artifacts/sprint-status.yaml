@@ -1,5 +1,5 @@
 # generated: 2026-06-21
-# last_updated: 2026-06-21
+# last_updated: 2026-06-21 (code review of 2-1)
 # project: The Markdown Web
 # project_key: NOKEY
 # tracking_system: file-system
@@ -52,7 +52,7 @@ development_status:
 
   # Epic 2: Publish & Read on the Web
   epic-2: in-progress
-  2-1-render-a-md-file-to-an-html-page: review
+  2-1-render-a-md-file-to-an-html-page: in-progress # code review PASS WITH ITEMS — 5 patch action items, all non-blocking; 6/6 ACs confirmed
   2-2-apply-the-github-style-default-theme: backlog
   2-3-inter-file-linking-and-navigation: backlog
   2-4-media-embedding: backlog

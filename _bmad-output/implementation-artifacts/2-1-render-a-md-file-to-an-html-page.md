@@ -1,6 +1,6 @@
 # Story 2.1: Render a `.md` file to an HTML page
 
-Status: review
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -64,6 +64,47 @@ so that anyone with a browser can read it.
   - [x] GFM extensions render correctly (strikethrough → `<del>`, task list → checkbox `<li>`, bare autolink → `<a>`) and special chars are HTML-escaped, not injected raw (AC6).
   - [x] `cd web && npx playwright test` passes; `cd web && npx astro check` passes (typecheck gate).
   - [x] Scope discipline held: NO GitHub theme/design tokens, NO Shiki palette customization, NO `site-header`/`pitch-card`, NO inter-file `.md` link resolution, NO media embedding (those are Stories 2.2/2.3/2.4/2.6).
+
+## Review Findings
+
+Consolidated code review (2026-06-21) — three adversarial layers: Blind Hunter (architecture/security, diff-only), Edge Case Hunter (path enumeration, project read access), Acceptance Auditor (AC-by-AC verification against the built HTML). **Verdict: PASS WITH ITEMS.** All 6 ACs CONFIRMED (build exits 0, 18/18 Playwright specs pass, content sourced from repo-root `../../content` with no `.md` copies in `web/`). 0 critical defects on the current code/content state. The action items below are hardening + cleanup, none blocking.
+
+Patch findings (unchecked — fixable without human input):
+
+- [ ] [Review][Patch] Misleading `index.md -> /` comment [web/src/pages/[...slug].astro:6] — comment claims `index.md` maps to `/`, but the catch-all uses `params: { slug: entry.id }`, so a future `content/index.md` would emit `/index` (id `"index"`), not `/`. No live collision today (no `content/index.md` exists; `index.astro` still owns `/`), but the comment is factually wrong. Fix the comment, or special-case the `index` id, and confirm intended `/` behavior.
+- [ ] [Review][Patch] Slug-collision silent data loss — no duplicate-id guard [web/src/content.config.ts:12 + web/src/pages/[...slug].astro:9] — two files that normalize to the same glob id (e.g. `foo bar.md` + `foo-bar.md`, or `README.md` + `readme.md`) make Astro emit a non-fatal `Duplicate id` WARN and the build SUCCEEDS (exit 0) with one page silently dropped. Not triggerable by the current fixtures, but invisible if it ever happens. Add a build-time check that fails on duplicate `entry.id` after `getCollection('pages')`.
+- [ ] [Review][Patch] Playwright `webServer` can serve a stale `dist/` on reuse [web/playwright.config.ts] — `reuseExistingServer: !process.env.CI` reuses a running `astro preview` from a previous build, so a local run can assert against outdated output. Document "rebuild before test" or restructure so reuse can't serve stale `dist/`.
+- [ ] [Review][Patch] Dead `|| entry.id` fallback in title chain [web/src/pages/[...slug].astro:32] — `slugToTitle` returns non-empty for any non-empty id, so the trailing `|| entry.id` is effectively dead (only fires for an empty id). Edge Hunter verified the chain is safe, but drop the dead branch and/or add a no-H1/no-front-matter fixture to actually exercise the `slugToTitle` fallback (currently every fixture has an H1, so it is untested).
+- [ ] [Review][Patch] No-op `reporter` ternary [web/playwright.config.ts] — `process.env.CI ? 'list' : [['list']]` is the `list` reporter on both branches. Collapse to `reporter: 'list'`.
+
+Deferred findings (pre-existing / out-of-scope / non-blocking, tracked):
+
+- [x] [Review][Defer] `deploy-web.yml` triggers on `web/**` only, not `content/**` [.github/workflows/deploy-web.yml] — content now drives the build, so an author adding a `content/*.md` would not redeploy (FR-17 "publish on push"). Already raised as story Open Question #2 — flag, do not change silently. Out of scope for 2-1.
+- [x] [Review][Defer] Malformed YAML front matter fails the whole-site build [content/*.md frontmatter] — one bad file (e.g. an unquoted `title:` with a colon) aborts the entire build at `safeParseFrontmatter`. Fail-loud (exit non-zero), so lower risk than the silent-collision case. A content-lint or zod schema would localize the failure; deferred as broader vault-hardening.
+- [x] [Review][Defer] Schema-less collection — `entry.data?.title` untyped [web/src/content.config.ts] — the collection has no `schema`, so front-matter `title` is unvalidated. The `typeof entry.data?.title === 'string'` guard was verified to reject non-string titles safely, so not a defect; an explicit zod schema would type the front-matter path. Hardening, deferred.
+- [x] [Review][Defer] AC4 single-source invariant is comment-only [web/src/content.config.ts] — nothing enforces "never copy `.md` into `web/`"; Auditor verified no copies exist (`find web/src -name '*.md'` empty). A guard test would lock it in. Deferred, non-blocking.
+- [x] [Review][Defer] No `<title>`-value assertion for the slug-derived title [web/tests/ac5-slugging-edge.spec.ts] — AC5 test checks the `<h1>` but not that `<title>` equals the slug-derived value; since H1 wins, the `my-notes -> "My Notes"` title path is not asserted end-to-end. Test-coverage gap, deferred.
+
+Dismissed as noise (4): slug determinism delegated to Astro's default `glob()` loader (this is the story's explicit requirement — no custom slugifier); over-broad escaping/strikethrough matchers (intentional, per the documented numeric-char-ref deviation); `@types/node ^26.0.0` "implausible" (build + `astro check` both pass clean, so it resolves); missing `content/index.md` fixture / `/` test (no `index.md` is in scope for 2-1; `/` is the deferred 2-5 index / Open Question #3).
+
+Edge-case findings (unhandled critical edges, JSON):
+
+```json
+[
+  {
+    "location": "web/src/content.config.ts:12 (glob loader) + web/src/pages/[...slug].astro:9 getStaticPaths",
+    "trigger_condition": "Two content files normalize to the same glob id (e.g. 'foo bar.md' + 'foo-bar.md', or 'README.md' + 'readme.md', case/separator-only differences).",
+    "guard_snippet": "After getCollection('pages'), detect duplicate entry.id values and fail the build (or a content-lint rejecting filenames that collide under the lowercase/separator-normalized slug rule).",
+    "potential_consequence": "Silent data loss: Astro emits a non-fatal 'Duplicate id' WARN, build exits 0, one whole page is dropped from the site with no error. Not triggerable by current fixtures."
+  },
+  {
+    "location": "content/*.md front matter parsing via safeParseFrontmatter (surfaced through the glob loader)",
+    "trigger_condition": "Any content file with malformed YAML front matter (e.g. unquoted 'title: A <b> & \"quote\"').",
+    "guard_snippet": "Pre-build content-lint validating front matter, or a documented zod schema; cannot be guarded in [...slug].astro because failure is at the content-sync stage.",
+    "potential_consequence": "Hard build failure for the ENTIRE site (exit non-zero) — one author's bad front matter blocks every page from deploying. Fail-loud, so lower priority than the silent-collision case."
+  }
+]
+```
 
 ## Dev Notes
 
