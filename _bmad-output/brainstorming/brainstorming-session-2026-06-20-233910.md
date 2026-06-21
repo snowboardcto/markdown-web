@@ -92,3 +92,9 @@ _Novelty_: Prioritizes reach over richness for the v1 client decision — the pa
 **[Principle #17]: Trust = Your Own Local Agent**
 _Concept_: The trust model for "no limit / client has all the power" is resolved by locality and ownership: the agent that rewrites, reorders, omits, or augments the page is the *reader's own AI agent, running locally from their own client, acting on their behalf*. There is no third party between author and reader doing the manipulation — the reader's agent is an extension of the reader.
 _Novelty_: Sidesteps the censorship/distortion fear entirely. You're not trusting the author or a platform to render honestly; you're trusting your own agent the same way you trust your own note-taking. Distortion becomes self-service, not imposed.
+
+**[Endorsed]:** naethyn accepts use-cases #18–#23 (Free Accessibility & Translation, Skill-Adaptive Docs, Reshaping Resume, Commerce-Your-Way, Read-It-For-Me Triage, Portable Lens) — all into the pool. #18 flagged as potential mission-grade / fundable headline.
+
+**[Use Case #24 — Customer Zero: Beautiful BMAD Output Vault]**
+_Concept_: naethyn's own grounded need — save his BMAD-generated markdown output files (brainstorming sessions, briefs, PRDs, architecture, retrospectives) somewhere for later viewing, and have them *look awesome*. The output of his AI-driven workflow is markdown; he wants a beautiful home and reader for it.
+_Novelty_: Perfect dogfooding wedge — the artifacts this very methodology produces are the first content for the Markdown Web client. The session document being written right now is itself the first test file. Self-referential, immediately useful, zero cold-start.
