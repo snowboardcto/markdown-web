@@ -1,11 +1,11 @@
 ---
-stepsCompleted: [1, 2]
+stepsCompleted: [1, 2, 3, 4]
 inputDocuments: []
 session_topic: 'The Markdown Web (themarkdownweb.com) — URLs to .md files where each user''s AI agent renders a personalized front-end'
 session_goals: 'Broad divergence across vision/concept, architecture/how, and adoption wedge (option D). Origin: snowboardcto.com where every .md file is a page.'
 selected_approach: 'progressive-flow'
 techniques_used: ['What If Scenarios','Mind Mapping','SCAMPER','Dream Fusion Laboratory']
-ideas_generated: []
+ideas_generated: 26
 context_file: ''
 ---
 
@@ -222,3 +222,33 @@ The product/paradigm now has its name and home: **The Markdown Web** → themark
 
 ### Open follow-ons (post-v0.1)
 - 💰 business model · 🔍 identity & discovery · content-negotiation server (Path 1) · the native agent client (Stage 3).
+
+## Idea Organization and Prioritization
+
+**Session achievement:** 26 numbered ideas/decisions across a 4-phase Progressive Flow (What If Scenarios → Mind Mapping → SCAMPER/development → Dream Fusion action planning). Outcome: a named, domained, shippable plan.
+
+**Thematic organization (6 territories):**
+- **A — Thesis:** Zero Shared Pixels (#1), Client Sovereignty (#2), Trust = Local Agent (#17), Portable Lens (#23)
+- **B — Wedge / Customer Zero:** Personal Vault (#3), Beautiful BMAD Vault (#24), Drop-a-Folder (#6)
+- **C — Sharing / Social:** Living Link (#5), Send-the-Doc (#7), Markdown Feed (#8), Portable & Sovereign (#9)
+- **D — Adoption / HTML Bridge:** Born Compatible (#10), Content Negotiation (#11), Crawlable (#12), Upgrade Moment (#13), Dual-Path (#14), Handoff (#15)
+- **E — The Client:** Works-Everywhere constraint (#16); form factor still open
+- **F — Killer Use-Cases:** Free Accessibility & Translation (#18, breakthrough), Skill-Adaptive Docs (#19), Reshaping Resume (#20), Commerce Your Way (#21), Read-It-For-Me (#22)
+
+**Breakthrough concepts:** #18 Free Accessibility & Translation (mission/fundable); #17 Trust = Local Agent (dissolves the "no limit" fear); #24 Customer Zero (the session doc itself is the first content).
+
+**Prioritization results:**
+- **Top priority / build now:** #24 wedge + #25 serving layer + #26 roadmap → v0.1.
+- **Quick win:** v0.1 static site on Azure Static Web Apps at themarkdownweb.com.
+- **Longer-term breakthroughs:** native agent client (Stage 3), free accessibility/translation, sharing feed.
+
+**Action plan:** see "Phase 4 — Action Plan" above (Stage-1 resolved: static-now/smart-later; v0.1 concrete steps; backwards bridge).
+
+**Decisions locked:** Name = The Markdown Web · Domain = themarkdownweb.com (purchased) · Dual-path architecture · Trust = local agent · Serving = static now / smart server later · Hosting = Azure Static Web Apps.
+
+**Open questions carried forward:** business model · identity & discovery · client form factor · author incentive.
+
+**Deliverable:** polished shareable manifesto written to `_bmad-output/the-markdown-web.md` — designed to be page one on themarkdownweb.com.
+
+---
+*Session complete.*
