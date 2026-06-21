@@ -18,3 +18,12 @@ Tech-how and downstream depth kept out of the capability-level PRD. For architec
 - Manifesto: `_bmad-output/the-markdown-web.md`
 - Market research: `_bmad-output/planning-artifacts/research/market-markdown-web-competitive-landscape-research-2026-06-21.md`
 - Brainstorm: `_bmad-output/brainstorming/brainstorming-session-2026-06-20-233910.md`
+
+## Infrastructure & Backend (input to architecture — confirmed shape)
+
+Confirmed by naethyn as the intended shape; specific service choices remain Winston's to finalize.
+
+- **GitHub Actions (CI/CD)** — on push to the content repo: build `.md` → HTML, then deploy to Azure. This is the mechanism behind **FR-17 (publish on push)**.
+- **Azure — static layer** — host rendered HTML + raw `.md` + media. Serves **FR-5** (server-rendered HTML to browsers) and **FR-18** (custom domain over HTTPS). `[ASSUMPTION: Azure Static Web Apps, or Blob Storage + CDN — architecture to decide.]`
+- **Azure — backend layer** — a serverless function for **content negotiation (FR-14)**: inspect `Accept`, return HTML to browsers / raw `.md` to the native client, with `Vary: Accept`. Also the endpoint the **native client (FR-9–FR-13)** fetches markdown from. `[ASSUMPTION: Azure Functions vs App Service — architecture to decide.]`
+- **Sequence note:** the v0.1 HTML-client slice can ship on the static layer alone (no backend); the backend layer arrives with content negotiation + the native client (both MVP, sequenced second).
