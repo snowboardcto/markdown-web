@@ -1,6 +1,6 @@
 # Story 2.3: Inter-file linking and navigation
 
-Status: review
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -250,3 +250,89 @@ Opus 4.8 (1M context) — claude-opus-4-8[1m]
 - `content/x.md` (UPDATE — "Links (AC: 2.3)" section)
 - `content/sub/page.md` (UPDATE — parent-`..`/vault-root link cases)
 - `web/tests/2-3-linking-nav.spec.ts` (the RED→GREEN linking/nav/404 specs)
+
+## Senior Developer Review (AI)
+
+### Reviewer
+
+naethyn (BMAD consolidated code review — Blind Hunter + Edge Case Hunter + Acceptance Auditor, non-interactive)
+
+### Date
+
+2026-06-21
+
+### Verdict
+
+**PASS WITH ITEMS** — All 6 ACs CONFIRMED against the implemented + tested behavior (61/61 green, build exit 0, `dist/404.html` emitted, no regression to the JS-free crawlable shell or 2.2 theme). The 20-row AC2 edge-case table is satisfied for every input the fixtures exercise. However, the adversarial layers found **3 latent input classes that reach the rewrite body without a guard and mis-route** — none triggered by any current vault fixture (so no test/build regression), but each contradicts the story's own "never silently mis-route / never a crash" contract and the `..`-escape-guard intent. They are correctness/robustness hardening items, not AC failures.
+
+### Critical / total
+
+- **Critical (HIGH): 1** — F1 (`%2F` decode → protocol-relative `//host` off-site href, defeats the pass-through guard).
+- **Total action items: 4** (1 high + 2 medium patches + 1 low patch). 2 deferred, 2 dismissed as noise.
+
+### Findings
+
+| # | Source | Severity | Finding | Recommendation |
+|---|---|---|---|---|
+| F1 | blind+edge | HIGH | **Encoded leading/interior slash escapes slug space.** `decodeURIComponent` runs on the whole path part AFTER pass-through checks, so `[x](%2Ffoo.md)` decodes to `/foo.md`; `posix.join('', '/foo.md')` keeps the leading `/`, the `..`-escape guard does not catch it, and `pathToSlug` yields `/foo` → final `href = '/' + '/foo' = '//foo'` — a **protocol-relative URL** (off-site navigation to host `foo`), the exact case the `href.startsWith('//')` pass-through was meant to prevent. Verified live: `%2Fetc%2Fpasswd.md → //etc/passwd`; `a%2Fb.md → /a/b` (encoded interior slash splits one filename into two route segments). | Decode per-segment (split on `/` first, decode each piece) OR reject/strip a decoded path that is absolute (`startsWith('/')`) before join, so an encoded separator cannot manufacture segments or a protocol-relative href. |
+| F2 | blind+edge | MEDIUM | **Links authored on an `index.md` page resolve one directory level too shallow.** `pageDirSlug` is derived by slugging the page path (which index-collapses `sub/index.md → sub`) then `pop()`-ing the last segment → `''` (root) instead of `sub`. Verified: a `[p](page2.md)` on `content/sub/index.md` resolves to `/page2`, not `/sub/page2`. Latent today (no `content/**/index.md` fixture exists), but the route layer explicitly anticipates index files. | Derive the page directory from the **source file's directory path** (relative to `content/`, before index-collapse), not by popping the index-collapsed page slug. |
+| F3 | blind+edge | LOW | **Degenerate `.md`-only basenames silently collapse to root.** A target that is exactly `.md` / `...md` passes the `/\.md$/i` gate; after slug it is empty → `href = '/'` (or `'/sub/'` with a trailing empty segment from a nested page). A garbage link is silently rewritten to the home page instead of left alone. Verified live (`.md → /`, `.md` on `/sub → /sub/`). | Distinguish "resolved to vault root via a real `index`/`..` chain" from "basename slugged to empty"; leave the latter unrewritten. |
+| F4 | blind | LOW | **VFile-degrade trail is effectively invisible.** Task 2 promised a degraded page (unresolvable VFile path) be "visible, not invisible," but `getUnresolvedPages()` is never wired to any build warning, so a future Astro VFile-shape change would silently disable ALL link rewriting site-wide with a green build. | Emit a build-time `console.warn` (or fail the build) when `unresolvedPages` is non-empty so the no-op-with-a-trail is loud. (Also: module-level Set never resets across a dev-server watch session.) |
+| F5 | blind | LOW (defer) | **Colon-in-filename mis-classified as a URL scheme.** The scheme regex `^[a-z][a-z0-9+.-]*:` treats `weird:name.md` as a scheme and leaves it unrewritten. Pathological for a POSIX vault; pre-existing heuristic class. | Defer — accept the heuristic; revisit only if a real filename hits it. |
+| F6 | blind | LOW (defer) | **Prod 404 status is host-config-dependent.** AC4's "real 404, not soft-200" is verified only under `astro preview`; production SWA behavior is asserted-by-default but unverified by any test, and a stray SPA `navigationFallback` would soft-200. Spec consciously chose to rely on SWA default and add no config. | Defer — out of this story's preview-tested scope; add a post-deploy smoke check at deploy time. |
+
+### Edge-case JSON (unhandled critical edges)
+
+```json
+[
+  {
+    "id": "F1",
+    "severity": "high",
+    "location": "web/src/lib/rehype-md-links.mjs — rewrite body (decodeURIComponent -> posix.join -> '/' + routeSlug)",
+    "trigger_condition": "Relative .md href whose encoded path contains %2F (or a leading %2F), e.g. [x](%2Ffoo.md) or [x](a%2Fb.md), reaching the rewrite after the pass-through checks (which ran on the still-encoded href).",
+    "guard_snippet": "const joined = path.posix.normalize(path.posix.join(pageDirSlug, decoded)); if (joined === '..' || joined.startsWith('../')) return; ... node.properties.href = '/' + routeSlug + fragment;",
+    "potential_consequence": "%2Ffoo.md -> href='//foo' (protocol-relative, off-site navigation to host 'foo'); a%2Fb.md -> '/a/b' (one filename split into two route segments). Defeats the href.startsWith('//') pass-through and the ..-escape guard.",
+    "verified": "live: node simulation -> %2Ffoo.md='//foo', %2Fetc%2Fpasswd.md='//etc/passwd', a%2Fb.md='/a/b'"
+  },
+  {
+    "id": "F2",
+    "severity": "medium",
+    "location": "web/src/lib/rehype-md-links.mjs — pageDirSlug derivation (pageSlug.split('/'); segs.pop())",
+    "trigger_condition": "A relative .md link authored on a content/<dir>/index.md page (page slug is index-collapsed to <dir> before the last segment is popped).",
+    "guard_snippet": "const pageSlug = pathToSlug(relPosix); const segs = pageSlug.split('/'); segs.pop(); const pageDirSlug = segs.join('/');",
+    "potential_consequence": "Links resolve one directory level too shallow: [p](page2.md) on content/sub/index.md -> /page2 instead of /sub/page2, landing on 404. Latent (no index.md fixture today).",
+    "verified": "live: pathToSlug('sub/index.md')='sub' -> dir after pop='' -> page2.md resolves to '/page2'"
+  },
+  {
+    "id": "F3",
+    "severity": "low",
+    "location": "web/src/lib/rehype-md-links.mjs — empty-slug branch",
+    "trigger_condition": "Target whose basename is exactly '.md' / '...md' (passes the .md gate, slugs to empty).",
+    "guard_snippet": "if (!/\\.md$/i.test(pathNoQuery)) return; ... node.properties.href = '/' + routeSlug + fragment;",
+    "potential_consequence": "Garbage link silently rewritten to '/' (root) or '/sub/' (trailing empty segment) instead of left unrewritten.",
+    "verified": "live: '.md'='/'; '.md' on /sub='/sub/'; '...md'='/'"
+  }
+]
+```
+
+### AC Verification (6 ACs)
+
+- **AC1 — CONFIRMED.** Build-time HAST rewrite, plain `/route` hrefs, no `client:*`; `[guide](gear-guide.md) → /gear-guide` (test asserts rendered `href`, not literal `.md`).
+- **AC2 — CONFIRMED (for fixtured inputs).** All 20 edge-case rows produce spec-exact output for the authored fixtures; decode-before-slug, first-`#`-only fragment, `?query` drop, `index.md` collapse, empty-slug→`/`, `..`-escape guard all present and asserted from emitted hrefs (no tautological re-impl). Caveat: F1/F3 are inputs *outside* the fixtured rows.
+- **AC3 — CONFIRMED (code).** Scheme / protocol-relative / root-absolute / `#anchor` / non-`.md` pass-throughs correct and tested. Table rows 15 (`media/*.jpg`) and 17 (`tel:`/`//host`) implemented but not individually asserted (same code path as tested siblings — dismissed as noise, not a defect).
+- **AC4 — CONFIRMED.** `404.astro` via shared `Page` layout (themed, semantic, single `<h1>`, link home, JS-free); plugin does not fs-check existence; tests assert real `status()===404` (not soft-200), custom content, and click-through. No `staticwebapp.config.json` / `infra/` change (correct per spec).
+- **AC5 — CONFIRMED.** No client router / View Transitions / pushState; plain `<a href="/route">`; test exercises click → `goBack` → `goForward` with URL+H1 assertions.
+- **AC6 — CONFIRMED (per recorded run).** Additive; `content/x.md` Links section uses `##` (no 2nd `<h1>`, no 2nd table); no slug collisions; recorded 61 passed (39 prior + 22 new), build exit 0, `astro check` 0 errors.
+
+### Scope discipline
+
+No scope creep. No media/asset rewriting (2.4 — `report.pdf`/`media/*.jpg` left alone), no index surface (2.5), no header/pitch chrome on 404 (2.6), no `api/`/content-negotiation (2.7), no native-client handling (3.5), no SPA router. The `slug.mjs` extraction is an in-scope drift-prevention refactor, not creep. Per the review scope mandate, the absence of 2.4–2.7 / native behavior was NOT treated as a defect.
+
+### Review Findings
+
+- [ ] [Review][Patch] F1 (HIGH): Encoded `%2F` in a relative `.md` link decodes to a separator/leading-slash and escapes slug space → emits a protocol-relative `//host` href or splits a filename into segments [web/src/lib/rehype-md-links.mjs rewrite body] — decode per-segment, or reject/strip a decoded absolute path before join.
+- [ ] [Review][Patch] F2 (MEDIUM): Relative links authored on a `content/<dir>/index.md` page resolve one directory level too shallow (page slug is index-collapsed before the directory is derived) [web/src/lib/rehype-md-links.mjs pageDirSlug] — derive the dir from the source file path before index-collapse.
+- [ ] [Review][Patch] F3 (LOW): Degenerate `.md`-only basenames (`.md`/`...md`) pass the gate and silently rewrite to `/` or `/sub/` [web/src/lib/rehype-md-links.mjs empty-slug branch] — leave unrewritten when the basename slugs to empty.
+- [ ] [Review][Patch] F4 (LOW): VFile-degrade trail is invisible — `getUnresolvedPages()` is never surfaced, so a future VFile-shape change silently disables all link rewriting site-wide [web/src/lib/rehype-md-links.mjs] — emit a build warning when `unresolvedPages` is non-empty.
+- [x] [Review][Defer] F5 (LOW): Colon-in-filename mis-classified as a URL scheme [web/src/lib/rehype-md-links.mjs scheme regex] — deferred, pathological POSIX edge, accept the heuristic.
+- [x] [Review][Defer] F6 (LOW): Production SWA 404-status is host-config-dependent and only preview-verified [deploy] — deferred, out of preview-tested scope; add a post-deploy smoke check.
