@@ -1,6 +1,6 @@
 # Story 2.5: Browsable vault index
 
-Status: review
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -192,3 +192,87 @@ Opus 4.8 (1M context) — claude-opus-4-8[1m]
 - `web/src/pages/index.astro` (REPLACED) — Story-1.1 "Coming soon" placeholder retired; now the generated browsable index from `getCollection('pages')`, sorted + rendered through `Page`.
 - `web/src/pages/[...slug].astro` (UPDATED) — imports `slugToTitle` from `../lib/title.mjs` instead of the inline definition; behaviour unchanged.
 - `web/tests/2-5-index.spec.ts` (NEW, RED→green) — 22 specs for the browsable index (listing completeness, link resolution, reachability, nested + CI-stable order, placeholder retired, themed/JS-free/listing-only).
+
+## Senior Developer Review (AI)
+
+**Reviewer:** naethyn (BMAD consolidated code review — Blind Hunter, Edge Case Hunter, Acceptance Auditor)
+**Date:** 2026-06-21
+**Outcome:** APPROVE WITH CHANGES (no blocking defect; 1 decision-needed, 3 patch action items, 3 deferred/pre-existing)
+
+### Verdict
+
+The implementation is **functionally correct and meets all 7 ACs as built**: the index lists every vault page one-to-one (11/11), generated from `getCollection('pages')`; hrefs are root-absolute resolved routes (`'/' + entry.id`); `sub/index.md` collapses to `/sub` with no `/sub/index` phantom; the empty-`id` self-link guard is present; `slugToTitle` was extracted to `web/src/lib/title.mjs` **behaviour-preserving** (byte-identical body, imported by both `[...slug].astro` and `index.astro`); the placeholder is retired; the page is themed/JS-free/crawlable/single-`<h1>`; scope held (no 2.6/2.7 chrome). **No critical defect.** 116/116 specs green, `astro check` 0 errors (self-reported, additive-by-inspection).
+
+The one substantive concern is a **robustness gap, not a present bug**: the AC4 sort `a.id.localeCompare(b.id, 'en')` is verified to coincide with code-unit order for the current all-lowercase-ASCII id set (and the test pins exactly that order), but `localeCompare` collation still resolves against host ICU/CLDR data, so the spec's literal "locale-independent, cannot reorder dev↔CI" bar is met today only by coincidence — a code-unit comparison was the spec-sanctioned safe alternative. Remaining items are test-coverage gaps on degenerate cases the code already handles.
+
+### Findings
+
+| # | Source | Severity | Finding | Recommendation |
+|---|--------|----------|---------|----------------|
+| 1 | blind+edge+auditor | High (robustness; **decision-needed**) | AC4 sort `a.id.localeCompare(b.id, 'en')` pins the *locale tag* but not ICU/CLDR collation data; punctuation (`-`,`/`) and any future non-ASCII/digit-adjacent id could reorder across Node ICU builds. Verified: for today's 11 lowercase-ASCII ids, LC order == code-unit order == the test's pinned `EXPECTED_ROUTES_SORTED` (full ICU 78.2). Passes today by coincidence; AC4 asks for robustness. | Switch to a code-unit comparator `a.id < b.id ? -1 : a.id > b.id ? 1 : 0` (the spec's explicitly-sanctioned ICU-independent alternative). Spec sanctioned *both* options, hence decision-needed not auto-patch. |
+| 2 | edge+auditor | Medium (patch) | AC1's empty-vault and single-page degenerate cases are handled in code (`items.length === 0 ? <p>No pages yet.</p> : <ul>…`) but have **zero test coverage** — the only fixture is the static 11-page vault. The `No pages yet.` branch is dead-untested; a regression would stay green. | Add a fixture-driven (or component-level) test that builds against an empty vault (assert shell + single `<h1>` + empty-state, no crash) and a single-page vault (assert exactly one `<li>`). |
+| 3 | blind+edge+auditor | Low (patch) | Decision-D label/title divergence (index uses `data.title \|\| slugToTitle`, omitting H1) is documented but **not genuinely exercised**: the only pinned case `/no-h1` has neither frontmatter title nor H1, so both Decision-D paths collapse to the same value; `empty.md` likewise coincides. The "label == destTitle OR slugTitle" assertion is permissive and cannot catch a real divergence. | Add an H1-only-without-frontmatter-title fixture where label (slug Title Case) provably differs from destination `<title>` (H1), and pin the index label exactly. |
+| 4 | blind+edge | Low (patch) | `slugToTitle` throws `TypeError` on `null`/`undefined` input (`slug.split(...)` before the `?? slug` guard, which only covers an impossible empty-array `pop()`), and returns `''` for separator-only/empty slugs — no never-empty guarantee on the index (only 2 fallbacks vs the route's 3). `entry.id` is never nullish in practice, so latent only. | Guard input (`if (!slug) return ''`) and/or add `… || slugToTitle(entry.id) || entry.id` as a final non-empty label fallback. Pre-existing extracted body; harden during the same touch. |
+| 5 | edge | Low (defer) | `content.config.ts` defines **no schema**, so a malformed frontmatter `title` (number/array/object) is silently coerced to `''` with no author feedback. Consistent across both files (no drift). Pre-existing since 2.1; `content.config.ts` untouched by 2.5. | Defer: optionally add `schema: z.object({ title: z.string().optional() })` to fail loud — out of 2.5 scope. |
+| 6 | blind | Low (defer) | `slugToTitle` title-case regex `\b\w` uppercases after any word boundary (`it's`→`It'S`, `3d`→`3D`). Pre-existing behaviour of the function extracted unchanged in 2.5. | Defer: behaviour was preserved deliberately (94 specs stay green); revisit if title cosmetics matter. |
+| 7 | blind+edge | Dismissed | `href = '/' + entry.id` "no encoding / `//` risk" and "`/sub/index` not filtered". False positives: github-slugger guarantees URL-safe `[a-z0-9-/]` ids that never start with `/`; `entry.id` is already index-collapsed (`sub/index.md`→`sub`), proven by green tests following every href to HTTP 200. | None. |
+| 8 | edge | Dismissed | XSS via frontmatter title — Astro auto-escapes the `{item.label}` text expression (not `set:html`); not a vulnerability. | None (note: a fixture asserting escaping would harden against future `set:html` refactors). |
+| 9 | edge | Dismissed | Sort tie-order non-determinism — ties are impossible (the `[...slug].astro` collision guard rejects duplicate slugs at build; `Array.sort` is stable). | None. |
+
+**Critical count: 0.** **Total items: 9** (1 decision-needed, 3 patch, 2 defer, 3 dismissed).
+
+### Edge-case JSON (unhandled critical edges)
+
+```json
+{
+  "critical_unhandled_edges": [],
+  "note": "No critical/unhandled edge produces an incorrect or crashing index for any input the current or near-future vault can yield. The highest-severity item (AC4 sort) is a cross-environment robustness gap that is behaviourally correct today (localeCompare('en') == code-unit order for all-lowercase-ASCII ids, full ICU 78.2, test order pinned and green); it would only manifest if a future id contained punctuation/non-ASCII that ICU collates differently from code units AND the CI ICU/CLDR data diverged from dev.",
+  "non_critical_unhandled_edges": [
+    {
+      "id": "sort-icu-drift",
+      "location": "web/src/pages/index.astro:48",
+      "trigger_condition": "a future content id contains punctuation/digit-adjacent/non-ASCII chars that github-slugger preserves AND host ICU/CLDR collation differs between dev and CI",
+      "current_behaviour": "DOM order may reorder vs the test's pinned code-unit order; CI could fail or (worse) order silently differs dev<->CI",
+      "guard_snippet": "a.id < b.id ? -1 : a.id > b.id ? 1 : 0",
+      "severity": "high-robustness"
+    },
+    {
+      "id": "empty-vault-untested",
+      "location": "web/src/pages/index.astro:54-55; web/tests/2-5-index.spec.ts",
+      "trigger_condition": "zero .md files in content/ (or exactly one)",
+      "current_behaviour": "code renders shell + <h1> + 'No pages yet.' (handled) but no test exercises it",
+      "guard_snippet": "add empty-/single-vault build fixture asserting shell+h1+empty-state / one <li>",
+      "severity": "medium-coverage"
+    },
+    {
+      "id": "slugtitle-empty-or-nullish",
+      "location": "web/src/lib/title.mjs:17-23; web/src/pages/index.astro:43",
+      "trigger_condition": "slug is null/undefined (TypeError) or all-separator/empty (-> '' label)",
+      "current_behaviour": "throws on nullish; empty label on separator-only id; entry.id never nullish today",
+      "guard_snippet": "if (!slug) return ''; ... label: ftTitle || slugToTitle(id) || id",
+      "severity": "low"
+    }
+  ]
+}
+```
+
+### AC verification (7 of 7)
+
+| AC | Confirmed | Note |
+|----|-----------|------|
+| AC1 | partial | Lists every page one-to-one (11/11), generated from `getCollection`; empty-state handled in code. Gap: **degenerate cases untested** (Finding 2). |
+| AC2 | yes | Root-absolute `'/' + entry.id` hrefs, no `*.md`; `slugToTitle` extracted to shared `title.mjs` and imported by both files, **behaviour-preserving**. Decision-D divergence documented but weakly tested (Finding 3). |
+| AC3 | yes | Index reachable at `/`, links every page; 404 "Go back home" → `/` reaches the real listing (asserted). |
+| AC4 | partial | Nested pages included, no `/sub/index` dup, no `/` self-link, sort deterministic & green today — but `localeCompare('en')` is not provably ICU-independent per the spec's literal bar (Finding 1). |
+| AC5 | yes | "Coming soon" retired, `/` owned by `index.astro` via `Page` layout, route ownership intact, empty-`id` guard present. |
+| AC6 | yes | Themed (github.css, light surface), server-rendered, JS-free (no `client:*`/`astro-island`), crawlable, single `<h1>`/`<main>`/`<article>` shell, no 2.6 chrome. |
+| AC7 | yes (reported) | Additive by inspection (only a new helper + rewritten index + one import line in `[...slug].astro` + new spec); 116/116 + `astro check` 0 errors self-reported in Dev Agent Record. |
+
+### Review Findings
+
+- [ ] [Review][Decision] AC4 sort uses `localeCompare(b.id, 'en')` not a code-unit comparator — locale-pinned but not ICU/CLDR-data-independent; correct today only by coincidence with code-unit order. Spec sanctioned both options, so the choice needs a human call. [web/src/pages/index.astro:48]
+- [ ] [Review][Patch] Add test coverage for AC1 empty-vault and single-page degenerate cases (code handles them; the `No pages yet.` branch is untested). [web/src/pages/index.astro:54-55; web/tests/2-5-index.spec.ts]
+- [ ] [Review][Patch] Harden the Decision-D label test: add an H1-only-without-frontmatter-title fixture where the index label provably differs from the destination `<title>`, and pin it (current `/no-h1`/`empty` cases coincide, so divergence is unproven). [web/tests/2-5-index.spec.ts:144-171]
+- [ ] [Review][Patch] Guard `slugToTitle` against nullish input and empty/separator-only slugs; add a final non-empty label fallback (`… || entry.id`) on the index. [web/src/lib/title.mjs:17-23; web/src/pages/index.astro:43]
+- [x] [Review][Defer] No `content.config.ts` collection schema — malformed frontmatter `title` silently coerced to `''`. Pre-existing (config untouched by 2.5); consistent across both files. — deferred, pre-existing
+- [x] [Review][Defer] `slugToTitle` title-case regex `\b\w` uppercases after any word boundary (apostrophes/digits). Pre-existing behaviour of the function extracted unchanged in 2.5. — deferred, pre-existing
