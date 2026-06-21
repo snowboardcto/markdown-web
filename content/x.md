@@ -82,6 +82,10 @@ Internal `.md` links (rewritten to page routes at build time):
 - An index-collapse link: [sub index](sub/index.md) (-> `/sub`)
 - A malformed-escape link: [malformed](bad%zz.md) (left unrewritten)
 - An escape-the-vault link: [escape](../escape.md) (left unrewritten)
+- An encoded leading-slash link: [encoded leading slash](%2Ffoo.md) (left unrewritten, never `//foo`)
+- An encoded interior-slash link: [encoded interior slash](a%2Fb.md) (left unrewritten, never split into `/a/b`)
+- An encoded path-traversal link: [encoded passwd](%2Fetc%2Fpasswd.md) (left unrewritten, never `//etc/passwd`)
+- An empty-basename link: [empty basename](.md) (left unrewritten, never `/`)
 - A broken internal link: [missing](does-not-exist.md) (-> `/does-not-exist`, lands on 404)
 
 Pass-through links (left exactly as authored):

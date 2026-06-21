@@ -159,6 +159,62 @@ test.describe('Story 2.3 AC3 — non-internal links pass through unchanged', () 
     expect(href, '../escape.md escapes content/ -> leave as authored').toBe('../escape.md');
     expect(href, 'must not emit a broken /../ route').not.toMatch(/^\/\.\./);
   });
+
+  // F1 (HIGH) — an encoded separator (`%2F`) must never manufacture a new path
+  // separator that escapes slug space: a leading `%2F` would otherwise become a
+  // protocol-relative `//host` off-site href, and an interior `%2F` would split
+  // one filename into two route segments. All three are left UNREWRITTEN.
+  test('F1: encoded LEADING slash is left unrewritten and never emits a protocol-relative //host', async ({
+    page,
+  }) => {
+    const href = await hrefOf(page, 'encoded leading slash');
+    expect(href, '%2Ffoo.md must not be rewritten to //foo').toBe('%2Ffoo.md');
+    expect(href, 'must never emit a protocol-relative off-site href').not.toMatch(/^\/\//);
+  });
+
+  test('F1: encoded INTERIOR slash is left unrewritten and never split into /a/b', async ({
+    page,
+  }) => {
+    const href = await hrefOf(page, 'encoded interior slash');
+    expect(href, 'a%2Fb.md must not be rewritten to /a/b').toBe('a%2Fb.md');
+    expect(href, 'one filename must not become two route segments').not.toBe('/a/b');
+  });
+
+  test('F1: encoded path-traversal target is left unrewritten and never emits //etc/passwd', async ({
+    page,
+  }) => {
+    const href = await hrefOf(page, 'encoded passwd');
+    expect(href, '%2Fetc%2Fpasswd.md must not be rewritten').toBe('%2Fetc%2Fpasswd.md');
+    expect(href, 'must never emit a protocol-relative //etc/passwd').not.toMatch(/^\/\//);
+  });
+
+  // F3 (LOW) — a degenerate `.md`-only basename slugs to empty but did NOT
+  // resolve to the vault root via a real index/.. chain; it must be left
+  // unrewritten rather than silently collapse to `/` (or `/sub/`).
+  test('F3: an empty-basename `.md` target is left unrewritten (never rewritten to /)', async ({
+    page,
+  }) => {
+    const href = await hrefOf(page, 'empty basename');
+    expect(href, '.md must be left as authored, not rewritten to /').toBe('.md');
+    expect(href, 'a degenerate basename must not collapse to the home route').not.toBe('/');
+  });
+});
+
+test.describe('Story 2.3 F2 — links on an index.md page resolve against the page dir, not root', () => {
+  test('a sibling link on content/sub/index.md (/sub) resolves to /sub/page2, not /page2', async ({
+    page,
+  }) => {
+    const res = await page.goto('/sub');
+    expect(res, 'route /sub should exist').not.toBeNull();
+    expect(res!.status(), '/sub (sub/index.md) should return 200').toBe(200);
+    expect(
+      await hrefOf(page, 'sibling two'),
+      'page2.md on sub/index.md -> /sub/page2 (not the one-level-too-shallow /page2)',
+    ).toBe('/sub/page2');
+    expect(await hrefOf(page, 'nested sibling'), 'sibling.md on sub/index.md -> /sub/sibling').toBe(
+      '/sub/sibling',
+    );
+  });
 });
 
 test.describe('Story 2.3 AC4 — missing target -> true HTTP 404 on a custom not-found page', () => {

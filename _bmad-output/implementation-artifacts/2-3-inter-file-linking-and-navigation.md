@@ -1,6 +1,6 @@
 # Story 2.3: Inter-file linking and navigation
 
-Status: in-progress
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -247,6 +247,7 @@ Opus 4.8 (1M context) — claude-opus-4-8[1m]
 - `web/src/pages/[...slug].astro` (UPDATE — `fileToSlug` now delegates to the shared `pathToSlug`; removed the local github-slugger import)
 - `content/gear-guide.md` (NEW — link-target fixture)
 - `content/sub/page2.md`, `content/sub/sibling.md` (NEW — sibling/`./` targets for AC2)
+- `content/sub/index.md` (NEW — code-review F2 fixture: an `index.md` page (routes to `/sub`) whose relative links must resolve against `sub`, not root)
 - `content/x.md` (UPDATE — "Links (AC: 2.3)" section)
 - `content/sub/page.md` (UPDATE — parent-`..`/vault-root link cases)
 - `web/tests/2-3-linking-nav.spec.ts` (the RED→GREEN linking/nav/404 specs)
@@ -330,9 +331,9 @@ No scope creep. No media/asset rewriting (2.4 — `report.pdf`/`media/*.jpg` lef
 
 ### Review Findings
 
-- [ ] [Review][Patch] F1 (HIGH): Encoded `%2F` in a relative `.md` link decodes to a separator/leading-slash and escapes slug space → emits a protocol-relative `//host` href or splits a filename into segments [web/src/lib/rehype-md-links.mjs rewrite body] — decode per-segment, or reject/strip a decoded absolute path before join.
-- [ ] [Review][Patch] F2 (MEDIUM): Relative links authored on a `content/<dir>/index.md` page resolve one directory level too shallow (page slug is index-collapsed before the directory is derived) [web/src/lib/rehype-md-links.mjs pageDirSlug] — derive the dir from the source file path before index-collapse.
-- [ ] [Review][Patch] F3 (LOW): Degenerate `.md`-only basenames (`.md`/`...md`) pass the gate and silently rewrite to `/` or `/sub/` [web/src/lib/rehype-md-links.mjs empty-slug branch] — leave unrewritten when the basename slugs to empty.
-- [ ] [Review][Patch] F4 (LOW): VFile-degrade trail is invisible — `getUnresolvedPages()` is never surfaced, so a future VFile-shape change silently disables all link rewriting site-wide [web/src/lib/rehype-md-links.mjs] — emit a build warning when `unresolvedPages` is non-empty.
+- [x] [Review][Patch][RESOLVED] F1 (HIGH): Encoded `%2F` in a relative `.md` link decodes to a separator/leading-slash and escapes slug space → emits a protocol-relative `//host` href or splits a filename into segments [web/src/lib/rehype-md-links.mjs rewrite body]. **Fixed:** decode is now **per-segment** (split the encoded path on `/` first, then `decodeURIComponent` each piece); if any decoded segment contains a `/`, the encoded form smuggled in a separator past the pass-through guards → leave the link **UNREWRITTEN**. Plus a belt-and-suspenders re-check rejects a decoded path that starts with `/` or matches a scheme. Verified in the built output: `%2Ffoo.md`, `a%2Fb.md`, `%2Fetc%2Fpasswd.md` are all emitted unchanged (no `//foo`, no `/a/b`, no `//etc/passwd`). New specs in `web/tests/2-3-linking-nav.spec.ts` assert each. Legit `../foo.md` resolution is untouched (the `..`-escape is still handled *after* `posix.join`).
+- [x] [Review][Patch][RESOLVED] F2 (MEDIUM): Relative links authored on a `content/<dir>/index.md` page resolve one directory level too shallow (page slug is index-collapsed before the directory is derived) [web/src/lib/rehype-md-links.mjs pageDirSlug]. **Fixed:** the page directory slug is now derived from the **source file path before index-collapse** — take the file's directory (`relPosix` minus its basename) and `pathToSlug` *that*, instead of slugging the page path and popping the last segment. So `content/sub/index.md` yields a page dir of `sub`, and `[p](page2.md)` on it → `/sub/page2` (not `/page2`). Added fixture `content/sub/index.md` (routes to `/sub`) + an F2 spec asserting `/sub/page2` and `/sub/sibling`.
+- [x] [Review][Patch][RESOLVED] F3 (LOW): Degenerate `.md`-only basenames (`.md`/`...md`) pass the gate and silently rewrite to `/` or `/sub/` [web/src/lib/rehype-md-links.mjs empty-slug branch]. **Fixed:** when the resolved route slug is empty, only emit the vault-root `/` href if the path actually collapsed to root via a real `index`/`..` chain (`cleaned` is empty/`.` or an `index` route); otherwise leave the link **UNREWRITTEN**. Verified: `[empty basename](.md)` is emitted as `.md`, not `/`. New spec asserts it.
+- [x] [Review][Patch][RESOLVED] F4 (LOW): VFile-degrade trail is invisible — `getUnresolvedPages()` is never surfaced, so a future VFile-shape change silently disables all link rewriting site-wide [web/src/lib/rehype-md-links.mjs]. **Fixed:** the plugin now emits a build-time `console.warn` the moment a page's VFile source path cannot be resolved inside the vault, naming the page and explaining the rewrite was skipped — so a future Astro VFile-shape regression is loud, not silent. (No page degrades in the current build, so the warning is dormant in practice.)
 - [x] [Review][Defer] F5 (LOW): Colon-in-filename mis-classified as a URL scheme [web/src/lib/rehype-md-links.mjs scheme regex] — deferred, pathological POSIX edge, accept the heuristic.
 - [x] [Review][Defer] F6 (LOW): Production SWA 404-status is host-config-dependent and only preview-verified [deploy] — deferred, out of preview-tested scope; add a post-deploy smoke check.

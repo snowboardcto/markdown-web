@@ -77,16 +77,30 @@ export default function rehypeMdLinks() {
       // No usable path -> leave EVERY link on this page unrewritten (degrade).
       const id = (file && (file.path || (file.history && file.history[0]))) || '<unknown>';
       unresolvedPages.add(String(id));
+      // F4: surface the degrade loudly at build time. Without this, a future
+      // Astro VFile-shape change that yields no usable source path would
+      // silently disable ALL link rewriting site-wide on a green build. Warn
+      // once per newly-degraded page so the no-op-with-a-trail is visible.
+      console.warn(
+        `[rehype-md-links] Could not resolve a vault source path for "${String(id)}"; ` +
+          'all relative .md links on this page were left UNREWRITTEN. ' +
+          'If this is unexpected, the Astro VFile contract may have changed.',
+      );
       return;
     }
 
-    // The page's own slug, then its directory slug (slug minus last segment) —
-    // relative links resolve against the page's location, not the site root.
+    // The page's directory slug — relative links resolve against the page's
+    // location, not the site root. F2: derive the directory from the SOURCE
+    // FILE PATH *before* any index-collapse. Slugging the page path first and
+    // popping the last segment is wrong for `content/<dir>/index.md`, whose
+    // page slug index-collapses to `<dir>` so the pop yields `''` (root) instead
+    // of `<dir>` — links then resolve one level too shallow. Take the file's
+    // directory (drop the basename) and slug THAT, so `sub/index.md` and
+    // `sub/page.md` both yield a page dir slug of `sub`.
     const relPosix = path.relative(contentDir, sourcePath).split(path.sep).join('/');
-    const pageSlug = pathToSlug(relPosix);
-    const segs = pageSlug.split('/');
-    segs.pop();
-    const pageDirSlug = segs.join('/');
+    const lastSlash = relPosix.lastIndexOf('/');
+    const relDirPosix = lastSlash === -1 ? '' : relPosix.slice(0, lastSlash);
+    const pageDirSlug = relDirPosix === '' ? '' : pathToSlug(relDirPosix);
 
     visit(tree, 'element', (node) => {
       if (node.tagName !== 'a' || !node.properties) return;
@@ -113,11 +127,35 @@ export default function rehypeMdLinks() {
       // Only relative `.md` targets are rewritten (non-.md assets are 2.4).
       if (!/\.md$/i.test(pathNoQuery)) return;
 
-      // Decode before slugging; a malformed `%`-escape leaves the link as-is.
+      // F1: decode PER SEGMENT (split on the *encoded* path's `/` first, then
+      // decode each piece individually) so an encoded separator cannot introduce
+      // a NEW path separator. A decoded segment that *itself* contains a `/`
+      // means the author smuggled a `%2F` past the pass-through guards (which ran
+      // on the still-encoded href): `%2Ffoo.md` -> a segment decoding to `/foo.md`
+      // (a leading slash -> a protocol-relative `//foo` off-site href), and
+      // `a%2Fb.md` -> a segment decoding to `a/b.md` (one filename split into two
+      // route segments). In either case leave the link UNREWRITTEN rather than
+      // emit a mis-routed / off-site href. A malformed `%`-escape (`bad%zz.md`)
+      // throws in decodeURIComponent and likewise leaves the link as-is (degrade,
+      // never throw).
       let decoded;
       try {
-        decoded = decodeURIComponent(pathNoQuery);
+        const encodedSegments = pathNoQuery.split('/');
+        const decodedSegments = encodedSegments.map((s) => decodeURIComponent(s));
+        // Reject if decoding manufactured a new separator inside any segment.
+        if (decodedSegments.some((s) => s.includes('/'))) return;
+        decoded = decodedSegments.join('/');
       } catch {
+        return;
+      }
+
+      // F1 belt-and-suspenders: a *single* encoded segment must not, after
+      // decoding, look like an absolute path or a scheme — that means an encoded
+      // char (`%2F`, `%3A`) smuggled a separator/scheme past the pass-through
+      // guards (which ran on the still-encoded href). A legitimately-authored
+      // `../foo.md` is NOT rejected here — the `..`-escape is handled *after*
+      // `posix.join` below, so real parent-relative links still resolve.
+      if (decoded.startsWith('/') || /^[a-z][a-z0-9+.-]*:/i.test(decoded)) {
         return;
       }
 
@@ -129,9 +167,27 @@ export default function rehypeMdLinks() {
       // A `..` that escapes the vault root -> leave unrewritten (no clamp).
       if (joined === '..' || joined.startsWith('../')) return;
 
+      // F1: a leading `/` after join (from an absolute decoded path) would
+      // produce a protocol-relative `//...` href — leave unrewritten.
+      if (joined.startsWith('/')) return;
+
       // Strip a residual `./` that normalize can leave for same-dir targets.
       const cleaned = joined.replace(/^\.\//, '');
       const routeSlug = pathToSlug(cleaned);
+
+      // F3: a degenerate `.md`-only basename (`.md`, `./.md`, `...md`) slugs to
+      // an empty route *without* having resolved to the vault root via a real
+      // `index`/`..` chain — it would silently rewrite garbage to `/` (or
+      // `/sub/`). Only emit the empty-slug vault-root href when the resolved
+      // path actually collapses to the root (the joined path is empty or an
+      // `index` route); otherwise leave the link UNREWRITTEN.
+      if (routeSlug === '') {
+        const collapsesToRoot =
+          cleaned === '' ||
+          cleaned === '.' ||
+          /(^|\/)index$/i.test(cleaned.replace(/\.md$/i, ''));
+        if (!collapsesToRoot) return;
+      }
 
       // Empty slug (vault root) -> `/` (+ fragment), never `//` or empty.
       node.properties.href = '/' + routeSlug + fragment;
