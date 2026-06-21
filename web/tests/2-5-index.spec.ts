@@ -328,7 +328,12 @@ test.describe('Story 2.5 AC6 — themed, JS-free, crawlable, semantic shell, lis
     // RECONCILED in Story 2.6 (was the 2.5 "no chrome yet" guard). 2.6 layers the
     // wordmark / "the vision" / "Get the client" CTA onto ALL pages via the shared
     // Page.astro layout — so the index now carries the chrome too.
-    await expect(page.getByText('Get the client', { exact: false })).toHaveCount(1);
     await expect(page.locator('header')).toHaveCount(1);
+    // Scope the "Get the client" CTA check to the header landmark via role +
+    // exact accessible name (not a loose page-wide substring, which would also
+    // partial-match the pitch "Get the Markdown Web client").
+    await expect(
+      page.locator('header').getByRole('link', { name: 'Get the client', exact: true }),
+    ).toHaveCount(1);
   });
 });

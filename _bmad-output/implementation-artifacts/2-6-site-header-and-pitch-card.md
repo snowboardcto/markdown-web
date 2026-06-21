@@ -1,6 +1,6 @@
 # Story 2.6: Site header and pitch card
 
-Status: in-progress
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -286,17 +286,31 @@ Opus 4.8 (1M context) — claude-opus-4-8[1m]
 
 No critical (build-breaking / AC-failing / data-loss) unhandled edges were found. All 11 items are MEDIUM/LOW quality/robustness improvements; the build, typecheck, and full suite are green.
 
+**Review-fix application (2026-06-21).** Items #1–#9 applied directly on the branch; #10, #11, and the preview-server flakiness item remain DEFERRED (unchanged):
+
+- **#5 (decision):** pitch headline `<h4>` → NON-HEADING `<p class="pitch-headline">` — out of the document heading outline; same visual size via the existing `.pitch-headline` CSS (18px/600). Single content `<h1>` invariant holds.
+- **#6 (decision):** KEEP the pitch-card as `<footer>`/`contentinfo` (AC2-sanctioned). Marketing-in-`contentinfo` is an accepted design tension (the pitch-card IS the page's end-of-page recruiting region; AC2 permits footer/contentinfo or a named section, and the implicit-contentinfo footer is the lower-blast-radius choice). No code change.
+- **#1 (patch):** `html { scroll-padding-top: 56px }` added to github.css (≈ the ~49px sticky-header height) so `#fragment` jumps + keyboard-focused targets clear the bar (WCAG 2.4.11); the SiteHeader "never hidden beneath the bar" comment corrected.
+- **#2 (patch):** AC5 tests assert each CTA/link `href` equals its documented target (`/get` for both Get-client CTAs, `/vision` for both vision links) AND resolves 200.
+- **#3 (patch):** AC7 stub `test.skip`-on-missing guard dropped; `/get` + `/vision` asserted to exist (200) with a single `<h1>` under chrome.
+- **#4 (patch):** 2-5 reconciled CTA check scoped to `header.getByRole('link', { name: 'Get the client', exact: true })`.
+- **#7 (patch):** 3 "curly U+2019" comments corrected to straight `'` (U+0027) — matching the shipped/asserted strings.
+- **#8 (patch):** tautological in-test-constant assertions re-pointed at the rendered DOM.
+- **#9 (patch):** stale `index.astro` "no 2.6 chrome" comment updated (chrome inherited via `Page.astro`).
+
+**Gates after fixes (all green):** `npx playwright test` → **157 passed, 0 failed, 0 skipped** (re-run clean past the pre-existing preview-server `URI malformed` flakiness); `npm run build` → exit 0 (16 pages incl. `/get`, `/vision`); `npx astro check` → 0 errors, 0 warnings (1 pre-existing 2-3 deprecation hint).
+
 ### Review action items
 
-- [ ] [Review][Decision] Pitch headline `<h4>` skips the heading outline (h1→h4) — choose `<h2>` for outline correctness or a non-heading styled element [web/src/components/PitchCard.astro:24]
-- [ ] [Review][Decision] Pitch-card `<footer>`/`contentinfo` lands a marketing CTA under the document-info landmark — keep AC-sanctioned `<footer>` or switch to a named `<section aria-labelledby>` [web/src/components/PitchCard.astro:23]
-- [ ] [Review][Patch] Sticky header occludes `#fragment` jumps + focused targets — add `scroll-padding-top` = header height; fix the "never hidden" comment [web/src/components/SiteHeader.astro:30; web/src/styles/github.css]
-- [ ] [Review][Patch] AC5 test only checks 200, not the documented target — assert `href === '/get'`/`'/vision'` per link [web/tests/2-6-chrome.spec.ts:187]
-- [ ] [Review][Patch] AC7 stub `test.skip` guard masks a regression if routes vanish — drop the skip, assert routes + single `<h1>` [web/tests/2-6-chrome.spec.ts:302]
-- [ ] [Review][Patch] 2-5 reconciled CTA check is a loose page-wide substring — scope to the header CTA via role+exact name [web/tests/2-5-index.spec.ts:327]
-- [ ] [Review][Patch] Comments claim curly U+2019 but shipped+asserted strings are straight U+0027 — correct the 3 comments [web/src/components/PitchCard.astro:19; web/tests/2-6-chrome.spec.ts:36]
-- [ ] [Review][Patch] Tautological in-test-constant assertions add no coverage — drop or assert rendered DOM [web/tests/2-6-chrome.spec.ts:135]
-- [ ] [Review][Patch] Stale `index.astro` comment claims "no 2.6 chrome" — update it [web/src/pages/index.astro:28]
+- [x] [Review][Decision] Pitch headline `<h4>` skips the heading outline (h1→h4) — RESOLVED: changed to a NON-HEADING styled element `<p class="pitch-headline">` (out of the document heading outline entirely; same visual size via the existing 18px/600 `.pitch-headline` CSS). Single content `<h1>` invariant preserved; the `h1[hasText:"fixed view"]` count-0 assertion stays green. [web/src/components/PitchCard.astro:24]
+- [x] [Review][Decision] Pitch-card `<footer>`/`contentinfo` lands a marketing CTA under the document-info landmark — RESOLVED (decision): KEEP the `<footer>`/`contentinfo` (AC2 explicitly sanctions footer/contentinfo for the pitch-card). Marketing-in-`contentinfo` is an accepted design tension, not a defect; no code change. [web/src/components/PitchCard.astro:23]
+- [x] [Review][Patch] Sticky header occludes `#fragment` jumps + focused targets — RESOLVED: added `html { scroll-padding-top: 56px }` (≈ the ~49px header height) to github.css so in-page `#fragment` jumps and keyboard-focused targets land below the bar (WCAG 2.4.11); corrected the SiteHeader "never hidden beneath the bar" comment. [web/src/components/SiteHeader.astro:30; web/src/styles/github.css]
+- [x] [Review][Patch] AC5 test only checks 200, not the documented target — RESOLVED: each CTA/link now asserts `href === '/get'` (both Get-client CTAs) / `'/vision'` (both vision links) AND a 200, so a header↔vision swap fails. [web/tests/2-6-chrome.spec.ts]
+- [x] [Review][Patch] AC7 stub `test.skip` guard masks a regression if routes vanish — RESOLVED: dropped the skip-on-missing guard; `/get` + `/vision` are asserted to exist (200) and each carries a single `<h1>` under the chrome. [web/tests/2-6-chrome.spec.ts]
+- [x] [Review][Patch] 2-5 reconciled CTA check is a loose page-wide substring — RESOLVED: scoped to `header.getByRole('link', { name: 'Get the client', exact: true })`. [web/tests/2-5-index.spec.ts]
+- [x] [Review][Patch] Comments claim curly U+2019 but shipped+asserted strings are straight U+0027 — RESOLVED: corrected the 3 comments (PitchCard header comment + the two `2-6-chrome.spec.ts` curly-apostrophe comments) to say straight `'` (U+0027). [web/src/components/PitchCard.astro:19; web/tests/2-6-chrome.spec.ts]
+- [x] [Review][Patch] Tautological in-test-constant assertions add no coverage — RESOLVED: the `PITCH_HEADLINE.not.toContain('!')` and `HEADER_CTA.not.toBe(PITCH_CTA)` constant-checks now assert against the rendered DOM (rendered headline text; header-scoped role+exact-name distinctness). [web/tests/2-6-chrome.spec.ts]
+- [x] [Review][Patch] Stale `index.astro` comment claims "no 2.6 chrome" — RESOLVED: updated to note the chrome is inherited from `Page.astro`. [web/src/pages/index.astro:28]
 - [x] [Review][Defer] Self-referential CTA loop on `/get` + `/vision` stub pages [web/src/pages/get.astro; web/src/pages/vision.astro] — deferred, intended stub behavior (revisit at Epic 3 / real vision content)
 - [x] [Review][Defer] Pitch `<code>.md</code>` duplicates github.css chip styling (scoped-CSS isolation drift) [web/src/components/PitchCard.astro:60] — deferred, pre-existing low-risk trade-off
 - [x] [Review][Defer] Full-suite preview-server flakiness (`URI malformed`/`ERR_INVALID_FILE_URL_PATH` on encoded-slash routes under parallel load) [web/playwright.config.ts] — deferred, pre-existing test-harness/Astro-preview quirk, green on retry; not a 2.6 regression

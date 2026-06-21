@@ -27,8 +27,10 @@
 </header>
 
 <style>
-  /* Normal-flow sticky (never `fixed`): it stays in flow so a keyboard-focused
-     in-content element is never hidden beneath the bar. */
+  /* Normal-flow sticky (never `fixed`): it stays in flow rather than overlaying
+     content. When pinned it can still overlap an in-page #fragment target or a
+     keyboard-focused element scrolled to the very top — `html { scroll-padding-
+     top }` (github.css) reserves the bar's height so those land below it. */
   .site-header {
     position: sticky;
     top: 0;

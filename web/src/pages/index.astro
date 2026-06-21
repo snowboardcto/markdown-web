@@ -26,7 +26,8 @@
 //    documented divergence; `/no-h1` has no H1 either, so its label is "No H1".
 //
 // Themed via the shared `Page` layout (2.1 shell + 2.2 GitHub theme), JS-free,
-// crawlable. Listing surface ONLY — no 2.6 site-header / pitch-card / CTA chrome.
+// crawlable. This page owns the vault LISTING only; the 2.6 site-header /
+// pitch-card / CTA chrome is inherited from `Page.astro` (not rendered here).
 import { getCollection } from 'astro:content';
 import { buildIndexItems } from '../lib/index-entries.mjs';
 import Page from '../layouts/Page.astro';

@@ -48,6 +48,11 @@
 
 html {
   background: var(--md-surface);
+  /* The sticky site-header (Story 2.6) pins to top:0 in normal flow. Reserve its
+     height as scroll padding so in-page #fragment jumps and keyboard-focused
+     targets land BELOW the bar instead of hidden beneath it (WCAG 2.4.11). The
+     header is ~49px tall (12px+12px padding around a ~15px wordmark row). */
+  scroll-padding-top: 56px;
 }
 
 body {

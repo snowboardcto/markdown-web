@@ -29,11 +29,11 @@ import { test, expect, type Page } from '@playwright/test';
  */
 
 // ── EXPERIENCE.md / epics.md verbatim microcopy anchors ───────────────────────
-// Pinned EXACTLY (curly apostrophe U+2019, em-dash U+2014) so any copy drift in
+// Pinned EXACTLY (straight apostrophe U+0027, em-dash U+2014) so any copy drift in
 // the shipped chrome fails loudly. These are the load-bearing strings.
 const WORDMARK_TEXT = 'the markdown web'; // mono ".md" chip + lowercase sans wordmark
 const MD_CHIP = '.md';
-const PITCH_HEADLINE = "You're reading one fixed view. There's a better one."; // U+2019 in You're / There's
+const PITCH_HEADLINE = "You're reading one fixed view. There's a better one."; // straight ' (U+0027) in You're / There's
 const PITCH_BODY_TAIL = 'Same file. Your shape.'; // final cadence anchor (EXPERIENCE.md line 35)
 const PITCH_BODY_EMDASH = '—'; // U+2014 em-dash before "your layout" (NOT a hyphen)
 
@@ -112,7 +112,7 @@ test.describe('Story 2.6 AC2 — end-of-page pitch-card on every surface', () =>
         0,
       );
 
-      // Verbatim headline (curly apostrophes) + body cadence anchor present.
+      // Verbatim headline (straight ' apostrophes) + body cadence anchor present.
       await expect(page.getByText(PITCH_HEADLINE, { exact: false })).toHaveCount(1);
       await expect(page.getByText(PITCH_BODY_TAIL, { exact: false }).first()).toBeVisible();
 
@@ -125,14 +125,18 @@ test.describe('Story 2.6 AC2 — end-of-page pitch-card on every surface', () =>
 
 // ── AC4 — microcopy verbatim per EXPERIENCE.md ────────────────────────────────
 test.describe('Story 2.6 AC4 — microcopy verbatim (EXPERIENCE.md anchors)', () => {
-  test('pitch headline is the EXACT two-sentence anchor (curly apostrophes, no "!")', async ({
+  test('pitch headline is the EXACT two-sentence anchor (straight apostrophes, no "!")', async ({
     page,
   }) => {
     await gotoSurface(page, SURFACES[0]);
     const html = await page.content();
     expect(html, 'pitch headline must match EXPERIENCE.md verbatim').toContain(PITCH_HEADLINE);
     // Two sentences, one period each — never an exclamation-driven sales headline.
-    expect(PITCH_HEADLINE).not.toContain('!');
+    // Assert against the RENDERED headline text, not the in-test constant.
+    const headlineText = await page.getByText(PITCH_HEADLINE, { exact: false }).first().innerText();
+    expect(headlineText, 'rendered pitch headline must not be exclamation-driven').not.toContain(
+      '!',
+    );
   });
 
   test('pitch body carries the em-dash (U+2014) + "Same file. Your shape." cadence', async ({
@@ -159,13 +163,18 @@ test.describe('Story 2.6 AC4 — microcopy verbatim (EXPERIENCE.md anchors)', ()
     page,
   }) => {
     await gotoSurface(page, SURFACES[0]);
-    // Both exist, exactly, and are not the same string (AC4 deliberate distinction).
-    await expect(page.getByRole('link', { name: HEADER_CTA, exact: true })).toHaveCount(1);
+    // Both CTAs are present as DISTINCT rendered links (AC4 deliberate
+    // distinction): the SHORT header label and the LONG pitch label each match
+    // exactly ONE link, and — crucially — the long pitch string does NOT match
+    // the header CTA (its exact accessible name is the short string only). Read
+    // from the rendered DOM via role+exact-name, never an in-test comparison.
+    await expect(
+      page.locator('header').getByRole('link', { name: HEADER_CTA, exact: true }),
+    ).toHaveCount(1);
+    await expect(
+      page.locator('header').getByRole('link', { name: PITCH_CTA, exact: true }),
+    ).toHaveCount(0);
     await expect(page.getByRole('link', { name: PITCH_CTA, exact: true })).toHaveCount(1);
-    expect(HEADER_CTA).not.toBe(PITCH_CTA);
-    // The short header CTA accessible name must NOT be the long pitch string.
-    const headerCta = page.locator('header').getByRole('link', { name: HEADER_CTA, exact: true });
-    await expect(headerCta).toHaveCount(1);
   });
 
   test('all anchor labels appear verbatim ("the vision", "Why a markdown web?", wordmark)', async ({
@@ -179,60 +188,58 @@ test.describe('Story 2.6 AC4 — microcopy verbatim (EXPERIENCE.md anchors)', ()
   });
 });
 
-// ── AC5 — stub links resolve (no 404 / no dangle) ─────────────────────────────
-// Decision-agnostic: the chosen target may be a real route (/get, /vision) OR a
-// bare `#` stub (per the story). EITHER way the href must be non-empty, and IF
-// it is a real route it must return 200 (no dangling/404 link).
-test.describe('Story 2.6 AC5 — stub links resolve to a documented target', () => {
-  async function assertHrefResolves(page: Page, href: string | null, label: string) {
-    expect(href, `${label} must have a non-empty href (no dangling link)`).toBeTruthy();
-    const h = href as string;
-    if (h === '#') {
-      // A bare `#` is an accepted intentional stub per the story decision.
-      return;
-    }
-    // Internal route stub (e.g. /get, /vision): must resolve to a live 200.
-    if (h.startsWith('/')) {
-      const res = await page.request.get(h);
-      expect(res.status(), `${label} stub route ${h} must resolve 200 (no 404)`).toBe(200);
-    }
-    // External http(s) targets are left unfetched (network-independent test).
+// ── AC5 — stub links point at their DOCUMENTED targets (no 404 / no dangle) ───
+// Decisions A/B (Dev Agent Record): "Get the client" + "Get the Markdown Web
+// client" → /get ; "the vision" + "Why a markdown web?" → /vision. Each test
+// asserts the href EQUALS its documented target (not just that *some* route is
+// 200) — so a header↔vision href swap fails — AND that the route resolves 200.
+const GET_TARGET = '/get'; // Decision A — Epic-3 client-download stub
+const VISION_TARGET = '/vision'; // Decision B — vision/manifesto stub
+
+test.describe('Story 2.6 AC5 — stub links resolve to their documented target', () => {
+  async function assertHrefIsTarget(
+    page: Page,
+    href: string | null,
+    expected: string,
+    label: string,
+  ) {
+    expect(href, `${label} href must equal its documented target ${expected}`).toBe(expected);
+    const res = await page.request.get(expected);
+    expect(res.status(), `${label} target ${expected} must resolve 200 (no 404)`).toBe(200);
   }
 
-  test('"Get the client" (header) resolves to its documented stub', async ({ page }) => {
+  test('"Get the client" (header) → /get', async ({ page }) => {
     await gotoSurface(page, SURFACES[0]);
     const href = await page
       .locator('header')
       .getByRole('link', { name: HEADER_CTA, exact: true })
       .getAttribute('href');
-    await assertHrefResolves(page, href, '"Get the client"');
+    await assertHrefIsTarget(page, href, GET_TARGET, '"Get the client"');
   });
 
-  test('"Get the Markdown Web client" (pitch) resolves to its documented stub', async ({
-    page,
-  }) => {
+  test('"Get the Markdown Web client" (pitch) → /get', async ({ page }) => {
     await gotoSurface(page, SURFACES[0]);
     const href = await page
       .getByRole('link', { name: PITCH_CTA, exact: true })
       .getAttribute('href');
-    await assertHrefResolves(page, href, '"Get the Markdown Web client"');
+    await assertHrefIsTarget(page, href, GET_TARGET, '"Get the Markdown Web client"');
   });
 
-  test('"the vision" (header) resolves to its documented stub', async ({ page }) => {
+  test('"the vision" (header) → /vision', async ({ page }) => {
     await gotoSurface(page, SURFACES[0]);
     const href = await page
       .locator('header')
       .getByRole('link', { name: VISION_LINK, exact: true })
       .getAttribute('href');
-    await assertHrefResolves(page, href, '"the vision"');
+    await assertHrefIsTarget(page, href, VISION_TARGET, '"the vision"');
   });
 
-  test('"Why a markdown web?" (pitch) resolves to its documented stub', async ({ page }) => {
+  test('"Why a markdown web?" (pitch) → /vision', async ({ page }) => {
     await gotoSurface(page, SURFACES[0]);
     const href = await page
       .getByRole('link', { name: WHY_LINK, exact: true })
       .getAttribute('href');
-    await assertHrefResolves(page, href, '"Why a markdown web?"');
+    await assertHrefIsTarget(page, href, VISION_TARGET, '"Why a markdown web?"');
   });
 });
 
@@ -294,21 +301,18 @@ test.describe('Story 2.6 AC6 — themed / JS-free / crawlable / single <h1>', ()
   });
 });
 
-// ── AC7 edge case — stub pages (if added) also carry exactly one <h1> ─────────
-// IF Decision A/B add /get and/or /vision routes, they ALSO route through
-// Page.astro and inherit the header+pitch chrome — so each must itself carry
-// EXACTLY ONE <h1> (its own placeholder heading) and the chrome must add none.
-// Decision-agnostic: only assert when the route actually exists (200).
-test.describe('Story 2.6 AC7 — stub pages (if any) keep a single <h1> under chrome', () => {
+// ── AC7 edge case — the /get + /vision stub pages keep exactly one <h1> ───────
+// Decisions A/B add real /get and /vision routes; they ALSO route through
+// Page.astro and inherit the header+pitch chrome — so each must itself resolve
+// 200 and carry EXACTLY ONE <h1> (its own placeholder heading), the chrome
+// adding none. No skip guard: if a stub route ever vanishes, this FAILS loudly
+// (a 404 would break the single-<h1>-under-chrome invariant silently otherwise).
+test.describe('Story 2.6 AC7 — /get + /vision stub pages keep a single <h1> under chrome', () => {
   for (const stub of ['/get', '/vision']) {
-    test(`${stub}: if it is a real route, it has the chrome and exactly one <h1>`, async ({
-      page,
-    }) => {
+    test(`${stub}: real 200 route with the chrome and exactly one <h1>`, async ({ page }) => {
       const res = await page.goto(stub);
-      if (!res || res.status() !== 200) {
-        test.skip(true, `${stub} is not a real route (bare "#" stub) — nothing to assert`);
-        return;
-      }
+      expect(res, `navigation to ${stub} should produce a response`).not.toBeNull();
+      expect(res!.status(), `${stub} must be a real 200 route`).toBe(200);
       await expect(page.locator('h1')).toHaveCount(1);
       await expect(page.locator('header')).toHaveCount(1);
       await expect(page.getByText(PITCH_HEADLINE, { exact: false })).toHaveCount(1);

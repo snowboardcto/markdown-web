@@ -11,17 +11,19 @@
 // crawlable, JS-free. Reuses the 2.2 --md-* tokens.
 //
 // Microcopy is verbatim per EXPERIENCE.md Voice and Tone (AC4): the headline
-// (curly apostrophes), the body tail with the em-dash (U+2014) before "your
-// layout", inline <code>.md</code>, and the "Same file. Your shape." cadence.
+// (straight ' apostrophes, U+0027), the body tail with the em-dash (U+2014)
+// before "your layout", inline <code>.md</code>, and "Same file. Your shape."
 //
 // Targets (Decisions A/B): CTA → /get ; "Why a markdown web?" → /vision.
-// The headline is an <h4> (NEVER an <h1>) so the page keeps its single <h1>.
+// The headline is a NON-HEADING styled <p class="pitch-headline"> (NEVER any
+// <hN>), so it stays out of the document heading outline and the page keeps its
+// single content <h1> (Review #5 decision: non-heading element).
 // Decorative `▣`/`→` glyphs are aria-hidden so accessible names stay exactly
 // "Get the Markdown Web client" and "Why a markdown web?".
 ---
 
 <footer class="pitch-card">
-  <h4 class="pitch-headline">You're reading one fixed view. There's a better one.</h4>
+  <p class="pitch-headline">You're reading one fixed view. There's a better one.</p>
   <p class="pitch-body">
     This page is plain markdown, rendered the same for everyone. In the
     <strong>Markdown Web client</strong>, your own AI personality renders every
