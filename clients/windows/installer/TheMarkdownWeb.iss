@@ -1,4 +1,6 @@
 ; Inno Setup script — The Markdown Web native client installer.
+; (Code signing via Azure Trusted Signing is enabled in release-windows.yml; both this installer
+; and the bundled app exe are Authenticode-signed when SIGNING_ENABLED is set.)
 ;
 ; Packages the SELF-CONTAINED win-x64 publish output of clients/windows/App
 ; (TheMarkdownWeb.App.exe + its .NET runtime + Rendering/Markdig/ColorCode) into a
