@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-21
-last_updated: 2026-06-21 (3-4 marked done — 8 ACs covered, Windows CI green (run #19) on windows-latest; ColorCode syntax highlighting; review APPROVED)
+last_updated: 2026-06-21 (3-5 marked done — 12 ACs covered, Windows CI green (run #28, 78 Rendering + 221 App.Tests) on windows-latest; in-client links/media/navigation; review APPROVED)
 project: The Markdown Web
 project_key: NOKEY
 tracking_system: file-system
@@ -68,7 +68,7 @@ development_status:
   3-2-md-only-address-bar-and-fetch: done # 7/7 ACs covered + GREEN on windows-latest (run #11, 5565897, 78/78 tests); review APPROVED (only MINOR, 1 applied); CI #9 caught a WPF System.IO.Packaging test-parallelism race -> fixed via DisableTestParallelization; fetch-target = typed .md URL as-is with Accept: text/markdown, URL->/api/negotiate/<slug> mapping deferred to 3.3+
   3-3-markdig-ast-flowdocument-rendering: done # 12 ACs covered + GREEN on windows-latest (run #16, c91e403); review CHANGES-REQUESTED->fixed (test-helper missing using System.Windows.Automation; D5 link assert OriginalString vs ToString slash); FlowDocumentRenderer pure (Markdig + System.Windows only); image = record source no fetch; colors/nav/display deferred to 3.4/3.5/3.6
   3-4-code-syntax-highlighting: done # 8 ACs covered + GREEN on windows-latest (run #19, 6f74f86); ColorCode.Core 2.0.15 -> github-light palette; review APPROVED (no action items); base(null,null) parser + ScopeName constants confirmed; known-language >=2 colors, unknown/flag-off single-color fallback; Rendering pure (allowlist {Markdig, ColorCode.Core})
-  3-5-in-client-links-media-navigation: backlog
+  3-5-in-client-links-media-navigation: done # 12 ACs covered + GREEN on windows-latest (run #28, 92d7c14; 78 Rendering + 221 App.Tests); review APPROVED; content now renders on screen + Back/Forward/Reload + internal .md nav + anchor scroll + external->browser + vault images + /api/negotiate/<slug> mapping (github-slugger parity, Node-cross-validated). 3 CI rounds: 2 missing-using compile fixes + 1 real protocol-relative scheme bug fixed
   3-6-basic-faithful-default-render: backlog
   epic-3-retrospective: optional
 

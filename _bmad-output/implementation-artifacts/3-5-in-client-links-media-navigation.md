@@ -1,6 +1,6 @@
 # Story 3.5: In-client links, media, navigation
 
-Status: ready-for-dev
+Status: done
 
 <!-- VALIDATION (Step 3, post-hardening, vs epics.md Story 3.5, lines 338–350; FR-2, FR-3, FR-8, UX-DR8): RESULT = PASS (kept WHOLE; split contract pinned as the safety valve).
   - Step-2 hardening verified: SlugDeriver parity CORRECTED to byte-exact github-slugger (was a wrong approximation — would have shipped diverging slugs → live-page 404s); link-classification edge matrix, NavigationController transition table, image edge matrix, and explicit decisions (failed-nav history / same-URL / re-entrancy last-wins / broken-image) all added. Scope UNCHANGED (the 3.5 integration set). 5 out-of-scope items logged to the Deferred-Work-Log (non-ASCII slug parity, richer media, same-URL Accept negotiation, button enabled-state, loading affordance) — none expand scope.
@@ -531,4 +531,32 @@ NOT touched: `Rendering/*`, `Rendering.Tests/*`, `App.Tests/*` (tests are the or
 
 ### CI Verification
 
-PENDING — `windows-latest` `build-windows.yml` is the sole verification surface (no .NET SDK / WPF on the Linux dev box). Not pushed by this agent. The SlugDeriver parity and AnchorMatcher slug logic were independently cross-validated in Node against the live github-slugger regex (all golden + manifest rows pass).
+**CI run #28** (`92d7c14`): **GREEN** on windows-latest — Restore ✓ Build ✓ Test ✓, **78 Rendering + 221 App.Tests all pass**. Authoritative verification. Three CI rounds were needed:
+- **#22** (`e96b9bd`): build error — `ContentHostController.cs` missing `using System.Windows.Automation;` (CS0103). Fixed.
+- **#24** (`9d05999`): build error — `ImageResolverTests.cs` referenced `Uri.UriSchemeData`, which doesn't exist in .NET (the `data:` scheme is the literal `"data"`). Fixed.
+- **#26** (`3661197`): compiled; **218/221 App.Tests passed, 3 failed** — a real impl bug: a protocol-relative `//host/path` ref was captured by `Uri.TryCreate(.., Absolute)` as a `file://` UNC URI before base resolution, so it never adopted the base scheme. Per web semantics `//host/path` is scheme-relative. Fixed in `ImageResolver.Resolve` + `LinkClassifier.ResolveHref` (skip the absolute-parse for `//`-leading refs → fall through to `PageUrlResolver`). → **#28 GREEN**.
+
+The embedded github-slugger regex (the review's top CI-red watch-item) compiled and ran correctly as a .NET `Regex`; the SlugDeriver/AnchorMatcher parity was also Node-cross-validated against the live slugger.
+
+### Consolidated Code Review (Step 7) — APPROVED
+
+No blocking changes. Verified (by hand + against upstream): slug parity, signature parity vs all 11 test files, NavigationController cursor/truncation/generation-token re-entrancy correctness, the FlowDocument image-tree walk (InlineUIContainer→Image incl. Span/Hyperlink recursion), exact-host `IsAppHost` (no suffix/prefix bypass), purity/boundary (no package added, Rendering untouched). The 3 CI-reds above were the missing usings (not behavioral) + the protocol-relative bug (a real fix); none contradicts the review's behavioral analysis.
+
+### AC → Test Trace (Step 10) — all green on run #28
+
+| AC | Requirement | Test(s) |
+|----|-------------|---------|
+| AC1 | Render fetched markdown into ContentHost (content on screen) | `ContentHostTests` (host render) |
+| AC2 | LinkClassifier total: Internal/Anchor/External/Unsupported | `LinkClassifierTests` (incl. protocol-relative) |
+| AC3 | Relative→absolute resolution against page base | `PageUrlResolverTests` |
+| AC4 | Internal `.md` click → fetch+render in place + history push | `NavigationControllerTests` + `ContentHostTests` (click route) |
+| AC5 | `#anchor` → scroll within page, no re-fetch | `AnchorMatcherTests` + `AnchorScrollTests` |
+| AC6 | External `http(s)` → system browser | `NavigationControllerTests` (Dispatch External → launcher) |
+| AC7 | Images resolve from vault + load inline (broken→placeholder) | `ImageResolverTests` + `ImageLoadTests` (stub IImageLoader) |
+| AC8 | Broken/missing/failed → clear state, never crash, history intact | `NavigationControllerTests` (failure→Broken) + `ContentHostTests` (ShowBroken) |
+| AC9 | URL→`/api/negotiate/<slug>` (github-slugger parity) | `SlugDeriverTests` (golden + 12 manifest keys) + `PageEndpointResolverTests` |
+| AC10 | Back/Forward/Reload real navigation (history) | `NavigationControllerTests` (full transition table) + `ShellViewModelNavigationTests` |
+| AC11 | Rendering stays pure (no net/AI/webview/up-ref) | inherited `RenderingPurityTests`/`DependencyBoundaryTests`/`NoEmbeddedBrowserTests` green; no package added |
+| AC12 | windows-latest CI gate (STA + no-parallel) | CI run #28 green; only 3 hosting tests are `[StaFact]` |
+
+All 12 ACs covered by CI-runnable proofs. Trace complete. **Story 3-5 DONE — the client is now functionally browsable.**
