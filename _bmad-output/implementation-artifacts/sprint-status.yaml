@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-21
-last_updated: 2026-06-21 (3-1 story created — ready-for-dev; epic-3 -> in-progress; WPF app shell + toolbar, no-Chromium enforced by test)
+last_updated: 2026-06-21 (3-1 marked done — 5/5 ACs covered, Windows CI green 14/14 on windows-latest; no-Chromium enforced by failing-test guard)
 project: The Markdown Web
 project_key: NOKEY
 tracking_system: file-system
@@ -64,7 +64,7 @@ development_status:
 
   # Epic 3: Read Markdown in the Native Client (Windows)
   epic-3: in-progress
-  3-1-wpf-app-shell-with-toolbar: ready-for-dev
+  3-1-wpf-app-shell-with-toolbar: done # 5/5 ACs covered + GREEN on windows-latest (run #6, 7c771c3, 14/14 tests); review APPROVED (no action items); 2 test-harness bugs from run #4 fixed (ColumnDefinition tree-walk, assembly-elision boundary check); no-Chromium guard (csproj + runtime tiers) green
   3-2-md-only-address-bar-and-fetch: backlog
   3-3-markdig-ast-flowdocument-rendering: backlog
   3-4-code-syntax-highlighting: backlog

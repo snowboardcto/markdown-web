@@ -1,6 +1,6 @@
 # Story 3.1: WPF app shell with toolbar
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -198,3 +198,25 @@ None. WPF builds/runs Windows-only; the Linux dev box has no .NET SDK. Verificat
 - `clients/windows/App/MainWindow.xaml.cs` (UPDATE) — ShellViewModel field + DataContext + Click handlers.
 - `clients/windows/App/ShellViewModel.cs` (NEW) — `ShellAction` enum + `ShellViewModel` (inert Back/Forward/Reload, `LastAction`).
 - (No change to `App.xaml`/`App.xaml.cs`, `TheMarkdownWeb.App.csproj`, `.sln`, `build-windows.yml`, or any `Rendering`/`Agent`/test files — `App.Tests` project + `.sln` entry already present from Step 4.)
+- `clients/windows/App.Tests/ShellTestHelpers.cs` (UPDATE, post-CI fix) — guarded the visual-tree fallback to `Visual` nodes only.
+- `clients/windows/App.Tests/DependencyBoundaryTests.cs` (UPDATE, post-CI fix) — `App_References_Rendering` now checks the csproj `<ProjectReference>` (elision-proof) instead of the bound assembly closure.
+
+### CI Verification & Harness Fixes
+
+The dev cross-check above predicted all tests PASS, but the **windows-latest runner found two test-harness defects** the Linux-side reasoning missed (no local WPF runtime to catch them):
+
+- **CI run #4** (`ecd8122`): compiled clean (0 warnings/errors); **11/14 green, 3 red** — `Toolbar_Buttons_AreInBackForwardReloadOrder`, `Toolbar_TabOrder_IsBackForwardReload` (`'ColumnDefinition' is not a Visual or Visual3D` — the tree-walker recursed into the Grid's `ColumnDefinition` logical children and called `VisualTreeHelper` on them) and `App_References_Rendering` (assembly-reference elision: App declares but does not yet *use* a `Rendering` type, so the metadata reference is elided). **Both are harness bugs; the implementation correctly meets the ACs.**
+- **Fix** (`7c771c3`): guarded the visual fallback in `ShellTestHelpers.CollectButtons` to `Visual` nodes (the logical sweep already collects the buttons); switched `App_References_Rendering` to the elision-proof csproj `ProjectReference` check.
+- **CI run #6** (`7c771c3`): **GREEN — Restore ✓ Build ✓ Test ✓, 14/14 tests pass** on windows-latest (run id 27913515835). This is the authoritative verification.
+
+### AC → Test Trace (Step 10) — all green on run #6
+
+| AC | Requirement | Test(s) |
+|----|-------------|---------|
+| AC1 | Single WPF window, titlebar exactly "The Markdown Web" | `ShellWindowTests.MainWindow_Title_IsExactlyTheMarkdownWeb` `[StaFact]` + WinExe build |
+| AC2 | Toolbar Back/Forward/Reload present, in order, top-docked | `ShellWindowTests.Toolbar_HasBackForwardReloadButtons` + `_AreInBackForwardReloadOrder` `[StaFact]` |
+| AC3 | UI-Automation names exact/unique, keyboard-reachable, tab order Back→Forward→Reload | `ToolbarAccessibilityTests` (names/reachable/tab-order) + `ShellViewModelTests` command `[Fact]`s |
+| AC4 | No Chromium/WebView2/embedded-browser — enforced by failing test | `NoEmbeddedBrowserTests` csproj tier + runtime-closure tier |
+| AC5 | Solution builds + all tests green on windows-latest; App→Rendering one-way | `DependencyBoundaryTests` (both directions) + existing `Rendering.Tests` green + CI run #6 green |
+
+All 5 ACs covered by CI-runnable proofs; none relies on "launch and look". Trace complete. **Story 3-1 DONE.**
