@@ -12,6 +12,8 @@ using Markdig.Extensions.TaskLists;
 using Markdig.Helpers;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
+using ColorCode;
+using TheMarkdownWeb.Rendering.Highlighting;
 using WpfTable = System.Windows.Documents.Table;
 using WpfTableCell = System.Windows.Documents.TableCell;
 using WpfTableRow = System.Windows.Documents.TableRow;
@@ -172,6 +174,36 @@ public sealed class FlowDocumentRenderer
         };
 
         IReadOnlyList<string> lines = CodeLines(code);
+
+        // Story 3.4: when highlighting is on AND the language resolves to a ColorCode grammar,
+        // tokenize the code into per-token colored mono runs. ANY failure (unknown language,
+        // highlighting off, or a tokenizer throw) falls back to the 3.3 single-color mono path.
+        if (_options.SyntaxHighlighting)
+        {
+            ILanguage? lang = ResolveLanguage(language);
+            if (lang is not null)
+            {
+                try
+                {
+                    string source = string.Join("\n", lines);
+                    var colorizer = new FlowDocumentCodeColorizer(_options.MonospaceFontFamily);
+                    IReadOnlyList<Run> coloredRuns = colorizer.GetRuns(source, lang);
+
+                    foreach (Run run in coloredRuns)
+                    {
+                        paragraph.Inlines.Add(run);
+                    }
+
+                    return paragraph;
+                }
+                catch
+                {
+                    // Totality (AC5): a tokenizer failure degrades to plain mono — never an error.
+                    paragraph.Inlines.Clear();
+                }
+            }
+        }
+
         for (int i = 0; i < lines.Count; i++)
         {
             if (i > 0)
@@ -179,12 +211,57 @@ public sealed class FlowDocumentRenderer
                 paragraph.Inlines.Add(new LineBreak());
             }
 
-            // Single foreground (inherited / unset) on every run — NO per-token colors (AC5).
+            // Single foreground (inherited / unset) on every run — NO per-token colors (3.3 fallback).
             paragraph.Inlines.Add(new Run(lines[i]) { FontFamily = MonoFamily });
         }
 
         return paragraph;
     }
+
+    /// <summary>
+    /// Resolves a GFM fence info-string id to a ColorCode <see cref="ILanguage"/>, or null when the
+    /// id is null/empty/unknown (→ plain-mono fallback, AC4). Total and never throws: a small
+    /// case-insensitive alias map covers common GFM ids ColorCode doesn't id 1:1, then
+    /// <see cref="Languages.FindById"/> (case-insensitive on the canonical id, returns null for
+    /// unknowns) handles the rest.
+    /// </summary>
+    private static ILanguage? ResolveLanguage(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            return null;
+        }
+
+        string key = id.Trim().ToLowerInvariant();
+        if (LanguageAliases.TryGetValue(key, out string? canonical))
+        {
+            key = canonical;
+        }
+
+        return Languages.FindById(key);
+    }
+
+    // Case-insensitive (lowercased keys) GFM fence id → ColorCode canonical id. Ids not listed here
+    // are passed to FindById as-is (which is case-insensitive on canonical ids). Unmapped/unknown →
+    // FindById returns null → plain-mono fallback (still "not an error", AC4).
+    private static readonly Dictionary<string, string> LanguageAliases = new(StringComparer.Ordinal)
+    {
+        ["cs"] = "csharp",
+        ["c#"] = "csharp",
+        ["js"] = "javascript",
+        ["jsx"] = "javascript",
+        ["ts"] = "typescript",
+        ["tsx"] = "typescript",
+        ["py"] = "python",
+        ["py3"] = "python",
+        ["c++"] = "cpp",
+        ["fs"] = "fsharp",
+        ["f#"] = "fsharp",
+        ["vb"] = "vb.net",
+        ["ps"] = "powershell",
+        ["ps1"] = "powershell",
+        ["md"] = "markdown",
+    };
 
     private static IReadOnlyList<string> CodeLines(LeafBlock code)
     {
