@@ -1,9 +1,10 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Xunit;
 using TheMarkdownWeb.Rendering;
-using AppType = global::TheMarkdownWeb.App.App;
 
 namespace TheMarkdownWeb.App.Tests;
 
@@ -40,14 +41,59 @@ public class DependencyBoundaryTests
     [Fact]
     public void App_References_Rendering()
     {
-        Assembly app = typeof(AppType).Assembly;
+        // NOTE: we assert the build-time ProjectReference in App's .csproj, NOT App's bound assembly
+        // closure. At this story App declares the dependency but does not yet *use* a Rendering type
+        // (rendering lands in Story 3.3), so the C# compiler ELIDES the metadata assembly reference and
+        // GetReferencedAssemblies() would not list Rendering — an assembly-closure check here gives a
+        // false negative. The csproj ProjectReference is the elision-proof, authoritative edge (same
+        // philosophy as the no-embedded-browser csproj tier).
+        string appCsproj = LocateAppCsproj();
+        string xml = File.ReadAllText(appCsproj);
 
-        bool referencesRendering = app
-            .GetReferencedAssemblies()
-            .Any(an => string.Equals(an.Name, RenderingAssemblyName, StringComparison.OrdinalIgnoreCase));
+        var projectRefRegex = new Regex(
+            "<ProjectReference\\s+[^>]*Include\\s*=\\s*\"(?<path>[^\"]+)\"",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+        bool referencesRendering = projectRefRegex
+            .Matches(xml)
+            .Select(m => m.Groups["path"].Value)
+            .Any(p => p.IndexOf("TheMarkdownWeb.Rendering.csproj", StringComparison.OrdinalIgnoreCase) >= 0
+                   || (p.IndexOf("Rendering", StringComparison.OrdinalIgnoreCase) >= 0
+                       && p.IndexOf("Rendering.Tests", StringComparison.OrdinalIgnoreCase) < 0));
 
         Assert.True(
             referencesRendering,
-            $"{AppAssemblyName} must reference {RenderingAssemblyName} (App depends on the pure render bedrock).");
+            $"{AppAssemblyName} must declare a <ProjectReference> to {RenderingAssemblyName} " +
+            $"(App depends on the pure render bedrock). Checked: {appCsproj}");
+    }
+
+    /// <summary>
+    /// Locates <c>App/TheMarkdownWeb.App.csproj</c> by walking up from the test bin/ to the
+    /// <c>clients/windows/</c> root (sentinel <c>TheMarkdownWeb.sln</c>) then globbing for the App csproj.
+    /// Robust to bin/ relocation; throws (fails the test) if not found.
+    /// </summary>
+    private static string LocateAppCsproj()
+    {
+        const string sentinel = "TheMarkdownWeb.sln";
+        DirectoryInfo? dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, sentinel)))
+        {
+            dir = dir.Parent;
+        }
+
+        if (dir is null)
+        {
+            throw new InvalidOperationException(
+                $"Could not locate the '{sentinel}' sentinel walking up from '{AppContext.BaseDirectory}'.");
+        }
+
+        string[] matches = Directory.GetFiles(dir.FullName, "TheMarkdownWeb.App.csproj", SearchOption.AllDirectories);
+        if (matches.Length == 0)
+        {
+            throw new InvalidOperationException(
+                $"Could not find TheMarkdownWeb.App.csproj under '{dir.FullName}'.");
+        }
+
+        return matches[0];
     }
 }

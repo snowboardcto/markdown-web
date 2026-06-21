@@ -90,7 +90,12 @@ internal static class ShellTestHelpers
             }
         }
 
-        if (sink.Count == 0)
+        // Visual fallback ONLY when the logical sweep found nothing AND the node is actually a Visual.
+        // A Grid's ColumnDefinition/RowDefinition objects ARE logical children of the Grid but are NOT
+        // Visuals, so calling VisualTreeHelper on them throws "X is not a Visual or Visual3D". The
+        // logical sweep above already collects the toolbar buttons (in the StackPanel), so this guard
+        // keeps the walker robust against a Grid-based toolbar that reserves columns for later stories.
+        if (sink.Count == 0 && node is Visual)
         {
             int count = VisualTreeHelper.GetChildrenCount(node);
             for (int i = 0; i < count; i++)
