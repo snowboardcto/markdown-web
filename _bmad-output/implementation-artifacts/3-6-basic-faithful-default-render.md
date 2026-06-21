@@ -1,6 +1,6 @@
 # Story 3.6: Basic faithful default render (no-personality)
 
-Status: in-review (Step-5 implementation complete — pending windows-latest CI verification)
+Status: done
 
 <!-- VALIDATION (Step 3, vs epics.md Story 3.6, lines 352–363; FR-6, UX-DR7, UX-DR9): RESULT = PASS.
   Re-run AFTER Step-2 advanced-elicitation hardening (per-token orthogonality audit, ARGB-vs-web parity, Epic-4 seam pin, a11y-exit assertion list). The Step-1 PASS stands and is STRENGTHENED.
@@ -417,3 +417,21 @@ _(PENDING — the authoritative verification is the `Build Windows Client` (`bui
 - [ ] 3.6 — faithful basic default theme applied by DEFAULT + shell a11y LOCKED + content UIA-readable (`BasicThemeTests` + `ShellAccessibilityExitTests`).
 - [ ] Cross-cutting — `Rendering` PURE, NO embedded browser, all green on `windows-latest`; record CI run id.
 - [ ] Conclusion — usable basic Markdown Web reader before any AI personalization; Epic-4 seam clean (`RenderTheme.Basic` default, open/closed). **Epic 3 CLOSEABLE.**
+
+## CI Verification & AC Trace (Steps 7 + 10)
+
+**CI run #31** (`35e3d9a`): **GREEN** on windows-latest — Restore ✓ Build ✓ Test ✓. The new `BasicThemeTests` + `ShellAccessibilityExitTests` pass AND every existing 3.3/3.4/3.5 Rendering/App test stays green (the additive theme broke ZERO markers — first-try green, no regression round needed). Authoritative verification.
+
+**Consolidated Code Review (Step 7) — APPROVED.** Token-by-token regression audit confirmed every theme token is orthogonal to the asserted markers: code-bg on `Paragraph.Background` (G1) leaves `DistinctForegrounds`/mono/verbatim intact; G2 keeps plain-mono fallback runs' `Foreground` null (SyntaxHighlightTests `<=1` holds); heading hairline/margins ⟂ Tag/Bold/FontSize; blockquote muted-fg keeps Left-rule+brush; table border/shade ⟂ structure/bold-header; link `Foreground` ⟂ `NavigateUri.OriginalString`; list indent ⟂ MarkerStyle; body margin/line-height ⟂ `Tag=null`. Compile/contract clean; MainWindow.xaml parses with ContentScroll Focusable+TabIndex=4. 1 cosmetic MINOR (dead non-Basic hr brush) — non-blocking.
+
+| AC | Requirement | Test |
+|----|-------------|------|
+| AC1 | Faithful GitHub-light basic theme (exact ARGB + spacing) | `BasicThemeTests` (per styled aspect) |
+| AC2 | No-personality → Basic render as the tested DEFAULT | `BasicThemeTests` default-ctor + `Theme==Basic` `[Fact]` |
+| AC3 | Epic-4 personality-override seam (open/closed) | `RenderTheme` single-member `[Fact]` + documented seam |
+| AC4 | Shell a11y LOCKED (UX-DR9) — toolbar+address+content reachable/labeled | `ShellAccessibilityExitTests` + existing toolbar/address suites |
+| AC5 | Rendering pure + theming total | inherited `RenderingPurityTests`/`DependencyBoundaryTests`/`NoEmbeddedBrowserTests` green; no package added |
+| AC6 | windows-latest CI gate (STA + no-parallel) | CI run #31 green |
+| AC7 | Epic-3 EXIT checklist (3.1–3.6 = usable basic reader) | sprint-status epic-3: done |
+
+All 7 ACs covered by CI-runnable proofs; no existing assertion changed. Trace complete. **Story 3-6 DONE — Epic 3 COMPLETE.**
