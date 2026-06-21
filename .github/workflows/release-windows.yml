@@ -104,7 +104,7 @@ jobs:
       # set up. Flip the variable to 'true' once the Azure setup is done — no workflow edit needed.
       # Auth is OIDC (azure/login) — no signing secret stored in the repo.
       - name: Azure login (OIDC) for signing
-        if: vars.SIGNING_ENABLED == 'true'
+        if: ${{ vars.SIGNING_ENABLED != '' && vars.SIGNING_ENABLED != 'false' && vars.SIGNING_ENABLED != '0' }}
         uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
@@ -112,7 +112,7 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Sign the app executable (Authenticode)
-        if: vars.SIGNING_ENABLED == 'true'
+        if: ${{ vars.SIGNING_ENABLED != '' && vars.SIGNING_ENABLED != 'false' && vars.SIGNING_ENABLED != '0' }}
         uses: azure/trusted-signing-action@v0
         with:
           endpoint: ${{ vars.TRUSTED_SIGNING_ENDPOINT }}
@@ -143,7 +143,7 @@ jobs:
       # Sign the installer itself (the file the user actually double-clicks — this is what SmartScreen
       # checks first). The app exe inside was already signed pre-package above.
       - name: Sign the installer (Authenticode)
-        if: vars.SIGNING_ENABLED == 'true'
+        if: ${{ vars.SIGNING_ENABLED != '' && vars.SIGNING_ENABLED != 'false' && vars.SIGNING_ENABLED != '0' }}
         uses: azure/trusted-signing-action@v0
         with:
           endpoint: ${{ vars.TRUSTED_SIGNING_ENDPOINT }}
