@@ -19,17 +19,33 @@ validates the domain and **auto-issues a managed TLS certificate** (no further a
 
 ## 2. Apex address record (required — points the domain at the Static Web App)
 
-Prefer an **ALIAS / ANAME** at the apex if your provider supports it; otherwise use the **A** record.
+**GoDaddy does not support ALIAS/ANAME at the apex — and you don't need it.** Azure Static Web Apps
+apex domains use a plain **A record**, which GoDaddy supports. Use this:
 
-| Option | Type | Host / Name | Value | TTL |
-|--------|------|-------------|-------|-----|
-| Preferred | `ALIAS` / `ANAME` | `@` (apex) | `purple-pond-09fadd20f.7.azurestaticapps.net` | 3600 |
-| Fallback | `A` | `@` (apex) | `40.67.153.174` | 3600 |
+| Type | Host / Name | Value | TTL |
+|------|-------------|-------|-----|
+| `A` | `@` (apex) | `40.67.153.174` | 1 hour (or default) |
 
-> ⚠️ The apex currently resolves to a parked page (`76.223.105.230`, `13.248.243.5`). **Remove those
-> existing apex A records** and replace them with the record above, or the domain will keep serving the
-> old parked page. Never use a CNAME at the apex (`@`) — it breaks other apex records and most
-> providers reject it; that's why ALIAS/ANAME or A is required here.
+> ⚠️ Never use a CNAME at the apex (`@`) — RFC-invalid and GoDaddy rejects it. The A record above is
+> the correct and only apex option here.
+
+### GoDaddy-specific steps
+1. GoDaddy → **My Products → Domains → themarkdownweb.com → DNS / Manage DNS**.
+2. **Turn OFF domain forwarding/parking** if enabled (Domain Settings → Forwarding → remove). GoDaddy's
+   parked page injects its own apex `A` record (`76.223.105.230` / `13.248.243.5`) — that will fight your
+   record if forwarding stays on.
+3. Find the existing apex **A** record with Name `@` and **edit it** to value `40.67.153.174`
+   (or delete the parked one and Add a new `A` record, Name `@`, Value `40.67.153.174`).
+4. **Add** a `TXT` record: Name `_dnsauth`, Value `_0eikqrixy05gpyeji5phm1667xvioua` (record #1 above).
+5. Save. GoDaddy DNS usually propagates within minutes (can be up to an hour).
+
+> The SWA inbound IP `40.67.153.174` is Azure's documented **stable** inbound IP for this app — fine to
+> pin in an A record.
+>
+> Prefer fully IaC-managed DNS instead? You can delegate the domain to **Azure DNS** (create a zone,
+> point GoDaddy's nameservers at Azure once, then manage records as code). Same apex A record applies —
+> Azure DNS isn't an alias target for SWA either — so it's optional and only worth it if you want the
+> DNS records themselves under IaC. Say the word and I'll set that up.
 
 ## 3. (Optional) www subdomain
 
