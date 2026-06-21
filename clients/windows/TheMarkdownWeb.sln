@@ -10,6 +10,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TheMarkdownWeb.Agent", "Age
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TheMarkdownWeb.Rendering.Tests", "Rendering.Tests\TheMarkdownWeb.Rendering.Tests.csproj", "{ACC98C7B-F890-40BF-A76A-ACD5B67C3A0D}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TheMarkdownWeb.App.Tests", "App.Tests\TheMarkdownWeb.App.Tests.csproj", "{DA809483-1070-45A4-84C7-9A28F3C8CA30}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -32,6 +34,10 @@ Global
 		{ACC98C7B-F890-40BF-A76A-ACD5B67C3A0D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{ACC98C7B-F890-40BF-A76A-ACD5B67C3A0D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{ACC98C7B-F890-40BF-A76A-ACD5B67C3A0D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DA809483-1070-45A4-84C7-9A28F3C8CA30}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DA809483-1070-45A4-84C7-9A28F3C8CA30}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DA809483-1070-45A4-84C7-9A28F3C8CA30}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DA809483-1070-45A4-84C7-9A28F3C8CA30}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
