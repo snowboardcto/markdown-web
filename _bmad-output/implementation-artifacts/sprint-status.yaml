@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-21
-last_updated: 2026-06-21 (2-7 DONE — 8/8 ACs covered, api 45 pass/3 gated-skip, web 157 green, Option 2 same-URL deferred; epic-2 COMPLETE)
+last_updated: 2026-06-21 (3-1 story created — ready-for-dev; epic-3 -> in-progress; WPF app shell + toolbar, no-Chromium enforced by test)
 project: The Markdown Web
 project_key: NOKEY
 tracking_system: file-system
@@ -63,8 +63,8 @@ development_status:
   epic-2-retrospective: optional
 
   # Epic 3: Read Markdown in the Native Client (Windows)
-  epic-3: backlog
-  3-1-wpf-app-shell-with-toolbar: backlog
+  epic-3: in-progress
+  3-1-wpf-app-shell-with-toolbar: ready-for-dev
   3-2-md-only-address-bar-and-fetch: backlog
   3-3-markdig-ast-flowdocument-rendering: backlog
   3-4-code-syntax-highlighting: backlog
