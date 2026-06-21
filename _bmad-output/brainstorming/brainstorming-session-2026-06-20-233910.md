@@ -132,3 +132,16 @@ Central node: **THE MARKDOWN WEB** — URLs to `.md`; author publishes meaning, 
 2. **Identity & Discovery** — how people find each other's markdown spaces (feed hints at it; no mechanism yet).
 3. **The Protocol / Spec** — conventions for `.md` URLs, content negotiation, the "born compatible" standard.
 4. **Author incentive** — why would authors publish `.md` and surrender presentation control?
+
+## Phase 3/4 — Development & Roadmap (Cluster E + build sequence)
+
+**[#25 — The Serving Layer (Azure)]**
+_Concept_: Foundation stage. Host the `.md` files on Azure, but not as isolated documents — with **inter-file linking** (markdown links between `.md` files resolve and navigate) and **media content** (images/video embedded and served), so a reader can *browse around* a space the way you browse a website. Turns a folder of files into a navigable vault/site.
+_Novelty_: Establishes the "Drop-a-Folder, Get-a-World" capability (#6) as the literal first deliverable — the substrate everything else renders from.
+
+**[#26 — The Build Roadmap (3 stages)]**
+_Concept_: Agreed sequencing:
+  1. **Serve** — `.md` on Azure with linking + media (browsable foundation).
+  2. **HTML Renderer** — browser hits the URL → clean server-rendered HTML (the "born compatible" path).
+  3. **Native MD Client** — a client that renders markdown *without HTML* — the reader's agent drives native presentation directly (the purest expression of Zero Shared Pixels / Client Sovereignty).
+_Novelty_: Foundation → compatibility → magic. Each stage ships independent value and de-risks the next; HTML is built before the native client so adoption/reach exists before the differentiated experience.
