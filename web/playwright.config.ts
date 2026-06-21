@@ -9,6 +9,10 @@ import { defineConfig, devices } from '@playwright/test';
  * `webServer` runs `npm run build && npm run preview`; the build is part of the
  * server command so `npx playwright test` is a single, CI-friendly entrypoint.
  * Astro preview defaults to port 4321.
+ *
+ * `reuseExistingServer: false` — never reuse an already-running `astro preview`
+ * from a previous build; that could serve a stale `dist/` and assert against
+ * outdated output. Always (re)build + serve fresh, locally and in CI.
  */
 const PREVIEW_PORT = 4321;
 
@@ -18,7 +22,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: process.env.CI ? 'list' : [['list']],
+  reporter: 'list',
   use: {
     baseURL: `http://localhost:${PREVIEW_PORT}`,
     trace: 'on-first-retry',
@@ -32,7 +36,7 @@ export default defineConfig({
   webServer: {
     command: 'npm run build && npm run preview',
     url: `http://localhost:${PREVIEW_PORT}/`,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });

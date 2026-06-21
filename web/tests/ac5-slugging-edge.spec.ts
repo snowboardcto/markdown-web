@@ -24,6 +24,23 @@ test.describe('AC5: deterministic slugging + empty-file resilience', () => {
     await expect(page.locator('h1', { hasText: 'Nested Page' })).toHaveCount(1);
   });
 
+  test('`My Notes.md` <title> is the slug-derived "My Notes" (H1 wins, asserts the value)', async ({ page }) => {
+    await page.goto('/my-notes');
+    // H1 "My Notes" wins the title chain; assert the rendered <title> value
+    // end-to-end (covers the slug-derived title path, not just the <h1>).
+    expect((await page.title()).trim()).toBe('My Notes');
+  });
+
+  test('no-H1 / no-front-matter `no-h1.md` falls back to the slug-derived <title>', async ({ page }) => {
+    const response = await page.goto('/no-h1');
+    expect(response, 'route /no-h1 should exist').not.toBeNull();
+    expect(response!.status(), '/no-h1 should return 200').toBe(200);
+    // With no front-matter title and no `# H1`, the title chain must fall back
+    // to slugToTitle(entry.id): `no-h1` -> "No H1". Exercises the fallback that
+    // every other fixture (each has an H1) leaves untested.
+    expect((await page.title()).trim()).toBe('No H1');
+  });
+
   test('near-empty `empty.md` builds to a valid document shell at /empty', async ({ page }) => {
     const response = await page.goto('/empty');
     expect(response, 'route /empty should exist').not.toBeNull();

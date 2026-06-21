@@ -1,6 +1,6 @@
 # Story 2.1: Render a `.md` file to an HTML page
 
-Status: in-progress
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -69,13 +69,15 @@ so that anyone with a browser can read it.
 
 Consolidated code review (2026-06-21) — three adversarial layers: Blind Hunter (architecture/security, diff-only), Edge Case Hunter (path enumeration, project read access), Acceptance Auditor (AC-by-AC verification against the built HTML). **Verdict: PASS WITH ITEMS.** All 6 ACs CONFIRMED (build exits 0, 18/18 Playwright specs pass, content sourced from repo-root `../../content` with no `.md` copies in `web/`). 0 critical defects on the current code/content state. The action items below are hardening + cleanup, none blocking.
 
-Patch findings (unchecked — fixable without human input):
+Patch findings (RESOLVED 2026-06-21 — applied on branch `claude/npx-bmad-method-install-ne8bw9`):
 
-- [ ] [Review][Patch] Misleading `index.md -> /` comment [web/src/pages/[...slug].astro:6] — comment claims `index.md` maps to `/`, but the catch-all uses `params: { slug: entry.id }`, so a future `content/index.md` would emit `/index` (id `"index"`), not `/`. No live collision today (no `content/index.md` exists; `index.astro` still owns `/`), but the comment is factually wrong. Fix the comment, or special-case the `index` id, and confirm intended `/` behavior.
-- [ ] [Review][Patch] Slug-collision silent data loss — no duplicate-id guard [web/src/content.config.ts:12 + web/src/pages/[...slug].astro:9] — two files that normalize to the same glob id (e.g. `foo bar.md` + `foo-bar.md`, or `README.md` + `readme.md`) make Astro emit a non-fatal `Duplicate id` WARN and the build SUCCEEDS (exit 0) with one page silently dropped. Not triggerable by the current fixtures, but invisible if it ever happens. Add a build-time check that fails on duplicate `entry.id` after `getCollection('pages')`.
-- [ ] [Review][Patch] Playwright `webServer` can serve a stale `dist/` on reuse [web/playwright.config.ts] — `reuseExistingServer: !process.env.CI` reuses a running `astro preview` from a previous build, so a local run can assert against outdated output. Document "rebuild before test" or restructure so reuse can't serve stale `dist/`.
-- [ ] [Review][Patch] Dead `|| entry.id` fallback in title chain [web/src/pages/[...slug].astro:32] — `slugToTitle` returns non-empty for any non-empty id, so the trailing `|| entry.id` is effectively dead (only fires for an empty id). Edge Hunter verified the chain is safe, but drop the dead branch and/or add a no-H1/no-front-matter fixture to actually exercise the `slugToTitle` fallback (currently every fixture has an H1, so it is untested).
-- [ ] [Review][Patch] No-op `reporter` ternary [web/playwright.config.ts] — `process.env.CI ? 'list' : [['list']]` is the `list` reporter on both branches. Collapse to `reporter: 'list'`.
+- [x] [Review][Patch] Misleading `index.md -> /` comment [web/src/pages/[...slug].astro] — **FIXED.** Rewrote the header comment to state the actual behavior: the catch-all routes by `entry.id`, so a future `content/index.md` would emit `/index` (not `/`); none exists today and `index.astro` still owns `/`. `/` intent confirmed unaffected (no `content/index.md`).
+- [x] [Review][Patch] Slug-collision silent data loss — no duplicate-id guard [web/src/pages/[...slug].astro getStaticPaths] — **FIXED.** Added a build-time guard in `getStaticPaths` that enumerates the raw `content/**/*.md` files on disk and replicates Astro's glob() slug derivation (drop ext → `github-slugger` each segment → join `/` → strip `/index`). It `throw`s a clear error naming both colliding files, failing the build (exit 1). Note: the check must read the filesystem, not `getCollection('pages')`, because the glob loader silently drops one of two colliding entries before the collection returns. Verified manually: a temp `My-Notes.md` colliding with `My Notes.md` made the build exit 1 with `Duplicate page slug "my-notes" from content files "My Notes.md" and "My-Notes.md"`; temp file removed, normal build back to exit 0.
+- [x] [Review][Patch] Playwright `webServer` can serve a stale `dist/` on reuse [web/playwright.config.ts] — **FIXED.** Set `reuseExistingServer: false` so the harness never reuses a previously-running `astro preview` (which could serve outdated `dist/`); the `webServer` command always rebuilds + serves fresh. Documented in the config comment.
+- [x] [Review][Patch] Dead `|| entry.id` fallback in title chain [web/src/pages/[...slug].astro] — **FIXED.** Dropped the trailing `|| entry.id` (the chain ends at `slugToTitle(entry.id)`). ALSO added a no-H1/no-front-matter fixture `content/no-h1.md` and a Playwright test asserting its slug-derived `<title>` is `"No H1"`, exercising the previously-untested `slugToTitle` fallback. Added a second title test asserting `/my-notes` `<title> === "My Notes"` (also closes deferred #10's title-value assertion).
+- [x] [Review][Patch] No-op `reporter` ternary [web/playwright.config.ts] — **FIXED.** Collapsed `process.env.CI ? 'list' : [['list']]` to `reporter: 'list'`.
+
+Post-fix gates: `cd web && npm run build` → exit 0 (7 pages); `cd web && npx playwright test` → 20/20 passing (+2 new title tests, was 18); `cd web && npx astro check` → 0 errors / 0 warnings / 0 hints.
 
 Deferred findings (pre-existing / out-of-scope / non-blocking, tracked):
 
@@ -215,9 +217,12 @@ claude-opus-4-8[1m]
 
 - `web/astro.config.mjs` (UPDATE — GFM via `remark-gfm`)
 - `web/src/content.config.ts` (NEW — `glob()` collection over `../../content`)
-- `web/src/pages/[...slug].astro` (NEW — dynamic route, title derivation)
+- `web/src/pages/[...slug].astro` (NEW + REVIEW-PATCH — dynamic route, title derivation, dup-slug build guard, corrected comment, dead-branch removal)
 - `web/src/layouts/Page.astro` (NEW — minimal HTML5 document shell)
+- `web/playwright.config.ts` (REVIEW-PATCH — `reuseExistingServer: false`, collapsed `reporter: 'list'`)
+- `web/tests/ac5-slugging-edge.spec.ts` (REVIEW-PATCH — added 2 slug-derived `<title>` assertions)
 - `web/tests/ac6-gfm-extensions.spec.ts` (UPDATE — accept numeric char-refs)
+- `content/no-h1.md` (NEW — no-H1/no-front-matter fixture exercising the `slugToTitle` title fallback)
 - `web/package.json` (UPDATE — add `remark-gfm` dep; `@astrojs/check`, `typescript`, `@types/node` devDeps)
 - `web/package-lock.json` (UPDATE — reproducible lockfile for the above)
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` (UPDATE — 2-1 → review, epic-2 → in-progress)

@@ -1,12 +1,66 @@
 ---
 import { getCollection, render } from 'astro:content';
+import { fileURLToPath } from 'node:url';
+import { readdirSync } from 'node:fs';
+import { join, relative, sep, extname } from 'node:path';
+import { slug as githubSlug } from 'github-slugger';
 import Page from '../layouts/Page.astro';
 
 // Story 2.1 — emit one static HTML page per `content/**/*.md`, sourced from the
-// repo-root vault via the `pages` collection (AC1/AC4). `index.md` -> `/`,
-// `x.md` -> `/x`, `sub/page.md` -> `/sub/page`. Slugs are Astro's deterministic
-// glob() ids (lower-cased, spaces/separators normalised) — no custom slugifier.
+// repo-root vault via the `pages` collection (AC1/AC4). The catch-all routes by
+// `entry.id`, so `x.md` -> `/x` and `sub/page.md` -> `/sub/page`. (A future
+// `content/index.md` would route to `/index`, not `/`; none exists today and
+// `index.astro` still owns `/`.) Slugs are Astro's deterministic glob() ids
+// (lower-cased, spaces/separators normalised) — no custom slugifier.
 export async function getStaticPaths() {
+  // Repo-root vault, resolved the same way as the `pages` glob collection.
+  const contentDir = fileURLToPath(new URL('../../../content', import.meta.url));
+
+  // Recursively list every `.md` file under `dir` (absolute paths).
+  const listMarkdownFiles = (dir: string): string[] => {
+    const out: string[] = [];
+    for (const dirent of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, dirent.name);
+      if (dirent.isDirectory()) out.push(...listMarkdownFiles(full));
+      else if (dirent.isFile() && extname(dirent.name).toLowerCase() === '.md')
+        out.push(full);
+    }
+    return out;
+  };
+
+  // Replicate Astro's glob() id derivation (content/utils.js
+  // getContentEntryIdAndSlug): drop the extension, slugify each path segment
+  // with github-slugger, join with `/`, strip a trailing `/index`. We compute
+  // it from the raw files (not getCollection) because the glob loader SILENTLY
+  // drops one of two colliding files — by the time getCollection returns the
+  // duplicate is already gone, so the collision is only visible on disk.
+  const fileToSlug = (absPath: string): string => {
+    const relPath = relative(contentDir, absPath);
+    const withoutExt = relPath.replace(new RegExp(`${extname(relPath)}$`), '');
+    return withoutExt
+      .split(sep)
+      .map((segment) => githubSlug(segment))
+      .join('/')
+      .replace(/\/index$/, '');
+  };
+
+  // Fail-loud on slug collisions: two files normalising to the same slug
+  // (e.g. `My Notes.md` + `My-Notes.md`, or `README.md` + `readme.md`) otherwise
+  // make Astro emit a non-fatal WARN, exit 0, and silently drop one whole page.
+  const seen = new Map<string, string>();
+  for (const file of listMarkdownFiles(contentDir)) {
+    const slug = fileToSlug(file);
+    const prior = seen.get(slug);
+    if (prior !== undefined) {
+      throw new Error(
+        `Duplicate page slug "${slug}" from content files "${prior}" and ` +
+          `"${relative(contentDir, file)}". Two .md files normalise to the same ` +
+          `route; rename one so each page has a unique slug.`
+      );
+    }
+    seen.set(slug, relative(contentDir, file));
+  }
+
   const entries = await getCollection('pages');
   return entries.map((entry) => ({
     params: { slug: entry.id },
@@ -29,7 +83,7 @@ function slugToTitle(slug: string): string {
 const frontmatterTitle =
   typeof entry.data?.title === 'string' ? entry.data.title.trim() : '';
 const h1 = headings.find((h) => h.depth === 1)?.text?.trim() ?? '';
-const title = frontmatterTitle || h1 || slugToTitle(entry.id) || entry.id;
+const title = frontmatterTitle || h1 || slugToTitle(entry.id);
 ---
 
 <Page title={title}>
