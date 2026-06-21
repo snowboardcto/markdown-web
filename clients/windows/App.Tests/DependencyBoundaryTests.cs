@@ -67,12 +67,66 @@ public class DependencyBoundaryTests
             $"(App depends on the pure render bedrock). Checked: {appCsproj}");
     }
 
+    [Fact]
+    public void Agent_DoesNotReference_App()
+    {
+        // AC6 — Agent must not depend "up" on App. Assert the build-time ProjectReference in Agent's
+        // .csproj (the elision-proof, authoritative edge — same philosophy as App_References_Rendering):
+        // the C# compiler elides an unused metadata reference, so the csproj edge is the real contract.
+        string agentCsproj = LocateCsproj("TheMarkdownWeb.Agent.csproj");
+        string xml = File.ReadAllText(agentCsproj);
+
+        bool referencesApp = ProjectReferencePaths(xml)
+            .Any(p => p.IndexOf("TheMarkdownWeb.App.csproj", StringComparison.OrdinalIgnoreCase) >= 0);
+
+        Assert.False(
+            referencesApp,
+            $"{AgentAssemblyName} must NOT declare a <ProjectReference> to {AppAssemblyName}: the Agent " +
+            $"owns net+AI but must never depend 'up' on App. Checked: {agentCsproj}");
+    }
+
+    [Fact]
+    public void App_References_Agent()
+    {
+        // AC6 — App composes the engine, so it must declare a ProjectReference to Agent. Assert the
+        // build-time csproj edge (elision-proof; App may not yet *use* an Agent type at red-phase, so
+        // an assembly-closure check would give a false negative — the csproj edge is authoritative).
+        string appCsproj = LocateCsproj("TheMarkdownWeb.App.csproj");
+        string xml = File.ReadAllText(appCsproj);
+
+        bool referencesAgent = ProjectReferencePaths(xml)
+            .Any(p => p.IndexOf("TheMarkdownWeb.Agent.csproj", StringComparison.OrdinalIgnoreCase) >= 0
+                   || (p.IndexOf("Agent", StringComparison.OrdinalIgnoreCase) >= 0
+                       && p.IndexOf("Agent.Tests", StringComparison.OrdinalIgnoreCase) < 0));
+
+        Assert.True(
+            referencesAgent,
+            $"{AppAssemblyName} must declare a <ProjectReference> to {AgentAssemblyName} " +
+            $"(App composes the PersonalityEngine). Checked: {appCsproj}");
+    }
+
+    private static System.Collections.Generic.IEnumerable<string> ProjectReferencePaths(string csprojXml)
+    {
+        var projectRefRegex = new Regex(
+            "<ProjectReference\\s+[^>]*Include\\s*=\\s*\"(?<path>[^\"]+)\"",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+        return projectRefRegex.Matches(csprojXml).Select(m => m.Groups["path"].Value);
+    }
+
     /// <summary>
     /// Locates <c>App/TheMarkdownWeb.App.csproj</c> by walking up from the test bin/ to the
     /// <c>clients/windows/</c> root (sentinel <c>TheMarkdownWeb.sln</c>) then globbing for the App csproj.
     /// Robust to bin/ relocation; throws (fails the test) if not found.
     /// </summary>
-    private static string LocateAppCsproj()
+    private static string LocateAppCsproj() => LocateCsproj("TheMarkdownWeb.App.csproj");
+
+    /// <summary>
+    /// Locates a named <c>.csproj</c> by walking up from the test bin/ to the <c>clients/windows/</c> root
+    /// (sentinel <c>TheMarkdownWeb.sln</c>) then globbing for it. Robust to bin/ relocation; throws (fails
+    /// the test) if not found.
+    /// </summary>
+    private static string LocateCsproj(string csprojFileName)
     {
         const string sentinel = "TheMarkdownWeb.sln";
         DirectoryInfo? dir = new DirectoryInfo(AppContext.BaseDirectory);
@@ -87,11 +141,11 @@ public class DependencyBoundaryTests
                 $"Could not locate the '{sentinel}' sentinel walking up from '{AppContext.BaseDirectory}'.");
         }
 
-        string[] matches = Directory.GetFiles(dir.FullName, "TheMarkdownWeb.App.csproj", SearchOption.AllDirectories);
+        string[] matches = Directory.GetFiles(dir.FullName, csprojFileName, SearchOption.AllDirectories);
         if (matches.Length == 0)
         {
             throw new InvalidOperationException(
-                $"Could not find TheMarkdownWeb.App.csproj under '{dir.FullName}'.");
+                $"Could not find {csprojFileName} under '{dir.FullName}'.");
         }
 
         return matches[0];

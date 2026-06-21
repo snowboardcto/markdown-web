@@ -12,6 +12,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TheMarkdownWeb.Rendering.Te
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TheMarkdownWeb.App.Tests", "App.Tests\TheMarkdownWeb.App.Tests.csproj", "{DA809483-1070-45A4-84C7-9A28F3C8CA30}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TheMarkdownWeb.Agent.Tests", "Agent.Tests\TheMarkdownWeb.Agent.Tests.csproj", "{5F8B61AC-C433-4254-BB55-7C4AD4B7722C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -38,6 +40,10 @@ Global
 		{DA809483-1070-45A4-84C7-9A28F3C8CA30}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DA809483-1070-45A4-84C7-9A28F3C8CA30}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DA809483-1070-45A4-84C7-9A28F3C8CA30}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5F8B61AC-C433-4254-BB55-7C4AD4B7722C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5F8B61AC-C433-4254-BB55-7C4AD4B7722C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5F8B61AC-C433-4254-BB55-7C4AD4B7722C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5F8B61AC-C433-4254-BB55-7C4AD4B7722C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
