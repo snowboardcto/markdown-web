@@ -16,14 +16,16 @@ permissions:
   contents: read
 
 concurrency:
-  # One deploy at a time per ref; a newer push supersedes an in-flight run.
+  # One deploy at a time per ref. Do NOT cancel in-progress: aborting an SWA upload
+  # mid-flight is not a clean signal, so queue the next deploy instead of cancelling.
   group: deploy-web-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
     name: Build and deploy
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -47,10 +49,13 @@ jobs:
 
       # Upload the prebuilt static output. skip_app_build avoids re-running a build in the action.
       - name: Deploy to Azure Static Web Apps
-        uses: Azure/static-web-apps-deploy@v1
+        # SHA-pinned (v1) — this action receives the deployment token, so pin for supply-chain safety.
+        uses: Azure/static-web-apps-deploy@1a947af9992250f3bc2e68ad0754c0b0c11566c9 # v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
           action: upload
+          # Upload the prebuilt static output. With skip_app_build, app_location IS the output dir
+          # and output_location must be empty (documented prebuilt-app pattern).
           app_location: 'web/dist'
+          output_location: ''
           skip_app_build: true
-          skip_api_build: true
