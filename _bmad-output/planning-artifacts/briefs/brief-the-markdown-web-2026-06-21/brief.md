@@ -1,6 +1,6 @@
 ---
 title: "Product Brief: The Markdown Web"
-status: draft
+status: final
 created: 2026-06-21
 updated: 2026-06-21
 ---
@@ -13,9 +13,9 @@ updated: 2026-06-21
 
 **The Markdown Web** ([themarkdownweb.com](https://themarkdownweb.com)) is a new shape for the web: URLs point to `.md` files, and presentation is no longer baked in by the author. The author publishes pure markdown — structure and meaning. The reader's own AI agent, running locally, renders that markdown into whatever shape fits *them*. One source file, a personal experience for every reader. By design.
 
-Today's web couples content and presentation; HTML makes the author dictate exactly how a page looks. The Markdown Web decouples them and hands presentation to the *consumer's* agent — the same way agents already prefer markdown over HTML internally. The bet: if markdown is the lingua franca for machines, it can be the lingua franca for humans too — rendered by each human's agent.
+Today's web couples content and presentation; HTML lets the author dictate exactly how a page looks. The Markdown Web decouples them and hands presentation to the *consumer's* agent — the same way agents already prefer markdown over HTML internally. The bet: if markdown is the lingua franca for machines, it can be the lingua franca for humans too — rendered by each human's agent.
 
-The product needs it all — the HTML client (server-rendered HTML for browsers), content negotiation, and the native agent-rendering client, plus sharing. v0.1 ships the first slice live at themarkdownweb.com: markdown rendered beautifully, casting the vision and dogfooded on the author's own files — with everything else sequenced behind it, none of it cut.
+The product needs it all — the HTML client, content negotiation, the native agent-rendering client, and sharing. v0.1 ships the first slice live at themarkdownweb.com: markdown rendered beautifully, casting the vision and dogfooded on the author's own files. Everything else is sequenced behind it, not cut.
 
 ## The Problem
 
@@ -25,7 +25,7 @@ More deeply: the web's author-controls-presentation model can't adapt to the ind
 
 ## The Solution
 
-A web where a `.md` URL is the canonical unit, and rendering is delegated to two clients:
+A web where a `.md` URL is the canonical unit, and rendering is delegated to two clients tied together by content negotiation:
 
 - **The HTML client** — server-renders markdown to clean HTML for browsers. Works everywhere, crawlable, SEO-friendly, no agent required (born compatible with today's web).
 - **The native client** — hands the raw markdown to the reader's *local* agent, which renders presentation per person, without HTML. This is the heart of the product: "Zero Shared Pixels for humans."
@@ -35,7 +35,7 @@ The grounded entry point is a **personal markdown vault**: store, browse, and sh
 
 ## What Makes This Different
 
-The market splits into four layers, and everyone picks one side:
+The market splits, and everyone picks one side:
 
 - **Markdown publishers / digital gardens** (Obsidian Publish, Quartz, Hosted.md) make markdown addressable — but render *one fixed author-controlled look*. No per-reader agent.
 - **Agentic-web standards** (llms.txt, Cloudflare "Markdown for Agents," content negotiation) serve markdown to *machines* to save tokens — the human still gets author-rendered HTML.
@@ -61,7 +61,7 @@ The market splits into four layers, and everyone picks one side:
 
 ## Scope
 
-Nothing is descoped — the product needs all of it. Scope here is about **sequence**, not exclusion.
+Nothing here is descoped. Scope is about **sequence**, not exclusion.
 
 **Build first (v0.1):**
 - Serve `.md` + media on Azure; inter-file linking so you can browse around.
