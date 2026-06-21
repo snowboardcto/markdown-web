@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using TheMarkdownWeb.Agent;
 using TheMarkdownWeb.Rendering;
 
 namespace TheMarkdownWeb.App;
@@ -24,6 +25,11 @@ public partial class MainWindow : Window
     private readonly MarkdownFetcher _fetcher = new(SharedHttpClient);
     private readonly IUrlLauncher _launcher = new SystemBrowserLauncher();
 
+    // The reader's local agent (BYO-key). 4.1 selects the constant Basic persona (pass-through); the 4.2
+    // chip will replace the () => Persona.Basic selector. Composed once for the window's lifetime.
+    private readonly ISecretStore _secretStore = new DpapiSecretStore();
+    private readonly PersonalizationGateway _gateway;
+
     private readonly ShellViewModel _viewModel;
     private readonly AddressBarViewModel _addressBar;
     private readonly NavigationController _controller;
@@ -32,6 +38,11 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
+        // Compose the agent: AnthropicLlmClient (reader's key, TLS) -> PersonalityEngine -> gateway.
+        var llmClient = new AnthropicLlmClient(SharedHttpClient, _secretStore);
+        var engine = new PersonalityEngine(llmClient, _secretStore);
+        _gateway = new PersonalizationGateway(engine, () => Persona.Basic);
 
         _addressBar = new AddressBarViewModel(_fetcher, _launcher);
 
@@ -55,11 +66,30 @@ public partial class MainWindow : Window
         AddressBar.DataContext = _addressBar;
     }
 
-    /// <summary>Fetches a page URL via the negotiate-endpoint mapping (AC9). Never throws.</summary>
-    private Task<FetchResult> FetchEndpointAsync(Uri pageUrl, CancellationToken ct)
+    /// <summary>
+    /// Fetches a page URL via the negotiate-endpoint mapping (AC9), then runs the fetched markdown through
+    /// the personalization gateway (Story 4.1 AC2) so the agent's output rides on the returned
+    /// <see cref="FetchResult.Markdown"/> into the controller's existing guarded render sink. This keeps
+    /// <see cref="NavigationController"/>'s last-wins re-entrancy intact: the gateway call is awaited inside
+    /// the same navigation generation and the controller re-checks its generation token after the awaited
+    /// fetch (NavigationController.cs line 153), so a superseded navigation's resolved markdown is dropped.
+    /// Never throws — the gateway is total, and a fetch failure flows through unchanged.
+    /// </summary>
+    private async Task<FetchResult> FetchEndpointAsync(Uri pageUrl, CancellationToken ct)
     {
         Uri endpoint = PageEndpointResolver.ToFetchEndpoint(pageUrl);
-        return _fetcher.FetchAsync(endpoint.ToString(), ct);
+        FetchResult fetched = await _fetcher.FetchAsync(endpoint.ToString(), ct).ConfigureAwait(true);
+
+        if (!fetched.IsSuccess)
+        {
+            return fetched;
+        }
+
+        string resolved = await _gateway
+            .ResolveMarkdownAsync(fetched.Markdown ?? string.Empty, pageUrl, ct)
+            .ConfigureAwait(true);
+
+        return FetchResult.Success(resolved);
     }
 
     /// <summary>Dispatches a classified hosted-link click; an Anchor scrolls in place, others go to the controller.</summary>

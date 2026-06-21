@@ -79,12 +79,17 @@ public class AnthropicLlmClientTests
         // content-type is json.
         Assert.Equal("application/json", handler.LastRequest.Content!.Headers.ContentType!.MediaType);
 
-        // the body carries the page markdown + the system prompt + the model/max_tokens scaffolding.
+        // The body is VALID JSON carrying the page markdown + system prompt + model/max_tokens. Assert the
+        // SEMANTIC contract by parsing it (a raw substring check would force invalid JSON — newlines inside
+        // a JSON string must be escaped, so the real provider would reject a raw-newline body).
         Assert.NotNull(handler.LastRequestBody);
-        Assert.Contains(PageMarkdown, handler.LastRequestBody!);
-        Assert.Contains(SystemPrompt, handler.LastRequestBody!);
-        Assert.Contains("max_tokens", handler.LastRequestBody!);
-        Assert.Contains("model", handler.LastRequestBody!);
+        using var doc = System.Text.Json.JsonDocument.Parse(handler.LastRequestBody!);
+        System.Text.Json.JsonElement root = doc.RootElement;
+        Assert.Equal(SystemPrompt, root.GetProperty("system").GetString());
+        Assert.Equal(PageMarkdown, root.GetProperty("messages")[0].GetProperty("content").GetString());
+        Assert.Equal("user", root.GetProperty("messages")[0].GetProperty("role").GetString());
+        Assert.True(root.TryGetProperty("model", out _), "body must carry a 'model'.");
+        Assert.True(root.TryGetProperty("max_tokens", out _), "body must carry 'max_tokens'.");
     }
 
     [Fact] // AC5 — the request host is the configured provider, NEVER a Markdown-Web host.

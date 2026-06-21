@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Rendering\TheMarkdownWeb.Rendering.csproj" />
+    <ProjectReference Include="..\Agent\TheMarkdownWeb.Agent.csproj" />
   </ItemGroup>
 
 </Project>
