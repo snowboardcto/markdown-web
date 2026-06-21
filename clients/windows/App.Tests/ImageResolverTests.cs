@@ -46,7 +46,8 @@ public class ImageResolverTests
         Uri? resolved = ImageResolver.Resolve(dataUri, Base);
 
         Assert.NotNull(resolved);
-        Assert.Equal(Uri.UriSchemeData, resolved!.Scheme);
+        // .NET has no Uri.UriSchemeData constant; the data: scheme is the literal "data".
+        Assert.Equal("data", resolved!.Scheme);
     }
 
     [Fact] // Protocol-relative //cdn/p.png adopts the base scheme.
