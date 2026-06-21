@@ -1,5 +1,5 @@
 ---
-stepsCompleted: [1, 2]
+stepsCompleted: [1, 2, 3]
 inputDocuments:
   - _bmad-output/planning-artifacts/prds/prd-the-markdown-web-2026-06-21/prd.md
   - _bmad-output/planning-artifacts/architecture.md
@@ -114,3 +114,340 @@ The reader picks an AI personality; their local agent re-renders the page their 
 ### Epic 5 (post-MVP): Sharing & Feed
 Share a Living Link that renders for whoever opens it; follow a vault's Feed. Deferred per PRD MVP scope.
 **FRs covered:** FR-15, FR-16.
+
+---
+
+## Epic 1: Walking Skeleton — IaC + CI/CD live on Azure
+
+Prove the entire deployment spine end-to-end with trivial content before any feature is built on it.
+
+### Story 1.1: Scaffold the monorepo
+
+As a developer,
+I want the monorepo scaffolded with a home for every component,
+So that all later work has a consistent, documented place to live.
+
+**Acceptance Criteria:**
+
+**Given** a fresh clone of the repository
+**When** I inspect the tree
+**Then** `content/`, `web/`, `api/`, `clients/windows/`, `infra/`, and `.github/workflows/` exist with placeholder READMEs
+**And** `web/` contains a minimal Astro project that builds successfully (`astro build` produces output)
+**And** the root README documents the layout and the component boundaries from the architecture.
+
+### Story 1.2: Provision Azure hosting via IaC (Bicep)
+
+As a developer,
+I want the Azure hosting defined as code,
+So that the environment is reproducible and not hand-clicked.
+
+**Acceptance Criteria:**
+
+**Given** the Bicep templates in `infra/`
+**When** I deploy them to a resource group
+**Then** an Azure Static Web App (hosting) is created and its default hostname is emitted as an output
+**And** re-running the deployment is idempotent (no drift, no duplicate resources)
+**And** the templates are parameterized (no hard-coded secrets or subscription IDs).
+
+### Story 1.3: Deploy a placeholder page via GitHub Actions on push (FR-17)
+
+As a developer,
+I want pushes to deploy automatically,
+So that "publish on push" is proven before real content exists.
+
+**Acceptance Criteria:**
+
+**Given** the `deploy-web.yml` GitHub Actions workflow and the provisioned hosting
+**When** I push a commit that changes the placeholder page
+**Then** the workflow builds and deploys it without manual steps
+**And** the updated page is reachable at the Static Web App default hostname over HTTPS
+**And** a failed build does not deploy (the live site is unchanged).
+
+### Story 1.4: Bind custom domain themarkdownweb.com over HTTPS (FR-18)
+
+As a reader,
+I want the site at themarkdownweb.com over HTTPS,
+So that the product lives at its real, trusted address.
+
+**Acceptance Criteria:**
+
+**Given** the provisioned hosting and DNS for themarkdownweb.com (configured via IaC where supported)
+**When** I visit `https://themarkdownweb.com`
+**Then** the placeholder page loads over HTTPS with a valid certificate
+**And** a plain `http://` request redirects to `https://`.
+
+---
+
+## Epic 2: Publish & Read on the Web
+
+Build the real, beautiful web experience on the proven skeleton.
+
+### Story 2.1: Render a `.md` file to an HTML page (FR-1, FR-5, FR-7)
+
+As an author,
+I want each `.md` file rendered as an HTML page,
+So that anyone with a browser can read it.
+
+**Acceptance Criteria:**
+
+**Given** a file `content/x.md` with GFM content
+**When** the site builds and deploys
+**Then** `/x` is a valid HTML page rendering headings, bold/italic, lists, code, and tables correctly
+**And** the page is readable with JavaScript disabled
+**And** the HTML is well-formed for crawlers (valid markup, no client-render dependency for content).
+
+### Story 2.2: Apply the GitHub-style default theme (FR-6, UX-DR1, UX-DR9)
+
+As a reader,
+I want the page to look genuinely good,
+So that reading on the web feels like a real publication, not raw text.
+
+**Acceptance Criteria:**
+
+**Given** a rendered page
+**When** it displays
+**Then** it applies the DESIGN.md tokens (typography, color, 760px measure, code syntax palette via Shiki)
+**And** code blocks are syntax-highlighted
+**And** text contrast meets WCAG AA against the surface color.
+
+### Story 2.3: Inter-file linking and navigation (FR-2, FR-8)
+
+As a reader,
+I want links between pages to work and navigation to feel natural,
+So that I can browse around a vault.
+
+**Acceptance Criteria:**
+
+**Given** a page containing `[guide](gear-guide.md)`
+**When** I click it
+**Then** I navigate to `/gear-guide`
+**And** browser back/forward returns to the prior page
+**And** a link to a missing file shows a clear broken-link / not-found state, never a crash.
+
+### Story 2.4: Media embedding (FR-3)
+
+As an author,
+I want images and video to render inline,
+So that my pages are rich, not text-only.
+
+**Acceptance Criteria:**
+
+**Given** `![](media/powder.jpg)` in a page with the asset in the vault
+**When** the page renders
+**Then** the image appears inline and the asset is served from the vault path.
+
+### Story 2.5: Browsable vault index (FR-4)
+
+As a reader,
+I want an entry surface that lists the vault's pages,
+So that I can find my way without typing URLs.
+
+**Acceptance Criteria:**
+
+**Given** a vault of several `.md` pages
+**When** I visit the index
+**Then** it lists or links the vault's pages
+**And** I can reach any page by navigation alone.
+
+### Story 2.6: Site header and pitch card (UX-DR2, UX-DR3, UX-DR10)
+
+As a first-time visitor,
+I want the page to convey the vision and how to get the client,
+So that the web recruits me to the native experience.
+
+**Acceptance Criteria:**
+
+**Given** any rendered web page
+**When** it displays
+**Then** a sticky site-header shows the `.md the markdown web` wordmark, a "the vision" link, and a "Get the client" CTA
+**And** an end-of-page pitch-card shows the vision headline + body + "Get the Markdown Web client" + "Why a markdown web?" link
+**And** the microcopy matches EXPERIENCE.md Voice and Tone.
+
+### Story 2.7: Content negotiation — one URL, two representations (FR-14)
+
+As an agent or native client,
+I want the same URL to serve raw markdown on request,
+So that clients can fetch the source while browsers get HTML.
+
+**Acceptance Criteria:**
+
+**Given** a `.md` page URL served by the Azure Function
+**When** a request sends `Accept: text/markdown`
+**Then** the response is the raw `.md` with `Content-Type: text/markdown` and `Vary: Accept`
+**And** a request with `Accept: text/html` (a browser) receives the HTML page
+**And** caches never serve a markdown response to a browser.
+
+---
+
+## Epic 3: Read Markdown in the Native Client (Windows)
+
+The rendering bedrock: a native Windows "Markdown Web browser" that renders GFM beautifully, no Chromium.
+
+### Story 3.1: WPF app shell with toolbar (FR-13, NFR-1, UX-DR4)
+
+As a reader,
+I want a native Windows app window with a browser-like toolbar,
+So that I have a place to read Markdown Web pages.
+
+**Acceptance Criteria:**
+
+**Given** the built .NET 10 WPF client
+**When** I launch it
+**Then** a native WPF window opens with a titlebar ("The Markdown Web") and a toolbar (back/forward/reload)
+**And** the application has no Chromium / WebView2 / embedded-browser dependency (verified in project references).
+
+### Story 3.2: `.md`-only address bar and fetch (FR-9, FR-14 consume, UX-DR5, UX-DR7)
+
+As a reader,
+I want to type a `.md` URL and have it loaded,
+So that I can open any Markdown Web page in the client.
+
+**Acceptance Criteria:**
+
+**Given** the client toolbar
+**When** I enter a `.md` URL
+**Then** the address bar shows a lock, host/path, and a `.md only` tag, and the client fetches the raw markdown via `Accept: text/markdown`
+**And** entering a non-`.md` URL is declined with an option to open it in the system browser instead.
+
+### Story 3.3: Markdig AST → FlowDocument rendering (FR-6, GFM bedrock)
+
+As a reader,
+I want markdown rendered faithfully to native UI,
+So that pages look like a clean, GitHub-style document.
+
+**Acceptance Criteria:**
+
+**Given** the pure `Rendering` library and a `.md` string
+**When** it renders
+**Then** it parses GFM with Markdig and produces a WPF FlowDocument mapping headings, bold/italic/strikethrough, paragraphs, inline + fenced code, lists, task lists, blockquotes, GFM tables, and images per DESIGN.md
+**And** the `Rendering` library has no networking or AI dependencies and is covered by unit tests.
+
+### Story 3.4: Code syntax highlighting (FR-6)
+
+As a reader,
+I want fenced code blocks highlighted,
+So that code is readable and the render feels like GitHub.
+
+**Acceptance Criteria:**
+
+**Given** a fenced code block with a language tag
+**When** it renders in the FlowDocument
+**Then** tokens are syntax-highlighted via ColorCode
+**And** an unknown or missing language degrades to plain monospace, not an error.
+
+### Story 3.5: In-client links, media, navigation (FR-2, FR-3, FR-8, UX-DR8)
+
+As a reader,
+I want links and media to behave correctly inside the client,
+So that I can browse around natively.
+
+**Acceptance Criteria:**
+
+**Given** a rendered page in the client
+**When** I click a relative `.md` link
+**Then** the client fetches and renders that page in place; an `#anchor` scrolls within the page; an external `http(s)` link opens in the system browser
+**And** images resolve from the vault and render inline
+**And** a broken link shows a clear state, never a crash.
+
+### Story 3.6: Basic faithful default render (no-personality) (FR-6, UX-DR7, UX-DR9)
+
+As a reader without a personality selected,
+I want a faithful basic render by default,
+So that the client is useful before any AI personalization exists.
+
+**Acceptance Criteria:**
+
+**Given** a first run or no personality selected
+**When** I open a page
+**Then** it renders with the faithful basic theme (the bedrock render)
+**And** the shell's controls are labeled and keyboard-reachable via WPF UI Automation.
+
+---
+
+## Epic 4: Personalized Rendering (AI Personalities)
+
+The differentiator — the reader's own local agent re-renders pages per person. Builds on Epic 3.
+
+> **[NOTE FOR PM] Epic 4 depends on the open architecture decision: agent-integration model (bundled model / BYO-API-key / local model). Resolve before starting Story 4.1.**
+
+### Story 4.1: Local agent integration (FR-12, NFR-5)
+
+As a reader,
+I want my own local agent wired into the client,
+So that personalization runs on my behalf, locally.
+
+**Acceptance Criteria:**
+
+**Given** the resolved agent-integration model and the `Agent` module
+**When** the client renders a page
+**Then** it can invoke the reader's local agent with the page markdown/AST plus reader context
+**And** no human-facing content is rewritten server-side (rendering is local).
+
+### Story 4.2: Personality selector (UX-DR6)
+
+As a reader,
+I want to choose which AI personality renders pages,
+So that I control how content meets me.
+
+**Acceptance Criteria:**
+
+**Given** the toolbar personality-selector
+**When** I choose a personality
+**Then** the current page re-renders in place using that personality without re-fetching the source.
+
+### Story 4.3: Per-reader structural rendering (FR-10)
+
+As a reader,
+I want a personality to reshape the page for me,
+So that I get my own version of the same source.
+
+**Acceptance Criteria:**
+
+**Given** two different personalities and the same `.md`
+**When** each renders it
+**Then** the results differ structurally (ordering, reading level, emphasis, or language), not merely cosmetically
+**And** changing a preference visibly changes the render.
+
+### Story 4.4: Accessibility and translation outcomes (FR-11)
+
+As a reader with accessibility or language needs,
+I want personalities to produce accessible/translated renders,
+So that the same source meets me without author effort.
+
+**Acceptance Criteria:**
+
+**Given** a translation personality
+**When** it renders a page
+**Then** the page appears in the target language with headings, links, and structure preserved
+**And** an audio personality produces a spoken rendering covering the full body in reading order.
+
+---
+
+## Epic 5 (post-MVP): Sharing & Feed
+
+Deferred per PRD MVP scope; specified for completeness.
+
+### Story 5.1: Living Link (FR-15)
+
+As a reader,
+I want to share a `.md` URL that renders for whoever opens it,
+So that sharing carries the per-reader magic.
+
+**Acceptance Criteria:**
+
+**Given** a shared `.md` URL
+**When** it is opened in a browser
+**Then** it renders as HTML
+**And** when opened in the native client, it renders per the recipient's personality.
+
+### Story 5.2: Follow / Feed (FR-16)
+
+As a reader,
+I want to follow a vault and receive its new pages,
+So that I can keep up with authors I value.
+
+**Acceptance Criteria:**
+
+**Given** I follow a vault
+**When** the author adds a new `.md` page
+**Then** that page surfaces to me as part of the vault's feed.
