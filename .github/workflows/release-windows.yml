@@ -85,6 +85,21 @@ jobs:
           "numeric=$num" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           Write-Host "Release version: $v (numeric $num)"
 
+      # TEMP diagnostic: print exactly what the workflow sees for the signing config. None of these
+      # are secrets (they are repo Variables). Remove once signing is confirmed working.
+      - name: Diagnose signing config
+        shell: pwsh
+        run: |
+          $se = '${{ vars.SIGNING_ENABLED }}'
+          Write-Host "SIGNING_ENABLED literal = '$se'  (empty = $([string]::IsNullOrEmpty($se)))"
+          Write-Host "AZURE_CLIENT_ID set      = $(-not [string]::IsNullOrEmpty('${{ vars.AZURE_CLIENT_ID }}'))"
+          Write-Host "AZURE_TENANT_ID set      = $(-not [string]::IsNullOrEmpty('${{ vars.AZURE_TENANT_ID }}'))"
+          Write-Host "AZURE_SUBSCRIPTION_ID set= $(-not [string]::IsNullOrEmpty('${{ vars.AZURE_SUBSCRIPTION_ID }}'))"
+          Write-Host "TRUSTED_SIGNING_ENDPOINT = '${{ vars.TRUSTED_SIGNING_ENDPOINT }}'"
+          Write-Host "TRUSTED_SIGNING_ACCOUNT  = '${{ vars.TRUSTED_SIGNING_ACCOUNT }}'"
+          Write-Host "TRUSTED_SIGNING_PROFILE  = '${{ vars.TRUSTED_SIGNING_PROFILE }}'"
+          Write-Host "Gate would enable signing = $('${{ vars.SIGNING_ENABLED }}' -ne '' -and '${{ vars.SIGNING_ENABLED }}' -ne 'false' -and '${{ vars.SIGNING_ENABLED }}' -ne '0')"
+
       # Self-contained so the end user needs no .NET runtime. WPF cannot be trimmed, so this is a
       # full runtime copy (~150MB on disk); the installer compresses it (lzma2/max).
       - name: Publish (self-contained win-x64)
