@@ -113,8 +113,8 @@ HTML pages are SEO-friendly and produce rich link previews when shared into chat
 #### FR-8: Navigation
 Reader can browse and navigate the Vault via rendered links. Realizes UJ-1, UJ-2.
 
-### 4.3 The Native Client & Per-Reader Rendering *(committed; post-v0.1)*
-**Description:** The heart of the product. A Reader opens a `.md` page in the native client; their local agent renders the presentation for them — reflowing, re-leveling, translating, re-emphasizing — without HTML. Trust comes from locality: it's the Reader's *own* agent. Realizes UJ-3. `[ASSUMPTION: native client and per-reader rendering are post-v0.1 per the brief's roadmap, though committed — confirm the MVP boundary.]`
+### 4.3 The Native Client & Per-Reader Rendering *(MVP)*
+**Description:** The heart of the product. A Reader opens a `.md` page in the native client; their local agent renders the presentation for them — reflowing, re-leveling, translating, re-emphasizing — without HTML. Trust comes from locality: it's the Reader's *own* agent. Realizes UJ-3.
 
 **Functional Requirements:**
 
@@ -137,9 +137,13 @@ Rendering in the native client is performed by the Reader's own local agent; no 
 - The raw `.md` the agent received is inspectable/available to the Reader.
 
 #### FR-13: Works everywhere
-The native client is available across the Reader's platforms. `[ASSUMPTION: cross-platform form factor (app/extension/CLI/web) is an open decision — see §8; requirement is ubiquity, not a specific shell.]`
+The native client is available across the Reader's platforms. `[ASSUMPTION: cross-platform form factor (app/CLI/native-UI) is an open decision — see §8; requirement is ubiquity, not a specific shell.]`
 
-### 4.4 Content Negotiation *(committed; post-v0.1)*
+**Feature-specific NFRs:**
+- **No Chromium dependency** — the native client must not depend on Chromium (rules out Electron, Chromium-based webviews, and Chrome extensions). It renders markdown to native UI, not via a bundled browser engine. *(Hard constraint, naethyn.)*
+- **Local execution** — per-reader rendering runs via the Reader's own local agent (FR-12); no server-side rewriting of human-facing content.
+
+### 4.4 Content Negotiation *(MVP)*
 **Description:** One URL, audience-appropriate representation. Browsers get HTML (FR-5); agents and the native client get raw markdown — from the same address. Realizes UJ-3.
 
 **Functional Requirements:**
@@ -182,16 +186,20 @@ The Vault is served at a custom domain (themarkdownweb.com) over HTTPS.
 
 ## 6. MVP Scope
 
-### 6.1 In Scope (v0.1)
+MVP includes **both clients** (naethyn: "we need both"). To keep the build sane, sequence *within* the MVP: HTML-client path first (gets themarkdownweb.com live), native client second — but v1 is not done until both work.
+
+`[NOTE FOR PM: this is a large MVP — a non-Chromium native client running a local agent is a substantial build on top of the static path. The HTML-client slice (FR-1–8, 17–18) is independently shippable and casts the vision; treat it as the internal first milestone even though it is not the MVP boundary.]`
+
+### 6.1 In Scope (MVP)
 - Markdown Content & Vault: FR-1, FR-2, FR-3, FR-4.
 - HTML Client: FR-5, FR-6, FR-7, FR-8.
+- Native Client & Per-Reader Rendering: FR-9, FR-10, FR-11, FR-12, FR-13 (non-Chromium).
+- Content Negotiation: FR-14.
 - Publishing & Hosting: FR-17, FR-18 (live at themarkdownweb.com).
 - Seed content: the manifesto and planning docs, dogfooded.
 
 ### 6.2 Out of Scope for MVP *(committed, sequenced — not cut)*
-- Native Client & Per-Reader Rendering: FR-9–FR-13 — *the core differentiator; v0.5.* `[NOTE FOR PM: emotionally load-bearing — naethyn said "we need it all." Sequenced, not abandoned; revisit if v0.1 lands fast.]`
-- Content Negotiation: FR-14 — *v0.5, pairs with the native client.*
-- Sharing / Feed: FR-15, FR-16 — *later.*
+- Sharing / Feed: FR-15, FR-16 — *after both clients are solid.*
 - Accounts / multi-user, monetization.
 
 ## 7. Success Metrics
@@ -199,9 +207,9 @@ The Vault is served at a custom domain (themarkdownweb.com) over HTTPS.
 **Primary**
 - **SM-1**: Author adoption (dogfood) — naethyn hosts his markdown at themarkdownweb.com and reads it at least weekly without abandoning it after a month. Validates FR-1–FR-4, FR-8, FR-17, FR-18.
 - **SM-2**: "Gets it" on sight — a first-time visitor to themarkdownweb.com perceives a beautiful publication and can articulate the vision unprompted. Validates FR-5, FR-6, FR-7.
+- **SM-3**: Per-reader rendering proven — the native client (non-Chromium) renders the same `.md` materially differently for two readers, end to end (not mocked). Validates FR-9–FR-14.
 
 **Secondary**
-- **SM-3**: Per-reader rendering proven — the native client renders the same `.md` materially differently for two readers, end to end (not mocked). Validates FR-9–FR-12.
 - **SM-4**: Beyond customer-zero — at least one other agent-and-markdown user publishes a Vault. Validates FR-1–FR-4, FR-17.
 
 **Counter-metrics (do not optimize)**
@@ -209,15 +217,14 @@ The Vault is served at a custom domain (themarkdownweb.com) over HTTPS.
 - **SM-C2**: Don't sacrifice born-compatibility — the no-agent HTML experience (FR-5) must stay first-class while chasing personalization. Counterbalances SM-3.
 
 ## 8. Open Questions
-1. **MVP boundary** — confirm native client + content negotiation are post-v0.1 (PRD assumes yes).
-2. **Native client form factor** — extension vs app vs OS-agent vs CLI vs web (must run a local agent and work everywhere).
-3. **Markdown flavor & frontmatter** — which markdown spec (CommonMark/GFM), and how is YAML frontmatter treated (metadata vs rendered)? `[ASSUMPTION: GFM + frontmatter-as-metadata — confirm.]`
+1. **Native client form factor** — given the **no-Chromium** constraint (FR-13 NFR), what shell? Native desktop UI (Swift/Kotlin/Rust-native), CLI/TUI, or a non-Chromium GUI toolkit. Must run a local agent and work everywhere. *(Architecture decision.)*
+2. **Markdown flavor & frontmatter** — which markdown spec (CommonMark/GFM), and how is YAML frontmatter treated (metadata vs rendered)? `[ASSUMPTION: GFM + frontmatter-as-metadata — confirm.]`
+3. **Local agent integration** — which agent(s) does the native client drive, and how (bundled, BYO-API-key, local model)? Affects "works everywhere." *(Architecture.)*
 4. **Business model** — parked; revisit before scaling.
 5. **Identity & discovery** — how readers find each other's Vaults (pairs with Sharing).
 6. **Author incentive** — why authors publish `.md` and surrender presentation control.
 
 ## 9. Assumptions Index
-- §4.3 — Native client & per-reader rendering are post-v0.1 (committed), not MVP. *(Confirm MVP boundary.)*
-- §4.3 FR-13 — Native client form factor is undecided; requirement is cross-platform ubiquity, not a specific shell.
-- §6.2 — MVP cut = v0.1 (HTML client path) per brief roadmap, despite "we need it all."
-- §8.3 — Markdown flavor = GFM; YAML frontmatter treated as metadata.
+- §4.3 FR-13 — Native client form factor is undecided; requirement is cross-platform ubiquity with **no Chromium dependency** (hard constraint, confirmed).
+- §8.2 — Markdown flavor = GFM; YAML frontmatter treated as metadata. *(Default — confirm.)*
+- §6 — MVP includes **both clients** + content negotiation (confirmed: "we need both"); Sharing deferred. Internal sequence: HTML client first, native client second.
