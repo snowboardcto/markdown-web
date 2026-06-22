@@ -81,7 +81,7 @@ development_status:
   epic-4-retrospective: optional
 
   # Epic 5 (post-MVP): Sharing & Feed
-  epic-5: in-progress
+  epic-5: done # both stories done; web fully green (268/268); 5-1 native (WPF) awaits windows-latest CI on push
   5-1-living-link: done # 8/8 ACs covered; web 192/192 green (157 prior + 35 new); review PASS-WITH-ITEMS resolved (2 HIGH+4 MED+2 LOW fixed, 1 deferred); native 23 xUnit tests CI-only (windows-latest pending push); AC trace report written
-  5-2-follow-feed: review # 7/7 ACs covered; 264/264 web tests green (192 prior + 26 builder unit + 46 E2E); astro check 0 errors; build green with dist/feed.xml (valid RSS 2.0, 13 items); static-only, no dep, no backend; Date policy: frontmatter date → build-date fallback, RFC-822 UTC, code-unit id tie-break; GUID = canonical URL (build-stable)
+  5-2-follow-feed: done # 7/7 ACs covered; web 268/268 green (76 story tests: 30 builder + 46 E2E); static RSS 2.0 /feed.xml from vault + autodiscovery <link> + Subscribe chrome link; review PASS-WITH-ITEMS resolved (4 MED+5 LOW; fixture rewritten to legitimate page; byte-equal canonical via new URL; guid=canonical build-stable); AC5 guardrail clean (no backend/store/Function/new dep); AC trace report written
   epic-5-retrospective: optional
