@@ -126,14 +126,16 @@
 
                 <!-- Grid.Column 3 (Width="Auto") — the Story 4.4 target-language picker. Labeled +
                      keyboard-reachable (UX-DR9): AutomationProperties.Name="Target language", Focusable,
-                     editable (a free-text fallback alongside common languages). Tab order:
-                     LanguagePicker(5) after PersonalitySelector(4), before ContentScroll(6). Shown only
-                     when the Translate persona is selected (code-behind toggles Visibility). -->
+                     a tab stop. A NON-editable ComboBox of common languages (an editable ComboBox makes the
+                     OUTER control a non-tab-stop — focus goes to its inner textbox — which would fail the
+                     keyboard-reachability assertion; the non-editable picker is a clean tab stop like the
+                     PersonalitySelector). Tab order: LanguagePicker(5) after PersonalitySelector(4), before
+                     ContentScroll(6). Shown only when the Translate persona is selected (code-behind toggles
+                     Visibility). -->
                 <ComboBox x:Name="LanguagePicker"
                           Grid.Column="3"
                           TabIndex="5"
                           Focusable="True"
-                          IsEditable="True"
                           Visibility="Collapsed"
                           Margin="6,0,0,0"
                           MinWidth="120"
