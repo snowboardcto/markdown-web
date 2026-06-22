@@ -51,8 +51,8 @@ public partial class MainWindow : Window
     private readonly AudioReadAloudController _audio;
     private string? _heldRaw;
 
-    // The Translate persona's language picker offers these common languages plus a free-text fallback
-    // (IsEditable). The chosen string is passed VERBATIM through to the engine's target-language directive.
+    // The Translate persona's language picker offers these common languages. The chosen string is passed
+    // VERBATIM through to the engine's target-language directive.
     private static readonly string[] CommonLanguages =
     {
         "Spanish", "French", "German", "Italian", "Portuguese",
@@ -172,20 +172,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        await ApplyLanguageAndRerenderAsync(LanguagePicker.SelectedItem as string ?? LanguagePicker.Text)
-            .ConfigureAwait(true);
-    }
-
-    /// <summary>Committing a free-text language with Enter re-renders in place (Story 4.4 AC2).</summary>
-    private async void LanguagePicker_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Enter)
-        {
-            return;
-        }
-
-        e.Handled = true;
-        await ApplyLanguageAndRerenderAsync(LanguagePicker.Text).ConfigureAwait(true);
+        await ApplyLanguageAndRerenderAsync(LanguagePicker.SelectedItem as string).ConfigureAwait(true);
     }
 
     private async Task ApplyLanguageAndRerenderAsync(string? language)

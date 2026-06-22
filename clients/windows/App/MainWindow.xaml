@@ -142,8 +142,7 @@
                           VerticalAlignment="Center"
                           AutomationProperties.Name="Target language"
                           ToolTip="Target language"
-                          SelectionChanged="LanguagePicker_SelectionChanged"
-                          KeyDown="LanguagePicker_KeyDown" />
+                          SelectionChanged="LanguagePicker_SelectionChanged" />
             </Grid>
         </Border>
 
