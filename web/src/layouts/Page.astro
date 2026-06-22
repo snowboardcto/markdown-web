@@ -41,6 +41,9 @@ const canonicalPathname = rawPathname.length > 1 && rawPathname.endsWith('/')
 // the config is missing or reused in a different Astro project without `site`).
 // When Astro.site is undefined, no <link rel="canonical"> is emitted — fail safe.
 const canonical = Astro.site ? new URL(canonicalPathname, Astro.site) : null;
+// Story 5.2 — Follow / Feed (AC4): build the absolute feed autodiscovery URL from
+// Astro.site (the same guard as the canonical <link> above). Static HTML, no script.
+const feedUrl = Astro.site ? new URL('/feed.xml', Astro.site) : null;
 ---
 
 <!doctype html>
@@ -50,6 +53,7 @@ const canonical = Astro.site ? new URL(canonicalPathname, Astro.site) : null;
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     {canonical && <link rel="canonical" href={canonical.href} />}
+    {feedUrl && <link rel="alternate" type="application/rss+xml" title="The Markdown Web feed" href={feedUrl.href} />}
   </head>
   <body>
     <SiteHeader />

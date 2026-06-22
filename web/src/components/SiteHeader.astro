@@ -42,6 +42,7 @@
     <button class="copy-link" id="copy-link-btn" type="button">
       <span aria-hidden="true">&#x1F517;</span><span class="copy-label"> Copy link</span>
     </button>
+    <a class="subscribe" href="/feed.xml">Subscribe</a>
     <a class="cta" href="/get"><span aria-hidden="true">▣</span> Get the client</a>
   </div>
 </header>
@@ -161,6 +162,24 @@
 
   .ghost:hover {
     text-decoration: underline;
+  }
+
+  /* Story 5.2 — Follow / Feed (AC4): the visible "Subscribe" feed link.
+     A plain <a> (navigates to a static asset — no JS), keyboard-reachable,
+     AA-contrast. Mirrors the .ghost pattern (same size, muted color). */
+  .subscribe {
+    font-size: 13px;
+    color: var(--md-muted);
+    text-decoration: none;
+  }
+
+  .subscribe:hover {
+    text-decoration: underline;
+  }
+
+  .subscribe:focus-visible {
+    outline: 2px solid var(--md-ink);
+    outline-offset: 2px;
   }
 
   .cta {

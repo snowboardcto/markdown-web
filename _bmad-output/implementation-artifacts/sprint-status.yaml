@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-21
-last_updated: 2026-06-22 (5-1 Living Link → done(web)/CI-pending(native): 8/8 ACs covered, web 192/192 specs green (157 prior + 35 new), astro check clean, build green; canonical <link> + web Copy link button + pure ShareLinkBuilder + IClipboard seam + native toolbar Copy link button; reuses Epic 2/3/4, AC6 scope guardrail clean (no new backend/Feed); code review PASS-WITH-ITEMS resolved (2 HIGH+4 MED+2 LOW fixed, 1 deferred). 23 native xUnit tests compile-by-construction, await windows-latest CI green on push)
+last_updated: 2026-06-22 (5-2 Follow/Feed → review: 7/7 ACs, 264/264 web tests green (192+26+46), astro check 0 errors, build green with dist/feed.xml; RSS 2.0 static feed, no backend/dep, date policy documented, GUID=canonical URL) | (5-2 Follow/Feed → ready-for-dev: create-story complete, 7 ACs, 6 task groups; static-only RSS 2.0 feed at /feed.xml generated from the vault, reusing 2.5 buildIndexItems + 5.1 Astro.site canonical URLs; AC5 scope guardrail = no accounts/subscription store/notification backend/database/new Azure Function/new dependency; web-only, no native touch) | (5-1 Living Link → done(web)/CI-pending(native): 8/8 ACs covered, web 192/192 specs green (157 prior + 35 new), astro check clean, build green; canonical <link> + web Copy link button + pure ShareLinkBuilder + IClipboard seam + native toolbar Copy link button; reuses Epic 2/3/4, AC6 scope guardrail clean (no new backend/Feed); code review PASS-WITH-ITEMS resolved (2 HIGH+4 MED+2 LOW fixed, 1 deferred). 23 native xUnit tests compile-by-construction, await windows-latest CI green on push)
 project: The Markdown Web
 project_key: NOKEY
 tracking_system: file-system
@@ -83,5 +83,5 @@ development_status:
   # Epic 5 (post-MVP): Sharing & Feed
   epic-5: in-progress
   5-1-living-link: done # 8/8 ACs covered; web 192/192 green (157 prior + 35 new); review PASS-WITH-ITEMS resolved (2 HIGH+4 MED+2 LOW fixed, 1 deferred); native 23 xUnit tests CI-only (windows-latest pending push); AC trace report written
-  5-2-follow-feed: backlog
+  5-2-follow-feed: review # 7/7 ACs covered; 264/264 web tests green (192 prior + 26 builder unit + 46 E2E); astro check 0 errors; build green with dist/feed.xml (valid RSS 2.0, 13 items); static-only, no dep, no backend; Date policy: frontmatter date → build-date fallback, RFC-822 UTC, code-unit id tie-break; GUID = canonical URL (build-stable)
   epic-5-retrospective: optional
