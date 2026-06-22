@@ -25,6 +25,19 @@ interface Props {
 }
 
 const { title } = Astro.props;
+
+// Story 5.1 — Living Link (AC3): build the canonical absolute URL for this page
+// from Astro.site (the production origin set in astro.config.mjs) + the route path.
+// The URL is pure static — no query string, no fragment artifacts from the preview
+// host. Derives from the SAME route path Astro already emits (no re-implementation
+// of slug logic). For the index "/" the canonical is "https://themarkdownweb.com/".
+// Trailing slash is stripped from non-root paths (e.g. "/x/" → "/x") so the canonical
+// is the clean slug form, consistent with PageEndpointResolver on the native side.
+const rawPathname = Astro.url.pathname;
+const canonicalPathname = rawPathname.length > 1 && rawPathname.endsWith('/')
+  ? rawPathname.slice(0, -1)
+  : rawPathname;
+const canonical = new URL(canonicalPathname, Astro.site);
 ---
 
 <!doctype html>
@@ -33,6 +46,7 @@ const { title } = Astro.props;
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
+    <link rel="canonical" href={canonical.href} />
   </head>
   <body>
     <SiteHeader />

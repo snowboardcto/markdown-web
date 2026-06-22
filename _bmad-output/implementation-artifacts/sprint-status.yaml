@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-21
-last_updated: 2026-06-22 (4-4 marked done — 9 ACs covered, Windows CI green (run 27925189102, 33292e3) on windows-latest; translation + audio outcomes. EPIC 4 CLOSED — personalized rendering (AI personalities) complete)
+last_updated: 2026-06-22 (5-1 implemented → review: canonical <link> + web copy button + ShareLinkBuilder + IClipboard + toolbar button; 190 web specs green; native compiles-by-construction)
 project: The Markdown Web
 project_key: NOKEY
 tracking_system: file-system
@@ -81,7 +81,7 @@ development_status:
   epic-4-retrospective: optional
 
   # Epic 5 (post-MVP): Sharing & Feed
-  epic-5: backlog
-  5-1-living-link: backlog
+  epic-5: in-progress
+  5-1-living-link: review # canonical <link> (AC3) + web copy button (AC4) + ShareLinkBuilder + IClipboard seam + toolbar button (AC5); 190 web specs green; native compiles-by-construction
   5-2-follow-feed: backlog
   epic-5-retrospective: optional
