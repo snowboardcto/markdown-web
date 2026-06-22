@@ -263,6 +263,17 @@ No debug issues encountered. Clean implementation on first pass.
 - `astro check`: 0 errors, 5 hints (pre-existing unused-import warnings in test files).
 - `npm run build`: exit 0, `dist/feed.xml` emitted (13 items, valid RSS 2.0).
 
+**Review Follow-ups (2026-06-22):**
+- [x] MEDIUM #1 — Canonical-URL drift on non-ASCII slugs (feed.mjs): Fixed. Item URL construction changed from raw concat `siteOrigin + item.href` to `new URL('/' + item.id, siteOrigin).href`, matching Page.astro exactly. Same fix applied to channel `<link>` (uses `new URL('/', siteOrigin).href`) and `<atom:link>` (uses `new URL('/feed.xml', siteOrigin).href`). xmlEscape applied AFTER URL construction. LOW #5 builder assertions added to confirm byte-equality for space/non-ASCII ids.
+- [x] MEDIUM #2 — Production-publishing fixture (content/5-2-fixture.md): Rewrote as legitimate "Markdown Formatting Sampler" page with real title frontmatter, real content (headings, list, code block), no test-scaffolding language. Slug unchanged (`5-2-fixture`), count stays 13, all existing EXPECTED_ROUTES assertions unchanged. Confirmed dist/5-2-fixture/index.html contains no test-scaffolding text.
+- [x] MEDIUM #3 — guid build-stability test is tautological: Strengthened at builder level (5-2-feed-builder.spec.ts). New test crafts TWO calls with the SAME id but DIFFERENT dates (`2024-01-01` vs `2026-06-22`) and asserts: (a) pubDates differ, (b) guids are byte-identical, proving guid derives from id/canonical URL, NOT pubDate/build date. The E2E guid-stability test (two GETs of the static feed) is retained.
+- [x] MEDIUM #4 — new-page-surfaces is weak: Strengthened at builder level. New test builds a baseline feed (2 entries), then adds a third entry, and asserts the delta: exactly one more `<item>` with the new entry's canonical URL guid — directly exercising "add a page → new item surfaces".
+- [x] LOW #5 — byte-equal-canonical only tested for plain slug: Two new builder-level assertions added. One with a space-containing id (`'my notes'`) and one with a non-ASCII id (`'café'`), each asserting `guid == new URL('/' + id, origin).href` — the same construction Page.astro uses.
+- [x] LOW #6 — site normalization: Trailing slash stripping changed to global replace (`/\/+$/g`). Added guard: if `siteOrigin` is empty or doesn't start with `http`, builder throws with a clear message. Production always passes a valid site; prod behavior unchanged.
+- [x] LOW #7 — duplicate entry.id: Entries are deduped by id (first occurrence wins) before buildIndexItems and the dateMap. Unique-id pipeline behavior unchanged.
+- [x] LOW #8 — numeric-string dates: `resolveDate` now only accepts strings that contain at least one non-digit character (`/\D/.test(candidate)`). Bare numeric strings like `'12345'` fall through to fallback instead of being parsed as year 12345. Numbers (`typeof === 'number'`) continue to fall through as before. Comment updated.
+- [x] LOW #9 — blank-line artifact: Final `join` uses `.filter(Boolean)` before joining so empty `itemsXml` string does not add a stray blank line in empty-vault output.
+
 ### File List
 
 - `web/src/lib/feed.mjs` — NEW: pure RSS 2.0 builder; exports `buildFeed`/`buildRssXml`.
@@ -276,3 +287,4 @@ No debug issues encountered. Clean implementation on first pass.
 ### Change Log
 
 - 2026-06-22: Implemented Story 5.2 Follow / Feed — RSS 2.0 static feed at `/feed.xml`, autodiscovery `<link>` in every page `<head>`, visible Subscribe link in chrome, committed fixture for AC2 new-page-surfaces test. Date policy: frontmatter date → build-date fallback, RFC-822 UTC, code-unit id tie-break. GUID = canonical URL (build-stable). All 264 tests pass, astro check clean, build exits 0.
+- 2026-06-22: Code-review fixes applied (Sonnet 4.6). MEDIUM #1: canonical URL now uses `new URL('/' + id, origin).href` matching Page.astro exactly (prevents non-ASCII/encoding drift). MEDIUM #2: content/5-2-fixture.md rewritten as legitimate "Markdown Formatting Sampler" page (no test-scaffolding). MEDIUM #3/#4: builder-level guid-stability and new-page-surfaces delta tests added (binding proof, not tautological). LOW #5: encoding-exercising id assertions (space, non-ASCII). LOW #6: global trailing-slash strip + empty-site guard. LOW #7: dedup by id. LOW #8: numeric-string guard in resolveDate. LOW #9: filter(Boolean) before join. After: 5-2-feed-builder.spec.ts 30/30, 5-2-follow-feed.spec.ts 46/46, full suite 268/268 (4 new builder tests), astro check 0 errors, build exits 0, dist/feed.xml valid RSS 2.0 (13 items).

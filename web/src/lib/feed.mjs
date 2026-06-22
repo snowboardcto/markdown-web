@@ -68,11 +68,16 @@ function toRfc822(d) {
  *
  * Precedence:
  *   1. entry.data.date if it is a valid parseable Date (string or Date object).
- *   2. entry.data.pubDate if it is a valid parseable Date.
+ *      NOTE: bare numeric strings (e.g. '12345') are NOT accepted — they parse
+ *      as year 12345 and would pin items to the top erroneously. Only strings
+ *      that contain at least one non-digit character (i.e. real ISO/date-shaped
+ *      strings) are candidates; pure numeric strings fall through to the fallback.
+ *   2. entry.data.pubDate under the same rules.
  *   3. fallbackDate (the channel build date, passed in — same for all undated pages).
  *
- * Total: never throws, never returns Invalid Date. A number, already-Date,
- * unparseable string, null, or undefined all fall through to the fallback.
+ * Total: never throws, never returns Invalid Date. A number, bare numeric string,
+ * already-Date, unparseable string, null, or undefined all fall through to the
+ * fallback.
  *
  * Trade-off documented (AC2 second-order note): because today NO page has a
  * frontmatter date, the fallback applies to ALL pages, so every undated page's
@@ -103,14 +108,16 @@ function resolveDate(entry, fallbackDate) {
       if (!isNaN(candidate.getTime())) return candidate;
       continue;
     }
-    // Accept strings (ISO 8601, etc.).
-    if (typeof candidate === 'string') {
+    // Accept strings ONLY if they are date-shaped (contain at least one non-digit
+    // character). Bare numeric strings like '12345' would parse as year 12345 and
+    // pin items incorrectly to the top of the feed — fall them through to the fallback.
+    // Numbers (typeof === 'number') also fall through unconditionally (ambiguous ms/year).
+    if (typeof candidate === 'string' && /\D/.test(candidate)) {
       const parsed = new Date(candidate);
       if (!isNaN(parsed.getTime())) return parsed;
       continue;
     }
-    // Numbers and everything else: fall through (do NOT interpret milliseconds —
-    // a number like 12345 is ambiguous and should fall through to the fallback per AC2).
+    // Numbers, pure numeric strings, and everything else: fall through to the fallback.
   }
 
   return fallbackDate;
@@ -148,18 +155,35 @@ export function buildFeed(entries, channelMeta) {
     : new Date();
 
   // Normalize site to a string (accept URL object or string).
+  // Strip ALL trailing slashes (global flag) so 'https://example.com///' → 'https://example.com'.
+  // Guard: if site is empty or non-absolute, throw so the caller gets a clear contract failure
+  // rather than silently emitting relative/invalid guids. Production always passes a valid site
+  // (Astro.site from astro.config.mjs), so prod behavior is unchanged.
   const siteStr = site instanceof URL ? site.href : String(site ?? '');
-  // Ensure trailing slash for joining.
-  const siteOrigin = siteStr.replace(/\/$/, '');
+  const siteOrigin = siteStr.replace(/\/+$/g, '');
+  if (!siteOrigin || !siteOrigin.startsWith('http')) {
+    throw new Error(
+      `buildFeed: 'site' must be a non-empty absolute URL (got: ${JSON.stringify(siteStr)}). ` +
+      'Pass Astro.site or context.site from the static endpoint.'
+    );
+  }
 
   // REUSE buildIndexItems for filtering (empty-id), label derivation, and code-unit sort.
   // This ensures the feed set + labels CANNOT drift from the index.
-  const indexItems = buildIndexItems(entries);
+  // Deduplicate entries by id BEFORE passing to buildIndexItems so two entries with
+  // the same id cannot emit duplicate <guid>s. First occurrence wins (stable, predictable).
+  const seenIds = new Set();
+  const deduped = entries.filter((e) => {
+    if (seenIds.has(e.id)) return false;
+    seenIds.add(e.id);
+    return true;
+  });
+  const indexItems = buildIndexItems(deduped);
 
   // Resolve dates and sort: newest-first by date, tie-broken by code-unit entry.id.
   // Build a map from id -> resolved date for efficient lookup.
   const dateMap = new Map();
-  for (const entry of entries) {
+  for (const entry of deduped) {
     if (entry.id === '') continue; // filtered by buildIndexItems
     dateMap.set(entry.id, resolveDate(entry, channelBuildDate));
   }
@@ -173,13 +197,20 @@ export function buildFeed(entries, channelMeta) {
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
 
-  const feedUrl = `${siteOrigin}/feed.xml`;
+  // Build the feed's own absolute URL exactly as Page.astro builds the canonical:
+  // new URL(path, siteOrigin).href — so percent-encoding of any URL-significant chars
+  // is handled by the URL constructor (same as the browser/Page.astro) rather than
+  // raw string concatenation. This keeps guid byte-equal to the page canonical for
+  // any entry.id containing non-ASCII or URL-significant characters.
+  const feedUrl = new URL('/feed.xml', siteOrigin).href;
+  // Channel <link> is the site root — use new URL('/', siteOrigin).href.
+  const siteRootUrl = new URL('/', siteOrigin).href;
   const lastBuildDate = toRfc822(channelBuildDate);
 
   // Emit channel metadata.
   const channelXml = [
     `    <title>${xmlEscape(title)}</title>`,
-    `    <link>${xmlEscape(siteOrigin)}/</link>`,
+    `    <link>${xmlEscape(siteRootUrl)}</link>`,
     `    <description>${xmlEscape(description)}</description>`,
     `    <language>en</language>`,
     `    <lastBuildDate>${lastBuildDate}</lastBuildDate>`,
@@ -187,8 +218,13 @@ export function buildFeed(entries, channelMeta) {
   ].join('\n');
 
   // Emit items.
+  // Build each item's canonical URL via new URL('/' + entry.id, siteOrigin).href —
+  // the SAME construction Page.astro uses for <link rel="canonical">. This ensures
+  // byte-equality between the feed item guid/link and the page's own canonical for
+  // any entry.id, including non-ASCII or URL-significant characters. xmlEscape is
+  // applied AFTER URL construction (never before) so we escape once at serialization.
   const itemsXml = sortedItems.map((item) => {
-    const canonicalUrl = `${siteOrigin}${item.href}`;
+    const canonicalUrl = new URL('/' + item.id, siteOrigin).href;
     const escapedUrl = xmlEscape(canonicalUrl);
     const resolvedDate = dateMap.get(item.id) ?? channelBuildDate;
     const pubDate = toRfc822(resolvedDate);
@@ -202,6 +238,8 @@ export function buildFeed(entries, channelMeta) {
     ].join('\n');
   }).join('\n');
 
+  // Filter out falsy/empty parts before joining so an empty-vault output has no
+  // stray blank line between the channel metadata block and </channel> (LOW #9).
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
     `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">`,
@@ -210,7 +248,7 @@ export function buildFeed(entries, channelMeta) {
     itemsXml,
     `  </channel>`,
     `</rss>`,
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
 // Also export as buildRssXml alias for test compatibility.

@@ -340,8 +340,8 @@ test.describe('Story 5.2 AC1 (builder) — newest-first when dates differ', () =
   });
 });
 
-// ── GUID stability ────────────────────────────────────────────────────────────
-test.describe('Story 5.2 AC2 (builder) — guid is canonical URL, not build-derived', () => {
+// ── GUID stability (MEDIUM #3 strengthened) ───────────────────────────────────
+test.describe('Story 5.2 AC2 (builder) — guid derives from id/canonical URL, NOT pubDate/build-date', () => {
   test('guid equals the canonical absolute URL (build-stable across calls)', () => {
     const fn = requireFeed();
     const xml1 = fn([makeEntry('my-page')], TEST_CHANNEL) as string;
@@ -352,6 +352,100 @@ test.describe('Story 5.2 AC2 (builder) — guid is canonical URL, not build-deri
 
     expect(items1[0].guid, 'guid must equal canonical URL').toBe(`${TEST_SITE}/my-page`);
     expect(items1[0].guid, 'guid must be identical across two calls (build-stable)').toBe(items2[0].guid);
+  });
+
+  test('two entries with SAME id but DIFFERENT dates emit IDENTICAL <guid> (guid derives from id, not pubDate)', () => {
+    // This is the binding proof of the anti-resurfacing invariant (pre-mortem #8):
+    // if guid derived from pubDate/build-date, the same page would re-surface as
+    // "new" on every rebuild. Instead, guid MUST derive from entry.id (canonical URL)
+    // so it is byte-equal regardless of pubDate changes between builds.
+    const fn = requireFeed();
+    // Call 1: entry with date '2024-01-01'
+    const xml1 = fn([makeEntry('stable-page', { date: '2024-01-01' })], TEST_CHANNEL) as string;
+    // Call 2: same id, but a different date (simulating a subsequent build date)
+    const xml2 = fn([makeEntry('stable-page', { date: '2026-06-22' })], TEST_CHANNEL) as string;
+
+    const items1 = extractItems(xml1);
+    const items2 = extractItems(xml2);
+
+    expect(items1.length, 'call 1 must produce one item').toBe(1);
+    expect(items2.length, 'call 2 must produce one item').toBe(1);
+
+    // The <pubDate> values should differ (different dates were passed in).
+    expect(items1[0].pubDate, 'pubDate should reflect the first date').not.toBe(items2[0].pubDate);
+
+    // BUT the <guid> must be byte-identical — it derives from id, not pubDate.
+    const expectedGuid = `${TEST_SITE}/stable-page`;
+    expect(items1[0].guid, 'guid in call 1 must be the canonical URL').toBe(expectedGuid);
+    expect(items2[0].guid, 'guid in call 2 must be the canonical URL').toBe(expectedGuid);
+    expect(
+      items1[0].guid,
+      'guid must be byte-identical across both calls despite different pubDates (proves guid derives from id, not pubDate)',
+    ).toBe(items2[0].guid);
+  });
+});
+
+// ── New-page-surfaces delta (MEDIUM #4) ──────────────────────────────────────
+test.describe('Story 5.2 AC2 (builder) — adding an entry yields a new <item> with the correct canonical URL guid', () => {
+  test('adding an entry to the input set yields a corresponding new <item> (delta proves new-page-surfaces)', () => {
+    const fn = requireFeed();
+    // Baseline: two existing pages.
+    const baseline = [
+      makeEntry('page-a', { date: '2026-01-01' }),
+      makeEntry('page-b', { date: '2026-02-01' }),
+    ];
+    const xmlBefore = fn(baseline, TEST_CHANNEL) as string;
+    const itemsBefore = extractItems(xmlBefore);
+    expect(itemsBefore.length, 'baseline must have 2 items').toBe(2);
+
+    // Add one new page — simulate "author adds a new .md page before rebuild".
+    const withNew = [
+      ...baseline,
+      makeEntry('new-page', { date: '2026-06-01' }),
+    ];
+    const xmlAfter = fn(withNew, TEST_CHANNEL) as string;
+    const itemsAfter = extractItems(xmlAfter);
+
+    // Assert the delta: exactly one more item.
+    expect(itemsAfter.length, 'after adding one entry, feed must have 3 items (one more)').toBe(3);
+
+    // Assert the new item is present with its canonical URL guid.
+    const newItem = itemsAfter.find((item) => item.link === `${TEST_SITE}/new-page`);
+    expect(newItem, 'new entry must appear as a new <item> with its canonical URL').toBeTruthy();
+    expect(newItem!.guid, 'new item guid must be the canonical URL').toBe(`${TEST_SITE}/new-page`);
+  });
+});
+
+// ── Encoding-exercising id (LOW #5) ──────────────────────────────────────────
+test.describe('Story 5.2 LOW #5 — non-ASCII/encoding-exercising id: guid equals new URL() construction', () => {
+  test('id with a space: guid equals new URL(\'/\' + id, origin).href (same as Page.astro canonical)', () => {
+    const fn = requireFeed();
+    const id = 'my notes';
+    const xml = fn([makeEntry(id)], TEST_CHANNEL) as string;
+    const items = extractItems(xml);
+    expect(items.length, 'must produce one item').toBe(1);
+
+    // The expected guid is exactly what new URL('/' + id, origin).href produces —
+    // the same construction Page.astro uses for <link rel="canonical">.
+    // For 'my notes', new URL('/my notes', 'https://themarkdownweb.com').href
+    // percent-encodes the space → 'https://themarkdownweb.com/my%20notes'.
+    const expectedUrl = new URL('/' + id, TEST_SITE).href;
+    // The guid in the XML is XML-escaped, so decode &amp; → & if needed, but for
+    // percent-encoded URLs (which contain no & or <) the guid should be verbatim.
+    expect(items[0].guid, 'guid for space-containing id must equal new URL() construction').toBe(expectedUrl);
+    expect(items[0].link, 'link for space-containing id must equal new URL() construction').toBe(expectedUrl);
+  });
+
+  test('id with non-ASCII char: guid equals new URL(\'/\' + id, origin).href (byte-equality)', () => {
+    const fn = requireFeed();
+    const id = 'café'; // 'café'
+    const xml = fn([makeEntry(id)], TEST_CHANNEL) as string;
+    const items = extractItems(xml);
+    expect(items.length, 'must produce one item').toBe(1);
+
+    const expectedUrl = new URL('/' + id, TEST_SITE).href;
+    expect(items[0].guid, 'guid for non-ASCII id must equal new URL() construction').toBe(expectedUrl);
+    expect(items[0].link, 'link for non-ASCII id must equal new URL() construction').toBe(expectedUrl);
   });
 });
 
