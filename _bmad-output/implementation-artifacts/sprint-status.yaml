@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-21
-last_updated: 2026-06-22 (4-4 marked done — 9 ACs covered, Windows CI green (run 27925189102, 33292e3) on windows-latest; translation + audio outcomes. EPIC 4 CLOSED — personalized rendering (AI personalities) complete)
+last_updated: 2026-06-22 (Epic 4 merged to main via PR #1; automated retrospectives done for epics 1-4 (epic-N-retrospective.md); MVP (epics 1-4) complete, Epic 5 next)
 project: The Markdown Web
 project_key: NOKEY
 tracking_system: file-system
@@ -48,7 +48,7 @@ development_status:
   1-2-provision-azure-hosting-via-iac-bicep: done
   1-3-deploy-a-placeholder-page-via-github-actions-on-push: done
   1-4-bind-custom-domain-themarkdownweb-com-over-https: done # live at https://themarkdownweb.com (Ready, TLS issued, http->https 301)
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
 
   # Epic 2: Publish & Read on the Web
   epic-2: done
@@ -60,7 +60,7 @@ development_status:
   2-6-site-header-and-pitch-card: done # 7/7 ACs covered + green (157 E2E: 121 prior reconciled + 36 chrome), code review resolved (9 items applied, 3 deferred); AC trace report written
   2-7-content-negotiation-one-url-two-representations: done # 8/8 ACs covered + green (api 45 pass/3 gated-skip, web 157 green); review resolved (2 Critical + 1 High fixed, rest deferred); Option 2 = markdown at /api/negotiate/<slug>, true same-URL DEFERRED (SWA can't branch on Accept); AC trace report written
 
-  epic-2-retrospective: optional
+  epic-2-retrospective: done
 
   # Epic 3: Read Markdown in the Native Client (Windows)
   epic-3: done
@@ -70,7 +70,7 @@ development_status:
   3-4-code-syntax-highlighting: done # 8 ACs covered + GREEN on windows-latest (run #19, 6f74f86); ColorCode.Core 2.0.15 -> github-light palette; review APPROVED (no action items); base(null,null) parser + ScopeName constants confirmed; known-language >=2 colors, unknown/flag-off single-color fallback; Rendering pure (allowlist {Markdig, ColorCode.Core})
   3-5-in-client-links-media-navigation: done # 12 ACs covered + GREEN on windows-latest (run #28, 92d7c14; 78 Rendering + 221 App.Tests); review APPROVED; content now renders on screen + Back/Forward/Reload + internal .md nav + anchor scroll + external->browser + vault images + /api/negotiate/<slug> mapping (github-slugger parity, Node-cross-validated). 3 CI rounds: 2 missing-using compile fixes + 1 real protocol-relative scheme bug fixed
   3-6-basic-faithful-default-render: done # 7 ACs covered + GREEN on windows-latest (run #31, 35e3d9a); github-light basic theme (additive, G1/G2 honored -> zero existing 3-3/3-4/3-5 assertions changed); RenderTheme.Basic default + Epic-4 personality seam; shell a11y exit locked (UX-DR9); review APPROVED. EPIC 3 EXIT: native client = usable basic Markdown Web reader
-  epic-3-retrospective: optional
+  epic-3-retrospective: done
 
   # Epic 4: Personalized Rendering (AI Personalities)
   epic-4: done
@@ -78,7 +78,7 @@ development_status:
   4-2-personality-selector: done # 7 ACs covered + GREEN on windows-latest (run #45, 0870103); toolbar PersonalitySelector + re-render-in-place WITHOUT re-fetch (held raw markdown, no-fetcher-by-construction, Basic->Cozy->Basic byte-identical, last-wins); selector drives gateway; API-key entry dialog (NeedsKey); review APPROVED; PersonalizationGateway/Rendering unchanged
   4-3-per-reader-structural-rendering: done # 7 ACs covered + GREEN on windows-latest (run #48, e96dde4); real distinct persona prompts (Cozy/Terminal/TLDR/Plain) -> structurally-different renders for same source; engine routes selected SystemPrompt (capturing-fake), different-output + visible-change (keyed-fake), Basic unchanged; zero new production type (only PersonaRegistry prompt strings)
   4-4-accessibility-and-translation-outcomes: done # 9 ACs covered + GREEN on windows-latest (run 27925189102, 33292e3; 293 tests). Translation: real language-agnostic structure-preserving Translate prompt + engine target-language directive (effective prompt = registry prompt prefix + chosen language via ReaderContext.PreferredLanguage; non-translate forwarded byte-unchanged; Translate+blank = original/no-call/no-key) + gateway OPTIONAL Func<string?> (backward-safe, all two-arg sites unchanged) + LanguageSelectionViewModel + toolbar language picker (re-render in place via unchanged 4-2 coordinator). Audio: "audio" pass-through persona -> App AudioReadAloudController over ISpeechSynthesizer seam (SapiSpeechSynthesizer/System.Speech 10.0.9 in App only, fake in CI; Stop-before-Speak, empty->no-op, throw->caught, zero render-sink/LLM/key) + pure ReadingOrderExtractor (Agent, Markdig 1.3.1, full-body document-order). Review APPROVED (no CRITICAL/HIGH/MEDIUM; 1 LOW dead-handler cleanup applied). Rendering untouched/pure; key never leaks. EPIC 4 EXIT: FR-10/11/12 + NFR-5 closed, D1-D5 satisfied (only D5's optional LLM-script stage deferred)
-  epic-4-retrospective: optional
+  epic-4-retrospective: done
 
   # Epic 5 (post-MVP): Sharing & Feed
   epic-5: backlog
