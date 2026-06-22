@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-21
-last_updated: 2026-06-22 (4-2 marked done — 7 ACs covered, Windows CI green (run #45) on windows-latest; personality selector + re-render-in-place; review APPROVED)
+last_updated: 2026-06-22 (4-3 marked done — 7 ACs covered, Windows CI green (run #48) on windows-latest; per-reader structural rendering via real distinct persona prompts)
 project: The Markdown Web
 project_key: NOKEY
 tracking_system: file-system
@@ -76,8 +76,8 @@ development_status:
   epic-4: in-progress
   4-1-local-agent-integration: done # 7 ACs covered + GREEN on windows-latest (run #42, 54843b9); BYO-key agent: AnthropicLlmClient (valid System.Text.Json body — caught/fixed a raw-newline invalid-JSON false-green), DpapiSecretStore (ProtectedData), PersonalityEngine total fallback, Persona.Basic pass-through, App PersonalizationGateway seam (re-entrancy preserved); review APPROVED; Agent.Tests project added; Agent<->App boundary + purity guards green
   4-2-personality-selector: done # 7 ACs covered + GREEN on windows-latest (run #45, 0870103); toolbar PersonalitySelector + re-render-in-place WITHOUT re-fetch (held raw markdown, no-fetcher-by-construction, Basic->Cozy->Basic byte-identical, last-wins); selector drives gateway; API-key entry dialog (NeedsKey); review APPROVED; PersonalizationGateway/Rendering unchanged
-  4-3-per-reader-structural-rendering: backlog
-  4-3-per-reader-structural-rendering: backlog
+  4-3-per-reader-structural-rendering: done # 7 ACs covered + GREEN on windows-latest (run #48, e96dde4); real distinct persona prompts (Cozy/Terminal/TLDR/Plain) -> structurally-different renders for same source; engine routes selected SystemPrompt (capturing-fake), different-output + visible-change (keyed-fake), Basic unchanged; zero new production type (only PersonaRegistry prompt strings)
+  4-3-per-reader-structural-rendering: done # 7 ACs covered + GREEN on windows-latest (run #48, e96dde4); real distinct persona prompts (Cozy/Terminal/TLDR/Plain) -> structurally-different renders for same source; engine routes selected SystemPrompt (capturing-fake), different-output + visible-change (keyed-fake), Basic unchanged; zero new production type (only PersonaRegistry prompt strings)
   4-4-accessibility-and-translation-outcomes: backlog
   epic-4-retrospective: optional
 

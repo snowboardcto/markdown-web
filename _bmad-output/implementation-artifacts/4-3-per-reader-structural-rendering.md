@@ -1,6 +1,6 @@
 # Story 4.3: Per-reader structural rendering
 
-Status: ready-for-review
+Status: done
 
 <!-- VALIDATION (Step 3, post-Step-2-hardening; vs epics.md Story 4.3 lines 398–409 + FR-10 + architecture-epic4-agent.md D2/D3/D4 + the 4.3 binding lines 122–123 + the COMPLETED 4-1/4-2 foundation, re-checked against the REAL code): RESULT = PASS.
   - AC↔EPIC ALIGNMENT (epics.md 4.3 = one Given/When/Then/And):
@@ -308,3 +308,19 @@ Step-2 refinement (scope UNCHANGED — real distinct prompts + the structural-di
 - **Capturing fake (AC3) is the complementary half** and is also pinned (see Dev Notes "The capturing / keyed fake"): it records `LastSystemPrompt` + `Calls` verbatim and returns a fixed canned success — it does NOT key its output (its job is to prove the EXACT forwarded prompt, asserted byte-equal against `PersonaRegistry.Seed`'s prompt, not to differ output). Routing (AC3, capturing fake) and different-output (AC4/AC5, keyed fake) are deliberately two distinct fakes with two distinct jobs.
 
 This was the only open question; it is now resolved and binding. Nothing blocks dev.
+
+## CI Verification & AC Trace (Step 10)
+
+**CI run #48** (`e96dde4`): **GREEN** on windows-latest — the prompt-distinctness/keyword/no-residue tests now pass against the real prompts; routing/different-output/visible-change stay green; all Epic 1–3 + 4-1/4-2 tests green (Basic default byte-identical). Authoritative verification. (Low-risk data change — verified the keyword/distinctness contract pre-push.)
+
+| AC | Requirement | Test(s) |
+|----|-------------|---------|
+| AC1 | Registry order/ids/flags unchanged | `PersonaRegistryTests` (4.2, still green) |
+| AC2 | Real distinct intent-encoding prompts (valid markdown) | `PersonaPromptDistinctnessTests` |
+| AC3 | Engine routes selected persona's exact SystemPrompt | `PersonaRoutingTests` (CapturingLlmClient) |
+| AC4 | Two personas → structurally-different output + render | `StructuralDifferenceTests` + `StructuralRenderDiffersTests` `[StaFact]` |
+| AC5 | Switching persona visibly changes render in place | `VisibleChangeOnSwitchTests` |
+| AC6 | Basic default unchanged + Rendering pure + boundary | inherited 4.1/4.2 + purity guards |
+| AC7 | windows-latest CI gate (LLM faked) | CI run #48 green |
+
+All 7 ACs covered by deterministic CI-runnable proofs (LLM faked; real-AI structural *quality* is a documented runtime concern, not unit-tested). Trace complete. **Story 4-3 DONE.**
