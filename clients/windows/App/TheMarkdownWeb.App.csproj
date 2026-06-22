@@ -11,6 +11,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Story 4.4 (Q-Speech-Placement): Windows SAPI TTS for the audio read-aloud persona lives ONLY in
+         App (speech is a UI/output concern; App already owns I/O). System.Speech references cleanly on
+         net10.0-windows; it is NOT an embedded browser (NoEmbeddedBrowserTests stays green). Agent and
+         Rendering never reference it. -->
+    <PackageReference Include="System.Speech" Version="10.0.9" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Rendering\TheMarkdownWeb.Rendering.csproj" />
     <ProjectReference Include="..\Agent\TheMarkdownWeb.Agent.csproj" />
   </ItemGroup>

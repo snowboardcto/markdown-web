@@ -67,6 +67,15 @@ public sealed class PersonalityEngine
                 return new PersonalizationResult(original, PersonalizationOutcome.FellBack, FellBackNotice);
             }
 
+            // Story 4.4 (Q-Lang-Plumbing / AC7): Translate with NO target language is a safe
+            // "choose a language" state — return the ORIGINAL pass-through-equivalent WITHOUT a provider
+            // call and WITHOUT needing a key (so a language-less Translate never issues an under-specified
+            // request and never surfaces NeedsKey). Checked BEFORE the no-key/provider path.
+            if (IsTranslate(persona) && string.IsNullOrWhiteSpace(readerContext.PreferredLanguage))
+            {
+                return new PersonalizationResult(original, PersonalizationOutcome.PassThrough, Notice: null);
+            }
+
             // Row 2: no key — NeedsKey, original, notice, no provider call.
             if (!_secretStore.HasApiKey)
             {
@@ -77,9 +86,15 @@ public sealed class PersonalityEngine
             // ORIGINAL (FellBack), never a stale/partial transform. Thrown OCE is caught below.
             ct.ThrowIfCancellationRequested();
 
+            // Story 4.4 (Q-Lang-Plumbing): compose the EFFECTIVE system prompt. For Translate with a
+            // non-blank target language, APPEND a deterministic directive carrying the chosen language so
+            // the language reaches the provider on the systemPrompt seam (the capturing fake records it).
+            // EVERY other persona forwards its prompt BYTE-UNCHANGED (no behaviour change for 4.1/4.2/4.3).
+            string effectivePrompt = ComposeEffectivePrompt(persona, readerContext);
+
             // Provider path. ILlmClient is contractually total; catch defensively (row 13).
             LlmResult result = await _llm
-                .CompleteAsync(persona.SystemPrompt, original, readerContext, ct)
+                .CompleteAsync(effectivePrompt, original, readerContext, ct)
                 .ConfigureAwait(false);
 
             // Row 12: success with usable (non-blank) text -> Transformed.
@@ -96,5 +111,31 @@ public sealed class PersonalityEngine
             // Rows 6 / 13: cancellation or a throwing fake -> total FellBack + ORIGINAL, no exception escapes.
             return new PersonalizationResult(original, PersonalizationOutcome.FellBack, FellBackNotice);
         }
+    }
+
+    /// <summary>The stable id of the built-in Translate persona (Q-Lang-Plumbing).</summary>
+    private const string TranslateId = "translate";
+
+    private static bool IsTranslate(Persona persona)
+        => string.Equals(persona.Id, TranslateId, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Composes the EFFECTIVE system prompt forwarded to the provider (Q-Lang-Plumbing). For the Translate
+    /// persona with a non-blank <see cref="ReaderContext.PreferredLanguage"/>, APPENDS a target-language
+    /// directive to the registry prompt (the directive is appended, never substituted — the effective
+    /// prompt STARTS WITH the registry prompt and CONTAINS the language string). Every other persona — and
+    /// Translate with a blank language — forwards <see cref="Persona.SystemPrompt"/> byte-unchanged.
+    /// </summary>
+    private static string ComposeEffectivePrompt(Persona persona, ReaderContext readerContext)
+    {
+        if (!IsTranslate(persona) || string.IsNullOrWhiteSpace(readerContext.PreferredLanguage))
+        {
+            return persona.SystemPrompt;
+        }
+
+        string lang = readerContext.PreferredLanguage!;
+        return persona.SystemPrompt
+            + "\n\nTarget language: " + lang
+            + ". Translate the entire page into " + lang + ", preserving all Markdown structure.";
     }
 }

@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-21
-last_updated: 2026-06-22 (4-3 marked done — 7 ACs covered, Windows CI green (run #48) on windows-latest; per-reader structural rendering via real distinct persona prompts)
+last_updated: 2026-06-22 (4-4 marked done — 9 ACs covered, Windows CI green (run 27925189102, 33292e3) on windows-latest; translation + audio outcomes. EPIC 4 CLOSED — personalized rendering (AI personalities) complete)
 project: The Markdown Web
 project_key: NOKEY
 tracking_system: file-system
@@ -73,11 +73,11 @@ development_status:
   epic-3-retrospective: optional
 
   # Epic 4: Personalized Rendering (AI Personalities)
-  epic-4: in-progress
+  epic-4: done
   4-1-local-agent-integration: done # 7 ACs covered + GREEN on windows-latest (run #42, 54843b9); BYO-key agent: AnthropicLlmClient (valid System.Text.Json body — caught/fixed a raw-newline invalid-JSON false-green), DpapiSecretStore (ProtectedData), PersonalityEngine total fallback, Persona.Basic pass-through, App PersonalizationGateway seam (re-entrancy preserved); review APPROVED; Agent.Tests project added; Agent<->App boundary + purity guards green
   4-2-personality-selector: done # 7 ACs covered + GREEN on windows-latest (run #45, 0870103); toolbar PersonalitySelector + re-render-in-place WITHOUT re-fetch (held raw markdown, no-fetcher-by-construction, Basic->Cozy->Basic byte-identical, last-wins); selector drives gateway; API-key entry dialog (NeedsKey); review APPROVED; PersonalizationGateway/Rendering unchanged
   4-3-per-reader-structural-rendering: done # 7 ACs covered + GREEN on windows-latest (run #48, e96dde4); real distinct persona prompts (Cozy/Terminal/TLDR/Plain) -> structurally-different renders for same source; engine routes selected SystemPrompt (capturing-fake), different-output + visible-change (keyed-fake), Basic unchanged; zero new production type (only PersonaRegistry prompt strings)
-  4-4-accessibility-and-translation-outcomes: backlog
+  4-4-accessibility-and-translation-outcomes: done # 9 ACs covered + GREEN on windows-latest (run 27925189102, 33292e3; 293 tests). Translation: real language-agnostic structure-preserving Translate prompt + engine target-language directive (effective prompt = registry prompt prefix + chosen language via ReaderContext.PreferredLanguage; non-translate forwarded byte-unchanged; Translate+blank = original/no-call/no-key) + gateway OPTIONAL Func<string?> (backward-safe, all two-arg sites unchanged) + LanguageSelectionViewModel + toolbar language picker (re-render in place via unchanged 4-2 coordinator). Audio: "audio" pass-through persona -> App AudioReadAloudController over ISpeechSynthesizer seam (SapiSpeechSynthesizer/System.Speech 10.0.9 in App only, fake in CI; Stop-before-Speak, empty->no-op, throw->caught, zero render-sink/LLM/key) + pure ReadingOrderExtractor (Agent, Markdig 1.3.1, full-body document-order). Review APPROVED (no CRITICAL/HIGH/MEDIUM; 1 LOW dead-handler cleanup applied). Rendering untouched/pure; key never leaks. EPIC 4 EXIT: FR-10/11/12 + NFR-5 closed, D1-D5 satisfied (only D5's optional LLM-script stage deferred)
   epic-4-retrospective: optional
 
   # Epic 5 (post-MVP): Sharing & Feed

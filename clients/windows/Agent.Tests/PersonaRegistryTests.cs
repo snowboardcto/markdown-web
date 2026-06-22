@@ -42,17 +42,20 @@ public class PersonaRegistryTests
         Assert.True(seed[0].IsPassThrough, "The first seed persona (Basic) must be pass-through.");
     }
 
-    [Fact] // AC1 — every non-Basic seed persona is a real transform persona (placeholder prompt, IsPassThrough=false).
+    [Fact] // AC1 — every non-Basic TRANSFORM persona drives the engine (IsPassThrough=false + non-empty prompt).
     public void Seed_NonBasicPersonas_AreTransformPersonas_WithNonEmptyPlaceholderPrompts()
     {
         IReadOnlyList<Persona> seed = PersonaRegistry.Seed;
 
-        foreach (Persona persona in seed.Skip(1))
+        // Story 4.4: the "audio" persona is the read-aloud persona — it is intentionally pass-through with
+        // an empty prompt (the App routes it to the SAPI speech path BEFORE the engine, so it is never an
+        // LLM call / never needs a key). Every OTHER non-Basic persona is a transform persona.
+        foreach (Persona persona in seed.Skip(1).Where(p => p.Id != "audio"))
         {
             Assert.False(persona.IsPassThrough,
-                $"Non-Basic seed persona '{persona.Id}' must have IsPassThrough == false so it drives the engine.");
+                $"Non-Basic transform persona '{persona.Id}' must have IsPassThrough == false so it drives the engine.");
             Assert.False(string.IsNullOrWhiteSpace(persona.SystemPrompt),
-                $"Non-Basic seed persona '{persona.Id}' must carry a non-empty (placeholder) SystemPrompt.");
+                $"Non-Basic transform persona '{persona.Id}' must carry a non-empty SystemPrompt.");
         }
     }
 

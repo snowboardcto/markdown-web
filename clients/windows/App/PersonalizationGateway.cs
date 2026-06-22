@@ -19,11 +19,24 @@ public sealed class PersonalizationGateway
 {
     private readonly PersonalityEngine _engine;
     private readonly Func<Persona> _selectedPersona;
+    private readonly Func<string?> _preferredLanguage;
 
-    public PersonalizationGateway(PersonalityEngine engine, Func<Persona> selectedPersona)
+    /// <summary>
+    /// Composes the render-time seam. <paramref name="preferredLanguage"/> (Story 4.4 Q-Lang-Source) is an
+    /// OPTIONAL third parameter sourcing the reader's chosen target language into
+    /// <see cref="ReaderContext.PreferredLanguage"/> per resolve; a null arg coalesces to a null-language
+    /// source, so every existing two-arg call site compiles and behaves identically (the language stays
+    /// <c>null</c>, the engine ignores it for non-Translate personas). The App composes it with
+    /// <c>() =&gt; _languageSelection.Current</c>.
+    /// </summary>
+    public PersonalizationGateway(
+        PersonalityEngine engine,
+        Func<Persona> selectedPersona,
+        Func<string?>? preferredLanguage = null)
     {
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         _selectedPersona = selectedPersona ?? throw new ArgumentNullException(nameof(selectedPersona));
+        _preferredLanguage = preferredLanguage ?? (() => null);
     }
 
     /// <summary>The last non-blocking notice the engine surfaced (NeedsKey/FellBack), or <c>null</c>.</summary>
@@ -38,7 +51,7 @@ public sealed class PersonalizationGateway
     /// </summary>
     public async Task<string> ResolveMarkdownAsync(string fetchedMarkdown, Uri pageUrl, CancellationToken ct)
     {
-        var context = new ReaderContext(PageUrl: pageUrl?.ToString(), PreferredLanguage: null);
+        var context = new ReaderContext(PageUrl: pageUrl?.ToString(), PreferredLanguage: _preferredLanguage());
 
         PersonalizationResult result = await _engine
             .PersonalizeAsync(fetchedMarkdown, _selectedPersona(), context, ct)
