@@ -1,6 +1,6 @@
 # Story 4.2: Personality selector
 
-Status: in-review (Step-5 implementation complete; pending windows-latest CI verification)
+Status: done
 
 <!-- VALIDATION (Step 3, vs epics.md Story 4.2 lines 386–396; UX-DR6/UX-DR8/UX-DR9; architecture-epic4-agent.md D2/D3/D4 + the 4.2 binding lines 119–121; the COMPLETED 4-1 foundation) — RESULT = PASS.
   Run AFTER the Step-2 advanced-elicitation hardening (this revision: the 3 decide-and-document questions RESOLVED + pinned; the no-re-fetch proof tightened; the gateway Outcome/Notice exposure pinned; the selector×key×nav state table added; the tab-order plan pinned).
@@ -500,3 +500,21 @@ Modified (App):
 - `clients/windows/App/MainWindow.xaml.cs` (selection VM + rerender coordinator wiring; gateway persona Func; held-RAW capture; NeedsKey key dialog)
 
 Unchanged (re-confirmed, NOT touched): all test files, `Rendering/*`, `App/PersonalizationGateway.cs`, `App/NavigationController.cs`, `App/ContentHostController.cs`, `Agent/Persona.cs`, `Agent/PersonalityEngine.cs`, `Agent/ISecretStore.cs`, `Agent/PersonalizationResult.cs`, `build-windows.yml`, `TheMarkdownWeb.sln`.
+
+## CI Verification & AC Trace (Steps 7 + 10)
+
+**CI run #45** (`0870103`): **GREEN** on windows-latest — Build ✓ Test ✓. Selector + re-render coordinator + key dialog + a11y tests pass; all Epic 1–3 + 4-1 tests stay green (default Basic = byte-identical). Authoritative verification.
+
+**Consolidated Code Review (Step 7) — APPROVED.** Verified: MainWindow XAML parses with the new column-2 selector without disturbing the nav 3-button walk or address-bar subtree; the no-fetcher reflection sweep passes (coordinator holds no fetcher field); byte-identical-from-RAW (held raw captured before the gateway transform, never overwritten); last-wins via `++_generation` in `SetCurrentPage` + drop-on-stale after await; signatures match; ComboBox init guarded against a spurious render; `PersonalizationGateway`/`Rendering` unchanged. No changes requested.
+
+| AC | Requirement | Test(s) |
+|----|-------------|---------|
+| AC1 | Toolbar selector (lists personas, labeled, keyboard-reachable, default Basic) | `PersonalitySelectorWindowTests` `[StaFact]` + `PersonaRegistryTests` |
+| AC2 | Choose → re-render in place WITHOUT re-fetch (held raw, byte-identical, last-wins) | `PersonalityRerenderCoordinatorTests` (no-fetcher sweep, Basic→Cozy→Basic, gated last-wins) |
+| AC3 | Selector drives the gateway | `PersonalitySelectionViewModelTests` |
+| AC4 | API-key entry UX + NeedsKey flow (store, never crash) | `ApiKeyPromptViewModelTests` + `ApiKeyEntryDialogTests` `[StaFact]` |
+| AC5 | State/notice patterns (PassThrough/NeedsKey/FellBack) | coordinator `LastOutcome`/`LastNotice` tests |
+| AC6 | Rendering pure + App→Agent boundary | `PersonalityLayeringTests` + inherited purity/no-webview |
+| AC7 | windows-latest CI gate (STA + no-parallel; LLM/key faked) | CI run #45 green |
+
+All 7 ACs covered by CI-runnable proofs (LLM + key faked). Trace complete. **Story 4-2 DONE.**
