@@ -1,6 +1,6 @@
 # Story 4.3: Per-reader structural rendering
 
-Status: ready-for-dev
+Status: ready-for-review
 
 <!-- VALIDATION (Step 3, post-Step-2-hardening; vs epics.md Story 4.3 lines 398–409 + FR-10 + architecture-epic4-agent.md D2/D3/D4 + the 4.3 binding lines 122–123 + the COMPLETED 4-1/4-2 foundation, re-checked against the REAL code): RESULT = PASS.
   - AC↔EPIC ALIGNMENT (epics.md 4.3 = one Given/When/Then/And):
