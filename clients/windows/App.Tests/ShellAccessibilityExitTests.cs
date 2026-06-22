@@ -43,6 +43,7 @@ public class ShellAccessibilityExitTests
     private const string LockIndicatorName = "LockIndicator";
     private const string MdOnlyTagName = "MdOnlyTag";
     private const string ContentScrollName = "ContentScroll";
+    private const string PersonalitySelectorName = "PersonalitySelector"; // Story 4.2 additive clause.
 
     // A no-op image loader (returns null -> empty Image, never throws) so hosting needs no I/O.
     private sealed class NullImageLoader : IImageLoader
@@ -116,6 +117,21 @@ public class ShellAccessibilityExitTests
         // The content host comes AFTER the address bar in tab order (sequence undisturbed).
         Assert.True(contentScroll.TabIndex > addressInput.TabIndex,
             $"ContentScroll.TabIndex ({contentScroll.TabIndex}) must follow AddressInput ({addressInput.TabIndex}) — the 0/1/2/3 sequence stays intact.");
+
+        // ---- Personality selector (Story 4.2 additive clause): labeled + reachable + in tab order ----
+        // The full walk is Back(0)/Forward(1)/Reload(2)/AddressInput(3)/PersonalitySelector(4)/ContentScroll(5):
+        // the selector sits AFTER the address bar and BEFORE the content scroll (which is bumped 4 -> 5).
+        var personalitySelector = window.FindName(PersonalitySelectorName) as ComboBox;
+        Assert.True(personalitySelector is not null,
+            "The toolbar must host a ComboBox named 'PersonalitySelector' (Story 4.2).");
+        Assert.False(string.IsNullOrWhiteSpace(AutomationProperties.GetName(personalitySelector!)),
+            "PersonalitySelector must have a non-empty AutomationProperties.Name (e.g. \"Personality\").");
+        Assert.True(personalitySelector!.Focusable, "PersonalitySelector must be Focusable.");
+        Assert.True(KeyboardNavigation.GetIsTabStop(personalitySelector), "PersonalitySelector must be a tab stop.");
+        Assert.True(personalitySelector.TabIndex > addressInput.TabIndex,
+            $"PersonalitySelector.TabIndex ({personalitySelector.TabIndex}) must follow AddressInput ({addressInput.TabIndex}).");
+        Assert.True(contentScroll.TabIndex > personalitySelector.TabIndex,
+            $"ContentScroll.TabIndex ({contentScroll.TabIndex}) must follow PersonalitySelector ({personalitySelector.TabIndex}) — 5 > 4.");
 
         // ---- Content readability via UIA: host a non-empty page, assert non-empty text -----
         var controller = new ContentHostController(
