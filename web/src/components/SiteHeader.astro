@@ -29,8 +29,9 @@
 //   (b) Copy source: <link rel="canonical"> href read from the DOM — single source of truth.
 //   (c) Feedback mechanism: button text toggles to "Copied" for 2000 ms, then resets.
 //       Single in-flight reset (clearTimeout guard) prevents stacking.
-//   (d) Clipboard-unavailable fallback: no-op (no throw, no crash); canonical <link>
-//       remains the JS-free shareable source. writeText rejection is .catch()'d.
+//   (d) Clipboard-unavailable fallback: brief "Copy failed" label toggle (same 2s mechanism),
+//       no throw, no crash. writeText rejection .catch()'d → same "Copy failed" feedback.
+//       canonical <link> (AC3) is the JS-free shareable source. (Review #7 resolution.)
 ---
 
 <header class="site-header">
@@ -39,7 +40,7 @@
     <span class="spacer"></span>
     <a class="ghost" href="/vision">the vision</a>
     <button class="copy-link" id="copy-link-btn" type="button">
-      <span aria-hidden="true">&#x1F517;</span> Copy link
+      <span aria-hidden="true">&#x1F517;</span><span class="copy-label"> Copy link</span>
     </button>
     <a class="cta" href="/get"><span aria-hidden="true">▣</span> Get the client</a>
   </div>
@@ -54,6 +55,10 @@
     var btn = document.getElementById('copy-link-btn');
     if (!btn) return;
 
+    // Get the label span by reference — ONLY this node is toggled, never the glyph span.
+    var labelSpan = btn.querySelector('.copy-label');
+    if (!labelSpan) return;
+
     var resetTimer = null;
 
     btn.addEventListener('click', function () {
@@ -62,44 +67,39 @@
       var url = canonicalEl ? canonicalEl.getAttribute('href') : '';
       if (!url) return;
 
-      var originalText = 'Copy link';
-      var feedbackText = 'Copied';
+      var originalText = ' Copy link';
+      var feedbackText = ' Copied';
+      var failedText = ' Copy failed';
 
-      function showFeedback() {
+      function showFeedback(text: string) {
         // Clear any pending reset to avoid stacking.
         if (resetTimer !== null) {
           clearTimeout(resetTimer);
           resetTimer = null;
         }
-        // Find or reconstruct the text node (button has glyph + text).
-        var children = btn.childNodes;
-        for (var i = 0; i < children.length; i++) {
-          if (children[i].nodeType === Node.TEXT_NODE) {
-            children[i].textContent = ' ' + feedbackText;
-          }
-        }
+        // Toggle only the label span (the glyph span is untouched — no duplication).
+        labelSpan.textContent = text;
         resetTimer = setTimeout(function () {
           resetTimer = null;
-          var nodes = btn.childNodes;
-          for (var j = 0; j < nodes.length; j++) {
-            if (nodes[j].nodeType === Node.TEXT_NODE) {
-              nodes[j].textContent = ' ' + originalText;
-            }
-          }
+          labelSpan.textContent = originalText;
         }, 2000);
       }
 
       // Guard: navigator.clipboard may be undefined in insecure contexts.
       if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
         navigator.clipboard.writeText(url).then(function () {
-          showFeedback();
+          showFeedback(feedbackText);
         }).catch(function () {
           // writeText rejected (permission denied, document not focused, etc.)
-          // Degrade silently — no throw, no unhandled rejection.
+          // Show brief "Copy failed" feedback — no throw, no unhandled rejection.
           // The canonical <link> remains the JS-free shareable source.
+          showFeedback(failedText);
         });
+      } else {
+        // clipboard API unavailable (insecure context / old browser): show brief feedback.
+        // The canonical <link> (AC3) is the JS-free shareable fallback — no throw.
+        showFeedback(failedText);
       }
-      // If clipboard API is unavailable, no-op (canonical <link> is the fallback).
     });
   })();
 </script>

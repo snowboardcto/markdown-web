@@ -262,15 +262,21 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Story 5.1 — Living Link (AC5): copies the current page's canonical shareable URL to the clipboard.
-    /// Reads the current page from <see cref="NavigationController.Current"/> (the single source of truth —
-    /// no second source of truth for "the current page"). Passes it through <see cref="ShareLinkBuilder.ToShareUrl"/>
-    /// to produce the canonical form, then writes to the injected <see cref="IClipboard"/>. When no page is
-    /// loaded (<c>Current == null</c>) this is a safe no-op (the clipboard is untouched, no throw).
-    /// Total — never throws into the UI (ShareLinkBuilder and SystemClipboard are both total).
+    /// Delegates to <see cref="ExecuteCopyLink"/> (the extracted testable logic) which can be asserted
+    /// in CI via an injected <see cref="IClipboard"/> fake without wiring a full window handler.
     /// </summary>
     private void ShareLinkButton_Click(object sender, RoutedEventArgs e)
+        => ExecuteCopyLink(_clipboard, _controller.Current);
+
+    /// <summary>
+    /// Extracted copy-link logic: reads <paramref name="current"/> (from <c>NavigationController.Current</c>),
+    /// passes it through <see cref="ShareLinkBuilder.ToShareUrl"/>, and writes to <paramref name="clipboard"/>.
+    /// When <paramref name="current"/> is <c>null</c> (no page loaded) this is a safe no-op (clipboard
+    /// untouched, no throw). Total — never throws (ShareLinkBuilder and IClipboard implementations are total).
+    /// Public visibility allows App.Tests to assert the REAL extracted method via the IClipboard fake.
+    /// </summary>
+    public static void ExecuteCopyLink(IClipboard clipboard, Uri? current)
     {
-        Uri? current = _controller.Current;
         if (current is null)
         {
             // No page loaded — safe no-op; clipboard untouched.
@@ -283,7 +289,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        _clipboard.SetText(shareUrl);
+        clipboard.SetText(shareUrl);
     }
 
     private async void AddressInput_KeyDown(object sender, KeyEventArgs e)

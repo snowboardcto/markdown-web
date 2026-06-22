@@ -224,6 +224,31 @@ The "Living Link" is NOT a new artifact — it is the page's OWN canonical `.md`
 - [Source: .github/workflows/build-windows.yml; web/playwright.config.ts] — the windows-latest WPF CI gate + the web Playwright harness (AC7/AC8).
 - [Source: _bmad-output/implementation-artifacts/sprint-status.yaml] — Epics 1–4 done; 5-1 is the first Epic-5 story.
 
+## Review Findings
+
+> Consolidated adversarial code review (Blind Hunter / Edge Case Hunter / Acceptance Auditor), 2026-06-22. Commit 0234135. Verdict: PASS WITH ITEMS. 0 CRITICAL, 2 HIGH, 6 MEDIUM, 3 LOW (after dedup + dismiss). AC verification: 8/8 satisfied (AC2/AC5/AC7 native execution CI-deferred). H1 text-node corruption independently confirmed against the built `dist/x/index.html`.
+
+**Decision-needed:**
+
+- [x] [Review][Decision] **RESOLVED (Review #7):** Clipboard-unavailable / writeText-rejection gives the user NO feedback (silent dead button) — `showFeedback()` ran only inside the `writeText().then()` success path. **Decision:** Added brief "Copy failed" label toggle (same 2s mechanism, reusing the `<span class="copy-label">` from fix #1) for both the `navigator.clipboard`-undefined branch and the `.catch()` rejection branch. This meets AC4's "degrade" wording while keeping the canonical `<link>` (AC3) as the JS-free shareable fallback. Recorded as the AC4 "degrade" resolution. [web/src/components/SiteHeader.astro]
+
+**Patches:**
+
+- [x] [Review][Patch] HIGH — **FIXED (#1):** "Copied" feedback corrupts/duplicates the button label. Fixed: wrapped label in `<span class="copy-label"> Copy link</span>` and the script now gets the span by reference (`btn.querySelector('.copy-label')`) and toggles only `labelSpan.textContent` — glyph span is never touched. Added regression tests asserting the label is exactly "Copy link" before click and exactly "Copied" after (not "Copied 🔗 Copied"). [web/src/components/SiteHeader.astro]
+- [x] [Review][Patch] HIGH — **FIXED (#2):** `%2F` round-trip parity now implemented. `ShareLinkBuilder.ToShareUrl` now calls `Uri.UnescapeDataString(current.AbsolutePath)` (mirroring `ToFetchEndpoint`'s single decode) before slugging. Docstring updated to accurately describe the decode. Added round-trip parity tests for `%20`, `%2F`, and unicode paths in `ShareLinkBuilderTests.cs`. [clients/windows/App/ShareLinkBuilder.cs, App.Tests/ShareLinkBuilderTests.cs]
+- [x] [Review][Patch] MEDIUM — **FIXED (#3):** `new URL(canonicalPathname, Astro.site)` now guarded: `const canonical = Astro.site ? new URL(...) : null` and `{canonical && <link rel="canonical" href={canonical.href} />}`. Page render never throws when `Astro.site` is undefined — fail safe. [web/src/layouts/Page.astro]
+- [x] [Review][Patch] MEDIUM — **FIXED (#4):** Clipboard-copy assertion un-gated on chromium. Moved the real clipboard read assertion into a nested `test.describe` block using `test.use({ permissions: ['clipboard-read', 'clipboard-write'] })`. No try/catch wrapping the primary assertion — it will fail if the button doesn't actually copy. Also added exact label assertions (before/after click). [web/tests/5-1-living-link.spec.ts]
+- [x] [Review][Patch] MEDIUM — **FIXED (#5):** Extracted `MainWindow.ExecuteCopyLink(IClipboard, Uri?)` as a public static method; `ShareLinkButton_Click` now just calls it. `CopyLinkAction_*` tests now call `MainWindow.ExecuteCopyLink(fakeClipboard, currentPage)` directly — asserting the real wiring, not a re-implemented inline copy. [clients/windows/App/MainWindow.xaml.cs, App.Tests/ShareLinkBuilderTests.cs]
+- [x] [Review][Patch] MEDIUM — **FIXED (#6):** writeText-rejection test now uses `addInitScript` before navigation (not `addInitScript` after `goto`) to inject both the `unhandledrejection` flag listener and the `clipboard` override. `page.on('pageerror')` registered before navigation. Test now asserts `__unhandledRejectionFired === false` (not just `pageerror`). Removing `.catch()` would now cause this test to fail. [web/tests/5-1-living-link.spec.ts]
+- [x] [Review][Patch] LOW — **FIXED (#8):** Non-app-host and relative branches now return `current.OriginalString` (not `current.ToString()`) so percent-encoded external URLs are byte-for-byte unchanged. [clients/windows/App/ShareLinkBuilder.cs]
+- [x] [Review][Patch] LOW — **FIXED (#9):** `Toolbar_NavStackPanel_Unchanged_WithShareButton` now asserts `back is not null` first (with a clear failure message if BackButton is renamed), then asserts the count unconditionally — no more silent tautology. [clients/windows/App.Tests/ShareLinkBuilderTests.cs]
+
+**Deferred:**
+
+- [x] [Review][Defer] LOW — relative-Uri branch returns the relative string (non-empty), which the handler would copy if ever reached; contract/some test assertions expect null/empty. Unreachable in current wiring (`NavigationController.Current` is always absolute). [clients/windows/App/ShareLinkBuilder.cs] — deferred, not reachable in production wiring (edge EC-6/F7)
+
+**Dismissed as noise (3):** blanket `catch {}` in `SystemClipboard` (intentional totality, mirrors `IUrlLauncher`); emoji-glyph font coverage (cosmetic, accessible name overrides); non-app-host query preserved (by-design — correct not to mutate foreign URLs).
+
 ## Dev Agent Record
 
 ### Agent Model Used
@@ -242,7 +267,7 @@ claude-sonnet-4-6
 - (a) **Placement:** Header (`SiteHeader.astro`) — every page inherits it with one edit. The button sits between the ghost "the vision" link and the "Get the client" CTA.
 - (b) **Copy source:** `<link rel="canonical">` href read from the DOM at click time — single DOM source of truth so the copied value and the declared canonical CANNOT drift. No prop injection needed.
 - (c) **Feedback mechanism:** Button text text-node toggles to "Copied" for 2000ms, then resets to "Copy link". Single in-flight `clearTimeout` guard prevents stacking on double/rapid activation.
-- (d) **Clipboard-unavailable fallback:** No-op — no throw, no crash. Guards: `typeof navigator.clipboard !== 'undefined'` + `typeof writeText === 'function'` before calling. `writeText` rejection `.catch()`'d silently. The canonical `<link>` (AC3) is the JS-free shareable source of truth when clipboard is unavailable.
+- (d) **Clipboard-unavailable fallback:** ~~No-op~~ → **UPDATED (Review #7 resolution):** Brief "Copy failed" label toggle (same 2s/clearTimeout mechanism) for both the `navigator.clipboard`-undefined and `.catch()` rejection paths. Chosen over silent no-op to meet AC4's "degrade" wording. The canonical `<link>` (AC3) remains the JS-free shareable fallback.
 
 **AC5 — Native share affordance:**
 - (a) **ShareLinkBuilder canonical form:** `scheme://host/path` — query+fragment dropped (consistent with `PageEndpointResolver.ToFetchEndpoint`), trailing slash stripped for non-root paths, host preserved. Reuses `PageEndpointResolver.IsAppHost` for host detection. Round-trip: `ToFetchEndpoint(new Uri(ToShareUrl(current)))` == original `/api/negotiate/<slug>`.
@@ -255,11 +280,17 @@ claude-sonnet-4-6
 - The `dist/` diff shows ONLY the new `<link rel="canonical">` lines and the copy-link button HTML added to each page — no changes to asset URLs (CSS stays hashed `/_astro/…`, media stays `/media/…`), no route changes, no sitemap/RSS (none added).
 - No `2-6-chrome.spec.ts` assertion needed reconciliation — the copy button addition is additive and the existing chrome elements (wordmark, "the vision" link, "Get the client" CTA) remain untouched.
 
-**Test results:**
+**Test results (initial implementation):**
 - Web: 190/190 passing (0 failures) — 157 prior specs + 33 new 5-1 specs.
 - `astro check`: 0 errors.
 - `npm run build`: exit 0.
 - Native: 23 tests in `ShareLinkBuilderTests.cs` (pre-written TDD); code verified to compile cleanly by construction with all required API surface (`ShareLinkBuilder.ToShareUrl`, `IClipboard`, `SystemClipboard`, `ShareLinkButton` in toolbar). Cannot run `dotnet test` in this Linux sandbox — CI (`windows-latest`) is the verification gate.
+
+**Test results (post-review-fixes, 2026-06-22):**
+- Web: 192/192 passing (0 failures) — 157 prior specs + 35 new/strengthened 5-1 specs (added 2 new label-exact assertions for Review #1/#4 regression prevention).
+- `astro check`: 0 errors, 0 warnings (2 pre-existing hints: unused `name` var in spec line 251, deprecated `waitForNavigation` in 2-3 spec — both pre-date this review).
+- `npm run build`: exit 0.
+- Native: code compiles by construction — all review fixes (#2/#5/#8/#9) are pure C# changes; `ShareLinkBuilderTests.cs` updated to call `MainWindow.ExecuteCopyLink()` directly (fix #5); added %20/%2F/unicode round-trip tests (fix #2); `back is not null` guard (fix #9); `OriginalString` for byte-fidelity (fix #8).
 
 ### File List
 
@@ -276,3 +307,4 @@ claude-sonnet-4-6
 ### Change Log
 
 - 2026-06-22: Story 5.1 Living Link implemented. Added canonical `<link>` to web (AC3), "Copy link" button to SiteHeader (AC4), `ShareLinkBuilder` + `IClipboard` seam to native (AC5), "Copy link" toolbar button to MainWindow (AC5). All 190 web specs green; native code compiles by construction. Decided: header placement, DOM canonical as copy source, 2s feedback timer, IClipboard seam, TabIndex ShareLinkButton=6/ContentScroll=7.
+- 2026-06-22: Review follow-up fixes applied. HIGH #1: label corruption fixed (`<span class="copy-label">` + span-by-reference toggle); HIGH #2: `Uri.UnescapeDataString` decode added to `ShareLinkBuilder`, docstring corrected, round-trip parity tests added for %20/%2F/unicode; MEDIUM #3: `Astro.site` guard added to `Page.astro`; MEDIUM #4: clipboard assertion un-gated (real clipboard read, no try/catch); MEDIUM #5: `MainWindow.ExecuteCopyLink` extracted, tests updated to call real method; MEDIUM #6: writeText-rejection test uses `addInitScript`+`unhandledrejection` before navigation; Decision #7: "Copy failed" feedback added (not silent no-op); LOW #8: `OriginalString` for byte-fidelity; LOW #9: BackButton non-null guard added. 192/192 web specs green.

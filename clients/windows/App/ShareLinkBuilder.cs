@@ -15,7 +15,8 @@ namespace TheMarkdownWeb.App;
 /// non-root paths so the share URL matches the canonical slug form (e.g. <c>/gear-guide/</c> → <c>/gear-guide</c>)
 /// — both forms map to the same <c>/api/negotiate/&lt;slug&gt;</c> via <see cref="PageEndpointResolver.ToFetchEndpoint"/>.</para>
 ///
-/// <para>For a non-app-host URL, the input is returned UNCHANGED (byte-for-byte) — never silently rewritten.</para>
+/// <para>For a non-app-host URL, the input is returned UNCHANGED (byte-for-byte via
+/// <see cref="Uri.OriginalString"/>) — never silently rewritten or decoded.</para>
 ///
 /// <para>For <c>null</c> or a relative <see cref="Uri"/>, returns <c>null</c> without throwing. PURE, TOTAL — never throws.</para>
 ///
@@ -44,22 +45,26 @@ public static class ShareLinkBuilder
 
         if (!current.IsAbsoluteUri)
         {
-            // Relative URIs: return the relative string unchanged (total, no InvalidOperationException).
-            return current.ToString();
+            // Relative URIs: return the original string unchanged (total, no InvalidOperationException).
+            return current.OriginalString;
         }
 
         if (!PageEndpointResolver.IsAppHost(current))
         {
-            // Non-app-host URLs: returned UNCHANGED byte-for-byte (never silently rewritten).
-            return current.ToString();
+            // Non-app-host URLs: returned UNCHANGED byte-for-byte (OriginalString preserves %XX encoding
+            // exactly; Uri.ToString() may display-decode percent-encoded characters, altering external URLs).
+            return current.OriginalString;
         }
 
         try
         {
             // App-host URL: produce the canonical scheme://host/path form.
-            // 1. Decode the path once (mirrors PageEndpointResolver.ToFetchEndpoint's single decode).
-            //    This ensures percent-encoded paths are not double-encoded in the share URL.
-            string rawPath = current.AbsolutePath;
+            // 1. Decode the path ONCE via Uri.UnescapeDataString (mirrors PageEndpointResolver.ToFetchEndpoint's
+            //    single decode). This is critical for %2F (encoded separator): UnescapeDataString turns it into
+            //    a real path separator "/" which then round-trips through SlugDeriver correctly. Without this
+            //    decode, %2F in the share URL would diverge from the endpoint that ToFetchEndpoint produces.
+            //    Uri.AbsolutePath is still percent-encoded at this point — we decode it once here.
+            string rawPath = Uri.UnescapeDataString(current.AbsolutePath);
 
             // 2. Strip trailing slash from non-root paths so /gear-guide/ → /gear-guide.
             //    The root "/" is preserved as-is. Both forms round-trip to the same
@@ -94,7 +99,7 @@ public static class ShareLinkBuilder
         catch
         {
             // Total — on any unexpected malformation fall back to the original URL string.
-            return current.ToString();
+            return current.OriginalString;
         }
     }
 }

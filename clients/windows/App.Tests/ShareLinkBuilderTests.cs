@@ -278,7 +278,62 @@ public class ShareLinkBuilderTests
         Assert.Equal(fetchFromClean.ToString(), fetchFromDirty.ToString());
     }
 
-    // ── (C) Copy action with in-memory IClipboard fake ────────────────────────
+    // ── (B-extra) AC2 round-trip parity: %20, %2F, and unicode path shapes ──────
+    // These assert the "decoded once" contract: ToShareUrl must call Uri.UnescapeDataString
+    // so that %2F becomes "/" and round-trips through ToFetchEndpoint identically to the
+    // non-encoded form. Without the decode, %2F would diverge (share ≠ fetch endpoint).
+
+    [Fact] // %20 (space) in path: round-trip must produce the same endpoint as the decoded form.
+    public void ToShareUrl_PercentEncodedSpace_RoundTrip_MatchesDecodedForm()
+    {
+        // %20 in a URL path is a space; the decoded slug should match "My Notes/page".
+        var encodedUri = new Uri("https://themarkdownweb.com/My%20Notes/page");
+        var decodedUri = new Uri("https://themarkdownweb.com/My Notes/page", UriKind.Absolute);
+
+        string? shareEncoded = ShareLinkBuilder.ToShareUrl(encodedUri);
+        Assert.NotNull(shareEncoded);
+
+        // Both must produce the same /api/negotiate/<slug> endpoint.
+        Uri fetchFromEncoded = PageEndpointResolver.ToFetchEndpoint(new Uri(shareEncoded!));
+        Uri fetchFromDecoded = PageEndpointResolver.ToFetchEndpoint(decodedUri);
+        Assert.Equal(fetchFromDecoded.ToString(), fetchFromEncoded.ToString());
+    }
+
+    [Fact] // %2F (encoded slash) in path: ToShareUrl decodes once so %2F -> "/" before slugging.
+    public void ToShareUrl_PercentEncodedSlash_RoundTrip_DecodedOnceBeforeSlug()
+    {
+        // %2F in a path component is an encoded "/" (a sub-path separator).
+        // After decode-once, "sub%2Fpage" → "sub/page" → slug "sub/page" → endpoint /api/negotiate/sub/page.
+        var uri = new Uri("https://themarkdownweb.com/sub%2Fpage");
+        string? shareUrl = ShareLinkBuilder.ToShareUrl(uri);
+        Assert.NotNull(shareUrl);
+
+        // The share URL, when fed through ToFetchEndpoint, must produce the same endpoint
+        // as the explicitly decoded URL (proving the single-decode contract holds).
+        var decodedUri = new Uri("https://themarkdownweb.com/sub/page");
+        Uri fetchFromShare = PageEndpointResolver.ToFetchEndpoint(new Uri(shareUrl!));
+        Uri fetchFromDecoded = PageEndpointResolver.ToFetchEndpoint(decodedUri);
+        Assert.Equal(fetchFromDecoded.ToString(), fetchFromShare.ToString());
+    }
+
+    [Fact] // Unicode path: non-ASCII slug chars round-trip through SlugDeriver correctly.
+    public void ToShareUrl_UnicodePath_RoundTrip_MatchesNormalized()
+    {
+        // Unicode in a URI path is percent-encoded. After decode-once, it's a unicode string.
+        // SlugDeriver normalizes it. This asserts the round-trip doesn't throw and produces a valid endpoint.
+        var uri = new Uri("https://themarkdownweb.com/caf%C3%A9"); // "café"
+        string? shareUrl = ShareLinkBuilder.ToShareUrl(uri);
+        Assert.NotNull(shareUrl);
+
+        // The share URL must round-trip without throwing.
+        Uri fetchFromShare = PageEndpointResolver.ToFetchEndpoint(new Uri(shareUrl!));
+        Assert.NotNull(fetchFromShare);
+        Assert.Contains("/api/negotiate/", fetchFromShare.ToString());
+    }
+
+    // ── (C) Copy action via the REAL extracted method (MainWindow.ExecuteCopyLink) ──
+    // These test the actual wiring — not a re-implementation of the handler inline.
+    // MainWindow.ExecuteCopyLink(IClipboard, Uri?) is the testable extract (Review fix #5).
 
     [Fact] // Loaded page → fake clipboard receives the canonical share URL.
     public void CopyLinkAction_WithLoadedPage_WritesShareUrlToFakeClipboard()
@@ -287,15 +342,8 @@ public class ShareLinkBuilderTests
         var fakeClipboard = new FakeClipboard();
         var currentPage = new Uri("https://themarkdownweb.com/gear-guide");
 
-        // Act: invoke the copy action (the handler reads NavigationController.Current and
-        // calls ShareLinkBuilder.ToShareUrl, then IClipboard.SetText).
-        // The handler is extracted into a testable static/instance method or invoked via
-        // the IClipboard seam. Arrange the copy action:
-        string? shareUrl = ShareLinkBuilder.ToShareUrl(currentPage);
-        Assert.NotNull(shareUrl);
-
-        // The copy action writes to IClipboard:
-        fakeClipboard.SetText(shareUrl!);
+        // Act: invoke the REAL extracted handler logic via the public static method.
+        MainWindow.ExecuteCopyLink(fakeClipboard, currentPage);
 
         // Assert: the fake clipboard received the canonical share URL.
         Assert.Equal("https://themarkdownweb.com/gear-guide", fakeClipboard.LastSetText);
@@ -306,16 +354,10 @@ public class ShareLinkBuilderTests
     {
         var fakeClipboard = new FakeClipboard();
 
-        // Simulate: NavigationController.Current == null → ToShareUrl(null) → null/empty.
-        string? shareUrl = ShareLinkBuilder.ToShareUrl(null);
+        // Act: invoke the REAL extracted handler with null current (no page loaded).
+        MainWindow.ExecuteCopyLink(fakeClipboard, null);
 
-        // The copy action must be a no-op when shareUrl is null/empty (no SetText called).
-        if (!string.IsNullOrEmpty(shareUrl))
-        {
-            fakeClipboard.SetText(shareUrl);
-        }
-
-        // Clipboard must be untouched.
+        // Clipboard must be untouched (no SetText called).
         Assert.Null(fakeClipboard.LastSetText);
     }
 
@@ -325,10 +367,8 @@ public class ShareLinkBuilderTests
         var fakeClipboard = new FakeClipboard();
         var externalPage = new Uri("https://example.com/some/page");
 
-        string? shareUrl = ShareLinkBuilder.ToShareUrl(externalPage);
-        Assert.NotNull(shareUrl);
-
-        fakeClipboard.SetText(shareUrl!);
+        // Act: invoke the REAL extracted handler.
+        MainWindow.ExecuteCopyLink(fakeClipboard, externalPage);
 
         // The clipboard should contain the original external URL (unchanged).
         Assert.Equal("https://example.com/some/page", fakeClipboard.LastSetText);
@@ -397,20 +437,16 @@ public class ShareLinkBuilderTests
         AppMainWindow window = ShellTestHelpers.CreateWindow();
         Button? back = ShellTestHelpers.FindButton(window, ShellTestHelpers.BackButtonName);
 
+        // Assert BackButton is non-null first — if it were renamed, the count assertion below
+        // would silently pass on an empty list, making it a tautology. This guard surfaces renames.
+        Assert.True(back is not null,
+            $"BackButton named '{ShellTestHelpers.BackButtonName}' must exist in the toolbar. " +
+            "If it was renamed, update ShellTestHelpers.BackButtonName to match.");
+
         // The Q-Placement pattern puts the Share button in a NEW column, NOT in the nav StackPanel.
-        // The nav stack must still have exactly 3 buttons.
-        if (back is not null)
-        {
-            var ordered = ShellTestHelpers.ButtonsInToolbarOrder(back);
-            Assert.Equal(3, ordered.Count);
-        }
-        else
-        {
-            // If BackButton is missing, the toolbar structure assertion still holds structurally.
-            Assert.True(window.FindName(ShellTestHelpers.BackButtonName) is null
-                || window.FindName(ShellTestHelpers.BackButtonName) is Button,
-                "BackButton must be a Button if it exists.");
-        }
+        // The nav stack must still have exactly 3 buttons (Back/Forward/Reload).
+        var ordered = ShellTestHelpers.ButtonsInToolbarOrder(back!);
+        Assert.Equal(3, ordered.Count);
     }
 }
 

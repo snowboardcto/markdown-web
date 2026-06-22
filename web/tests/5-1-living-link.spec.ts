@@ -265,57 +265,85 @@ test.describe('Story 5.1 AC4 — "Copy link" button in shared chrome (NEW, RED b
     await expect(copyButton).toHaveCount(1);
   });
 
-  // ── AC4 copy value: the copied URL equals the canonical href (PRIMARY assertion) ──
-  // GATED: Playwright clipboard-read/write requires browser permissions AND document focus.
-  // In CI sandbox this may be constrained. The backstop is the copy-source wiring assertion
-  // below (the button is wired to the canonical href value).
-  // Mirrors the 2.7 emulator-gating precedent.
-  test(
-    'activating "Copy link" copies the canonical URL (clipboard-read gated — CI backstop: copy-source wiring)',
-    async ({ page, context }) => {
-      // Grant clipboard permissions.
-      await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  // ── AC4 copy value: the copied URL equals the canonical href (PRIMARY real assertion) ──
+  // Un-gated on chromium: headless Chromium supports clipboard read with granted permissions.
+  // test.use() sets clipboard-read/write permissions for this describe block so the real
+  // clipboard assertion runs without a try/catch wrapper (Review fix #4).
+  test.describe('clipboard-read assertions (chromium with permissions)', () => {
+    test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
 
-      await page.goto('/x');
-      // Wait for the page to be fully loaded (needed for clipboard focus).
-      await page.waitForLoadState('load');
+    test(
+      'activating "Copy link" copies the canonical URL byte-for-byte (real clipboard read)',
+      async ({ page }) => {
+        await page.goto('/x');
+        await page.waitForLoadState('load');
 
-      const copyButton = page.getByRole('button', { name: COPY_LINK_LABEL, exact: true });
-      await expect(copyButton).toHaveCount(1);
+        const canonicalHref = await page
+          .locator('head link[rel="canonical"]')
+          .getAttribute('href');
+        expect(canonicalHref, 'canonical href must exist as the copy source').toBeTruthy();
+        expect(canonicalHref).toBe(`${CANONICAL_ORIGIN}/x`);
 
-      // Backstop (CI-green): assert the button is wired to the canonical href.
-      // The button must have a data attribute or be programmatically linked to the canonical URL.
-      // Implementation should wire it from <link rel="canonical"> or from the same Astro.site source.
-      // We assert the canonical link exists (the source of truth the button copies from).
-      const canonicalHref = await page
-        .locator('head link[rel="canonical"]')
-        .getAttribute('href');
-      expect(canonicalHref, 'canonical href must exist as the copy source').toBeTruthy();
-      expect(canonicalHref).toBe(`${CANONICAL_ORIGIN}/x`);
+        const copyButton = page.getByRole('button', { name: COPY_LINK_LABEL, exact: true });
+        await expect(copyButton).toHaveCount(1);
 
-      // Attempt the actual clipboard read (gated — may be blocked in CI).
-      try {
         await copyButton.click();
-        // Brief wait for the async clipboard write to resolve.
+        // Wait for the async clipboard write to resolve.
         await page.waitForTimeout(200);
 
+        // Real clipboard read — un-gated because headless Chromium honours granted permissions.
         const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
         expect(
           clipboardText,
           'copied URL must equal the canonical href byte-for-byte',
         ).toBe(canonicalHref);
-      } catch {
-        // In CI sandboxes where clipboard read is not available, this catch keeps the test green.
-        // The backstop above (canonical href wiring) is the CI-green assertion.
-        // The failure is documented: clipboard read is environment-constrained (AC8 gating precedent).
-        test.info().annotations.push({
-          type: 'clipboard-gated',
-          description:
-            'Clipboard read blocked by CI sandbox — backstop (canonical href wiring) is the CI-green assertion. Mirrors AC8 / 2.7 emulator-gating precedent.',
-        });
-      }
-    },
-  );
+      },
+    );
+
+    // ── AC4 label assertions: before and after click must be EXACT (not just "contains") ──
+    // Asserts the fix for Review #1 (label corruption). The button visible label must be
+    // exactly "Copy link" before and exactly "Copied" after — never "Copied 🔗 Copied".
+    test('"Copy link" button label is exactly "Copy link" before click', async ({ page }) => {
+      await page.goto('/x');
+      const copyLabel = page.locator('#copy-link-btn .copy-label');
+      await expect(copyLabel).toHaveCount(1);
+      // Must be exactly " Copy link" (with leading space from the span) — trimmed for comparison.
+      const text = await copyLabel.textContent();
+      expect(text?.trim(), 'button label must be exactly "Copy link" before click').toBe('Copy link');
+    });
+
+    test('"Copy link" button label is exactly "Copied" after click (no duplication)', async ({ page }) => {
+      await page.goto('/x');
+      await page.waitForLoadState('load');
+
+      await page.getByRole('button', { name: COPY_LINK_LABEL, exact: true }).click();
+      await page.waitForTimeout(100);
+
+      // The .copy-label span must show exactly "Copied" (not "Copied 🔗 Copied" or " Copied  Copied").
+      const copyLabel = page.locator('#copy-link-btn .copy-label');
+      const text = await copyLabel.textContent();
+      expect(text?.trim(), 'button label after click must be exactly "Copied" (no duplication)').toBe('Copied');
+    });
+
+    // ── AC4 index page: "Copy link" copies root canonical (not empty/stale) ──────
+    test('index /: "Copy link" copies the root canonical URL', async ({ page }) => {
+      await page.goto('/');
+
+      const copyButton = page.getByRole('button', { name: COPY_LINK_LABEL, exact: true });
+      await expect(copyButton).toHaveCount(1);
+
+      const canonicalHref = await page.locator('head link[rel="canonical"]').getAttribute('href');
+      expect(canonicalHref, 'index canonical href must exist').toBeTruthy();
+      expect(canonicalHref, 'index canonical must be the root absolute URL').toBe(
+        `${CANONICAL_ORIGIN}/`,
+      );
+
+      await copyButton.click();
+      await page.waitForTimeout(200);
+      const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
+      expect(clipboardText, 'index copy must produce the root canonical URL').toBe(canonicalHref);
+    });
+  });
 
   // ── AC4 success feedback: "Copied" label appears after activation ──────────
   test('"Copy link" button shows "Copied" feedback after activation', async ({ page, context }) => {
@@ -326,59 +354,11 @@ test.describe('Story 5.1 AC4 — "Copy link" button in shared chrome (NEW, RED b
     await expect(copyButton).toHaveCount(1);
 
     await copyButton.click();
-    // After clicking, success feedback (e.g. "Copied") should briefly appear.
-    // Accept either: the button text changes to "Copied", or a sibling/child element
-    // with the text "Copied" appears within the header chrome.
-    const feedbackVisible = await page
-      .locator(`header :text("${COPIED_FEEDBACK}")`)
-      .isVisible()
-      .catch(() => false);
-
-    // Allow for a brief delay in async feedback.
-    if (!feedbackVisible) {
-      await page.waitForTimeout(300);
-      const feedbackVisibleRetry = await page
-        .locator(`header :text("${COPIED_FEEDBACK}")`)
-        .isVisible()
-        .catch(() => false);
-      expect(
-        feedbackVisibleRetry,
-        '"Copied" feedback must be visible after activating the copy button',
-      ).toBe(true);
-    } else {
-      expect(feedbackVisible, '"Copied" feedback must be visible after activating the copy button').toBe(
-        true,
-      );
-    }
-  });
-
-  // ── AC4 index page: "Copy link" copies root canonical (not empty/stale) ──────
-  test('index /: "Copy link" copies the root canonical URL', async ({ page, context }) => {
-    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-    await page.goto('/');
-
-    const copyButton = page.getByRole('button', { name: COPY_LINK_LABEL, exact: true });
-    await expect(copyButton).toHaveCount(1);
-
-    // Backstop: the canonical href for the index must be the root URL.
-    const canonicalHref = await page.locator('head link[rel="canonical"]').getAttribute('href');
-    expect(canonicalHref, 'index canonical href must exist').toBeTruthy();
-    expect(canonicalHref, 'index canonical must be the root absolute URL').toBe(
-      `${CANONICAL_ORIGIN}/`,
-    );
-
-    // Attempt the clipboard check (gated — may be blocked in CI).
-    try {
-      await copyButton.click();
-      await page.waitForTimeout(200);
-      const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
-      expect(clipboardText, 'index copy must produce the root canonical URL').toBe(canonicalHref);
-    } catch {
-      test.info().annotations.push({
-        type: 'clipboard-gated',
-        description: 'Clipboard read blocked in CI — backstop (index canonical wiring) passes.',
-      });
-    }
+    // After clicking, the .copy-label span should show "Copied".
+    const copyLabel = page.locator('#copy-link-btn .copy-label');
+    await page.waitForTimeout(100);
+    const text = await copyLabel.textContent();
+    expect(text?.trim(), '"Copied" feedback must appear in the label span').toBe(COPIED_FEEDBACK);
   });
 });
 
@@ -455,13 +435,23 @@ test.describe('Story 5.1 AC4 — edge cases: JS-disabled + clipboard errors', ()
   });
 
   // Simulate writeText rejection (permission denied).
+  // Fix #6: inject the unhandledrejection listener and the clipboard override via addInitScript
+  // BEFORE navigation so they are registered before any page script runs. Then check the
+  // unhandledrejection flag (not pageerror, which is for thrown exceptions, not promise rejections).
+  // This ensures removing the .catch() from the script WOULD fail this test.
   test('clipboard writeText rejection: no unhandled rejection, page stays stable', async ({
     page,
   }) => {
-    await page.goto('/x');
-
-    // Override writeText to return a rejected Promise (permission denied simulation).
+    // Register the unhandledrejection flag AND the clipboard override BEFORE navigation.
+    // addInitScript runs before any page script — so the flag is set before the copy script loads.
     await page.addInitScript(() => {
+      // Flag: set to true if an unhandled promise rejection fires.
+      (window as unknown as Record<string, unknown>).__unhandledRejectionFired = false;
+      window.addEventListener('unhandledrejection', () => {
+        (window as unknown as Record<string, unknown>).__unhandledRejectionFired = true;
+      });
+
+      // Override writeText to return a rejected Promise (permission denied simulation).
       Object.defineProperty(navigator, 'clipboard', {
         value: {
           writeText: () => Promise.reject(new DOMException('Permission denied', 'NotAllowedError')),
@@ -472,26 +462,40 @@ test.describe('Story 5.1 AC4 — edge cases: JS-disabled + clipboard errors', ()
       });
     });
 
-    await page.reload();
-    await page.waitForLoadState('load');
-
+    // Register pageerror BEFORE navigation (for JS exceptions, distinct from unhandledrejection).
     let unhandledError: Error | null = null;
     page.on('pageerror', (err) => {
       unhandledError = err;
     });
+
+    // Navigate — addInitScript already applied before any page script runs.
+    await page.goto('/x');
+    await page.waitForLoadState('load');
 
     const copyButton = page.getByRole('button', { name: COPY_LINK_LABEL, exact: true });
     const buttonExists = (await copyButton.count()) > 0;
 
     if (buttonExists) {
       await copyButton.click();
+      // Wait for the async promise rejection to propagate (if the .catch() were missing, the
+      // unhandledrejection flag would be set within this window).
       await page.waitForTimeout(500);
     }
 
-    // Must NOT produce an unhandled rejection or crash the page.
+    // Must NOT produce an unhandled rejection (the .catch() must have caught it).
+    // If the .catch() were removed from the script, __unhandledRejectionFired would be true.
+    const rejectionFired = await page.evaluate(
+      () => (window as unknown as Record<string, unknown>).__unhandledRejectionFired,
+    );
+    expect(
+      rejectionFired,
+      'writeText rejection must be .catch()\'d — no unhandled promise rejection',
+    ).toBe(false);
+
+    // Also must NOT produce a synchronous pageerror.
     expect(
       unhandledError,
-      'page must not surface unhandled rejection when writeText is denied',
+      'page must not throw when writeText is denied',
     ).toBeNull();
 
     // The canonical source of truth must still be present.

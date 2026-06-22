@@ -37,7 +37,10 @@ const rawPathname = Astro.url.pathname;
 const canonicalPathname = rawPathname.length > 1 && rawPathname.endsWith('/')
   ? rawPathname.slice(0, -1)
   : rawPathname;
-const canonical = new URL(canonicalPathname, Astro.site);
+// Guard: only build the canonical URL when Astro.site is set (prevents a throw if
+// the config is missing or reused in a different Astro project without `site`).
+// When Astro.site is undefined, no <link rel="canonical"> is emitted — fail safe.
+const canonical = Astro.site ? new URL(canonicalPathname, Astro.site) : null;
 ---
 
 <!doctype html>
@@ -46,7 +49,7 @@ const canonical = new URL(canonicalPathname, Astro.site);
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
-    <link rel="canonical" href={canonical.href} />
+    {canonical && <link rel="canonical" href={canonical.href} />}
   </head>
   <body>
     <SiteHeader />
