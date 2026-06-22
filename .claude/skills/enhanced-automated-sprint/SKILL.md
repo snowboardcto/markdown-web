@@ -5,7 +5,7 @@ description: 'Run the full BMAD pipeline for multiple stories in an epic. Breaks
 
 # Enhanced Automated Sprint Pipeline
 
-> **TL;DR for humans:** This skill automates the entire dev lifecycle for multiple stories in an epic. You give it an epic ID (and optionally specific story IDs), and it runs each story through: **create -> refine -> validate -> write E2E tests -> implement -> consolidated code review -> fix issues -> verify -> update sprint status**. BMAD 6.2's `/bmad-bmm-code-review` now runs Blind Hunter, Edge Case Hunter, and Acceptance Auditor internally — no separate adversarial/edge-case steps needed. Stories can run in parallel when independent. You approve the plan upfront and get prompted at key decision points (story review, fix prioritization, failures). Everything else is hands-off.
+> **TL;DR for humans:** This skill automates the entire dev lifecycle for multiple stories in an epic. You give it an epic ID (and optionally specific story IDs), and it runs each story through: **create -> refine -> validate -> write E2E tests -> implement -> consolidated code review -> fix issues -> verify -> update sprint status**, then closes the epic with a **cross-story integration check + an automatic epic-wide review** (holistic review of all stories combined — architectural drift, cross-story consistency, FR/AC closure). BMAD 6.2's `/bmad-bmm-code-review` now runs Blind Hunter, Edge Case Hunter, and Acceptance Auditor internally — no separate adversarial/edge-case steps needed. Stories can run in parallel when independent. You approve the plan upfront and get prompted at key decision points (story review, fix prioritization, failures). Everything else is hands-off.
 >
 > **Usage:** `/enhanced-automated-sprint 7` or `/enhanced-automated-sprint 7 7-1 7-2 --parallel 2`
 >
@@ -186,14 +186,23 @@ If `--skip-elicitation`: ALWAYS create Step 2 in the task graph (keeps the depen
 | Task Subject | ActiveForm | Blocked By |
 |---|---|---|
 | `[Epic ${EPIC_ID}] Cross-story integration check` | `Running cross-story integration verification` | All stories' Step 11 |
-| `[Epic ${EPIC_ID}] Sprint summary` | `Generating sprint summary` | `[Epic ${EPIC_ID}] Cross-story integration check` |
+| `[Epic ${EPIC_ID}] Epic-level review` | `Reviewing the whole epic` | `[Epic ${EPIC_ID}] Cross-story integration check` |
+| `[Epic ${EPIC_ID}] Sprint summary` | `Generating sprint summary` | `[Epic ${EPIC_ID}] Epic-level review` |
 
 **Cross-story integration check** runs AFTER all stories are individually complete. It verifies that stories don't break each other when combined:
 1. Run: `${test_command}` — full test suite (catches cross-story conflicts like duplicate routes, naming collisions)
 2. Run: `${typecheck_command}` — type check (catches cross-story type conflicts)
 3. Run: `${build_command}` — full build (catches cross-story import/bundling issues)
 4. If any check fails: report failing tests/errors, identify which stories' files are involved, ask user whether to fix or rollback
-5. If all pass: mark as completed, proceed to sprint summary
+5. If all pass: mark as completed, proceed to the epic-level review
+
+**Epic-level review** runs AUTOMATICALLY after the integration check passes — it is a holistic, epic-WIDE consolidated code review of every story's combined changes (NOT a re-run of the per-story Step 7 reviews). It catches what per-story reviews structurally cannot: architectural drift accumulated across stories, cross-story inconsistencies (duplicated concepts, divergent patterns, seams that don't compose), epic-wide security/totality gaps, and whether the epic as a whole actually closes its FRs/ACs. The coordinator delegates it to the **Epic-Level Review agent** (see Agent Spawn Templates → "Epic-Level Review"). Behavior on findings mirrors Step 7's decision rule:
+1. The agent reviews the FULL epic diff (`git diff <epic-base>...<working-branch>` across all stories' files) + the epic file's FRs/ACs.
+2. It returns a verdict (APPROVED / CHANGES-REQUESTED) + findings tagged by severity ([CRITICAL]/[HIGH]/[MEDIUM]/[LOW]) with file:line and a concrete fix.
+3. If findings exist: `--auto-fix` → spawn a fix agent (Step 8 template, epic-scoped) for CRITICAL/HIGH, then re-verify; otherwise present the findings and ask the user which to fix (all / high+ / skip). Apply chosen fixes on the working branch and re-run the integration check before proceeding.
+4. If APPROVED with no actionable findings: mark completed, proceed to the sprint summary.
+This task ALWAYS runs at the end of every epic sprint — it is not conditional.
+
 
 ## Execution Engine: Parallel Story Processing
 
@@ -637,6 +646,50 @@ Task tool:
     - Report file path: {implementation_artifacts}/${SID}-ac-trace-report.md
 ```
 
+#### Epic-Level Review (Automatic — runs once per epic, after the cross-story integration check)
+```
+Task tool:
+  description: "[Epic ${EPIC_ID}] Epic-level review"
+  subagent_type: general-purpose
+  model: opus
+  prompt: |
+    ${BMAD_ENV_BLOCK}
+
+    You are the EPIC-LEVEL consolidated code reviewer for Epic ${EPIC_ID}. Every story in this
+    epic has already passed its own per-story review (Step 7); your job is the HOLISTIC, epic-WIDE
+    pass that per-story reviews structurally cannot do. Review the epic's COMBINED change set as one
+    body of work.
+
+    Inputs:
+    - Epic file (the FRs/ACs the epic must close): {planning_artifacts}/epics.md (Epic ${EPIC_ID} section)
+      or {planning_artifacts}/epic-${EPIC_ID}.md if present.
+    - The full epic diff: determine the epic base (the commit/tag the epic branched from, or the
+      merge-base of ${WORKING_BRANCH} with the epic's first story) and run
+      `git diff <epic-base>...${WORKING_BRANCH}` — review ALL stories' files together.
+    - The per-story AC-trace reports at {implementation_artifacts}/${SID}-ac-trace-report.md.
+
+    Review specifically for what only an epic-wide view reveals (do NOT just re-list per-story findings):
+    1. ARCHITECTURAL DRIFT accumulated across stories — patterns that diverged story-to-story,
+       abstractions that should have been shared but were duplicated, layering/boundary erosion.
+    2. CROSS-STORY INCONSISTENCY — divergent naming/error-handling/validation, seams that don't
+       compose, two stories solving the same problem two ways.
+    3. EPIC-WIDE SECURITY / TOTALITY — a failure mode that spans stories, a secret/PII path, an
+       unhandled edge that only appears when stories combine.
+    4. FR / AC CLOSURE — does the epic AS A WHOLE actually close its FRs and ACs (per the epic file)?
+       Flag any FR/AC that is partially met or silently dropped across the stories.
+    5. DEAD / ORPHANED code or docs left between stories; stale comments; deferred-work-log accuracy.
+
+    Output:
+    - VERDICT: APPROVED / CHANGES-REQUESTED
+    - Findings, each tagged [CRITICAL]/[HIGH]/[MEDIUM]/[LOW] with file:line and a concrete fix.
+    - FR/AC closure table: FR/AC -> closed? (yes / partial / no) -> evidence.
+    - If nothing actionable: say "APPROVED, no epic-level action items" explicitly.
+    Save the report to: {implementation_artifacts}/epic-${EPIC_ID}-review-report.md
+    Do NOT edit code — you are review-only; the coordinator routes fixes.
+```
+
+**Coordinator note (Epic-Level Review):** This task ALWAYS runs (it is unconditional). On findings, follow the same routing as Step 7's decision rule — `--auto-fix` spawns an epic-scoped fix agent (Step 8 template, with `${CONSOLIDATED_ACTION_ITEMS}` = the CRITICAL/HIGH epic findings) and re-runs the cross-story integration check; otherwise present the findings + the FR/AC closure table and ask the user which to fix (all / high+ / skip). Only proceed to the Sprint summary once the epic review is APPROVED (or the user explicitly defers the remaining items).
+
 ## Step Output Requirements
 
 ### Step 6 / 9: BMAD Dev Agent (Amelia) Merge — Output
@@ -770,3 +823,4 @@ After ALL stories complete (or fail):
 | Step 9: Merge fixes | **opus** | — | **BMAD Dev Agent (Amelia)** — same merge protocol as Step 6 |
 | Step 10: AC trace | sonnet | — | Systematic tracing, speed matters |
 | Step 11: Sprint status | coordinator | — | Delegates to `/bmad-bmm-sprint-status` sequentially |
+| Epic-level review | **opus** | — | Holistic epic-wide review (drift, cross-story consistency, FR/AC closure) — always runs once per epic after the integration check |
