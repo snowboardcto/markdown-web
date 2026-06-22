@@ -9,8 +9,16 @@ namespace TheMarkdownWeb.Agent;
 /// seed personas (Cozy / Terminal / TL;DR / Plain) carry real, distinct, intent-encoding
 /// <c>SystemPrompt</c>s (Story 4.3) with <c>IsPassThrough = false</c> — each instructs a markdown→markdown
 /// transform that PRESERVES valid Markdown so the pure renderer still applies, and they are pairwise
-/// distinct so two personas yield structurally-different output for the same source (FR-10). The
-/// Translate persona's target-language transform/UX is Story 4.4 — it is a LISTED placeholder here.
+/// distinct so two personas yield structurally-different output for the same source (FR-10).
+///
+/// Story 4.4 closes the seed set:
+///   • <c>translate</c> now carries a REAL, language-AGNOSTIC, structure-preserving translation prompt
+///     (the specific target language is appended by <see cref="PersonalityEngine"/> from
+///     <c>ReaderContext.PreferredLanguage</c> — Q-Lang-Plumbing); it stays <c>IsPassThrough = false</c>.
+///   • <c>audio</c> is APPENDED as a SAPI read-aloud persona — <c>IsPassThrough = true</c> (LLM-free,
+///     key-free): the App short-circuits it BEFORE the gateway to the speech path (Q-Audio-Trigger), so
+///     it never makes a provider call. The ordered ids are
+///     <c>basic, cozy, terminal, tldr, plain, translate, audio</c>.
 /// </summary>
 public static class PersonaRegistry
 {
@@ -50,6 +58,13 @@ public static class PersonaRegistry
             "(roughly a 6th–8th grade reading level) without losing the original meaning. " +
             "Output ONLY valid Markdown — no preamble, no notes, no surrounding code fence.",
             IsPassThrough: false),
-        new Persona("translate", "Translate", "You are the Translate persona. (Target-language UX in Story 4.4.)", IsPassThrough: false),
+        new Persona("translate", "Translate",
+            "You are the Translate persona. Translate the given page into the reader's target language " +
+            "while preserving its structure: keep every heading as a heading, keep every link's target " +
+            "URL unchanged (translate only the link text), and preserve all lists, tables, code blocks, " +
+            "emphasis, and block order. Do NOT translate code or URLs. " +
+            "Output ONLY valid Markdown — no preamble, no commentary, no surrounding code fence.",
+            IsPassThrough: false),
+        new Persona("audio", "Audio (Read aloud)", string.Empty, IsPassThrough: true),
     };
 }

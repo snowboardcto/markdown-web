@@ -42,6 +42,23 @@ public partial class MainWindow : Window
     private readonly PersonalitySelectionViewModel _selection = new();
     private readonly PersonalityRerenderCoordinator _rerender;
 
+    // Story 4.4: the target-language selection state (sourced into the gateway's ReaderContext for the
+    // Translate persona), the SAPI speech seam for the Audio persona, and the testable audio read-aloud
+    // route. _heldRaw mirrors the coordinator's held RAW markdown so the audio route can speak the current
+    // page without a re-fetch (and without touching the render-sink — the visible page stays as-is).
+    private readonly LanguageSelectionViewModel _languageSelection = new();
+    private readonly ISpeechSynthesizer _speech = new SapiSpeechSynthesizer();
+    private readonly AudioReadAloudController _audio;
+    private string? _heldRaw;
+
+    // The Translate persona's language picker offers these common languages plus a free-text fallback
+    // (IsEditable). The chosen string is passed VERBATIM through to the engine's target-language directive.
+    private static readonly string[] CommonLanguages =
+    {
+        "Spanish", "French", "German", "Italian", "Portuguese",
+        "Japanese", "Chinese", "Korean", "Arabic", "Hindi",
+    };
+
     // Suppresses the ComboBox.SelectionChanged that fires while wiring the initial selection in the ctor
     // (we must not trigger a re-render before any page has loaded).
     private bool _suppressSelectionChanged;
@@ -54,7 +71,13 @@ public partial class MainWindow : Window
         // 4.2 selector drives the persona: () => _selection.Current (the gateway reads it per resolve).
         var llmClient = new AnthropicLlmClient(SharedHttpClient, _secretStore);
         var engine = new PersonalityEngine(llmClient, _secretStore);
-        _gateway = new PersonalizationGateway(engine, () => _selection.Current);
+        // Story 4.4: the gateway also sources the reader's chosen target language (Q-Lang-Source) — the
+        // engine appends it as a directive ONLY for the Translate persona; every other persona ignores it.
+        _gateway = new PersonalizationGateway(
+            engine, () => _selection.Current, () => _languageSelection.Current);
+
+        // Story 4.4: the Audio persona's read-aloud route over the SAPI speech seam (offline, no key).
+        _audio = new AudioReadAloudController(_speech);
 
         _addressBar = new AddressBarViewModel(_fetcher, _launcher);
 
@@ -88,6 +111,9 @@ public partial class MainWindow : Window
         _suppressSelectionChanged = true;
         PersonalitySelector.ItemsSource = _selection.Options;
         PersonalitySelector.SelectedItem = _selection.Current;
+        // Story 4.4: seed the language picker with common languages (free-text fallback via IsEditable).
+        // It stays collapsed until the Translate persona is selected.
+        LanguagePicker.ItemsSource = CommonLanguages;
         _suppressSelectionChanged = false;
     }
 
@@ -111,6 +137,60 @@ public partial class MainWindow : Window
 
         _selection.Select(picked);
 
+        // Story 4.4: the language picker is only relevant for the Translate persona — show it for Translate,
+        // collapse it otherwise so it does not clutter the toolbar for the other personas.
+        LanguagePicker.Visibility = string.Equals(picked.Id, "translate", StringComparison.Ordinal)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        // Story 4.4 (Q-Audio-Trigger): the Audio persona routes to the SPEECH path BEFORE the gateway/
+        // coordinator — speak the held RAW markdown in reading order and leave the visible document EXACTLY
+        // as-is (the route makes ZERO render-sink/gateway/LLM calls; audio is offline + key-free). Return
+        // before the re-render so the page is never blanked/replaced.
+        if (string.Equals(picked.Id, "audio", StringComparison.Ordinal))
+        {
+            await _audio.ReadAsync(_heldRaw).ConfigureAwait(true);
+            return;
+        }
+
+        await _rerender.RerenderAsync().ConfigureAwait(true);
+
+        if (_rerender.LastOutcome == PersonalizationOutcome.NeedsKey)
+        {
+            PromptForApiKeyAndRerender();
+        }
+    }
+
+    /// <summary>
+    /// The target-language picker selection changed (Story 4.4 AC2): set the language-selection state and
+    /// re-render the current page IN PLACE via the coordinator (held RAW, NO re-fetch). Total — never throws.
+    /// </summary>
+    private async void LanguagePicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressSelectionChanged)
+        {
+            return;
+        }
+
+        await ApplyLanguageAndRerenderAsync(LanguagePicker.SelectedItem as string ?? LanguagePicker.Text)
+            .ConfigureAwait(true);
+    }
+
+    /// <summary>Committing a free-text language with Enter re-renders in place (Story 4.4 AC2).</summary>
+    private async void LanguagePicker_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        await ApplyLanguageAndRerenderAsync(LanguagePicker.Text).ConfigureAwait(true);
+    }
+
+    private async Task ApplyLanguageAndRerenderAsync(string? language)
+    {
+        _languageSelection.Select(language);
         await _rerender.RerenderAsync().ConfigureAwait(true);
 
         if (_rerender.LastOutcome == PersonalizationOutcome.NeedsKey)
@@ -158,6 +238,11 @@ public partial class MainWindow : Window
         // (a fresh navigation supersedes a pending switch).
         string raw = fetched.Markdown ?? string.Empty;
         _rerender.SetCurrentPage(raw, pageUrl);
+
+        // Story 4.4: mirror the held RAW markdown for the audio read-aloud route, and stop any in-progress
+        // speech on navigation so a previous page's read-aloud does not bleed into the new page.
+        _heldRaw = raw;
+        _audio.Stop();
 
         string resolved = await _gateway
             .ResolveMarkdownAsync(raw, pageUrl, ct)

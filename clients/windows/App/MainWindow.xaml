@@ -21,6 +21,10 @@
                          the RIGHT of the address bar, so the address bar keeps filling and the nav
                          StackPanel is undisturbed). -->
                     <ColumnDefinition Width="Auto" />
+                    <!-- col 3: the Story 4.4 target-language picker (Q-Lang-UX: shown only when the
+                         Translate persona is selected; collapsed otherwise so it does not clutter the
+                         toolbar for the other personas). -->
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0"
@@ -119,6 +123,25 @@
                           AutomationProperties.Name="Personality"
                           DisplayMemberPath="DisplayName"
                           SelectionChanged="PersonalitySelector_SelectionChanged" />
+
+                <!-- Grid.Column 3 (Width="Auto") — the Story 4.4 target-language picker. Labeled +
+                     keyboard-reachable (UX-DR9): AutomationProperties.Name="Target language", Focusable,
+                     editable (a free-text fallback alongside common languages). Tab order:
+                     LanguagePicker(5) after PersonalitySelector(4), before ContentScroll(6). Shown only
+                     when the Translate persona is selected (code-behind toggles Visibility). -->
+                <ComboBox x:Name="LanguagePicker"
+                          Grid.Column="3"
+                          TabIndex="5"
+                          Focusable="True"
+                          IsEditable="True"
+                          Visibility="Collapsed"
+                          Margin="6,0,0,0"
+                          MinWidth="120"
+                          VerticalAlignment="Center"
+                          AutomationProperties.Name="Target language"
+                          ToolTip="Target language"
+                          SelectionChanged="LanguagePicker_SelectionChanged"
+                          KeyDown="LanguagePicker_KeyDown" />
             </Grid>
         </Border>
 
@@ -128,11 +151,12 @@
         <Border x:Name="ContentHost">
             <!-- Story 3.6 (AC4): ContentScroll is keyboard-reachable so a keyboard user can reach +
                  scroll the rendered content (FlowDocumentScrollViewer is NOT a tab stop by default).
-                 Story 4.2 (Q-Token-Tab): TabIndex bumped 4 -> 5 so the personality selector sits at 4 —
-                 the walk is Back(0)/Forward(1)/Reload(2)/AddressInput(3)/PersonalitySelector(4)/ContentScroll(5). -->
+                 Story 4.4 (Q-Lang-UX): TabIndex bumped 5 -> 6 so the Translate language picker sits at 5 —
+                 the walk is Back(0)/Forward(1)/Reload(2)/AddressInput(3)/PersonalitySelector(4)/
+                 LanguagePicker(5)/ContentScroll(6). -->
             <FlowDocumentScrollViewer x:Name="ContentScroll"
                                       Focusable="True"
-                                      TabIndex="5"
+                                      TabIndex="6"
                                       IsToolBarVisible="False"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Auto" />
