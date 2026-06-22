@@ -1,5 +1,7 @@
 using System;
 using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -95,6 +97,66 @@ internal sealed class CountingLlmClient : ILlmClient
     {
         Calls++;
         return Task.FromResult(_result);
+    }
+}
+
+/// <summary>
+/// Story 4.3 AC3 — a CAPTURING fake <see cref="ILlmClient"/>. Records the <c>systemPrompt</c> argument of
+/// its last <see cref="CompleteAsync"/> call (and a <see cref="Calls"/> count) and returns a FIXED canned
+/// success. It deliberately does NOT key its output on the prompt — its job is to prove the EXACT prompt
+/// the engine forwarded (asserted byte-equal against <see cref="PersonaRegistry.Seed"/>), not to differ
+/// output (that is <see cref="KeyedLlmClient"/>'s job — the two fakes have two distinct jobs).
+/// </summary>
+internal sealed class CapturingLlmClient : ILlmClient
+{
+    /// <summary>The systemPrompt of the last CompleteAsync call (null before any call).</summary>
+    public string? LastSystemPrompt { get; private set; }
+
+    /// <summary>Number of times CompleteAsync was invoked (assert 0 on the Basic short-circuit).</summary>
+    public int Calls { get; private set; }
+
+    public Task<LlmResult> CompleteAsync(
+        string systemPrompt, string pageMarkdown, ReaderContext readerContext, CancellationToken ct)
+    {
+        Calls++;
+        LastSystemPrompt = systemPrompt;
+        return Task.FromResult(LlmResult.Success("# canned"));
+    }
+}
+
+/// <summary>
+/// Story 4.3 AC4 / AC5 — a systemPrompt-KEYED fake <see cref="ILlmClient"/> (Q-Marker form (a)). Returns a
+/// deterministic output that is a PURE function of the received <c>systemPrompt</c>:
+/// <c>Marker(systemPrompt) + "\n\n" + pageMarkdown</c>. The marker is prepended (never replaces) the body,
+/// so the output is valid renderable markdown and the source is preserved. Because the engine forwards
+/// <c>persona.SystemPrompt</c> verbatim and the four real prompts are pairwise-distinct (AC2), different
+/// personas → different systemPrompt → different <see cref="Marker"/> → different output — the
+/// deterministic substitute for a real model (no random/time state).
+///
+/// <see cref="Marker"/> is exposed so tests compute the expected marker from
+/// <c>PersonaRegistry.Seed[i].SystemPrompt</c> via the SAME function — NO hardcoded prompt wording.
+/// </summary>
+internal sealed class KeyedLlmClient : ILlmClient
+{
+    /// <summary>Number of times CompleteAsync was invoked.</summary>
+    public int Calls { get; private set; }
+
+    public Task<LlmResult> CompleteAsync(
+        string systemPrompt, string pageMarkdown, ReaderContext readerContext, CancellationToken ct)
+    {
+        Calls++;
+        return Task.FromResult(LlmResult.Success(Marker(systemPrompt) + "\n\n" + pageMarkdown));
+    }
+
+    /// <summary>
+    /// A STABLE, PURE token of the system prompt: "k" + the first 4 bytes of SHA256(UTF8(prompt)) as 8 hex
+    /// chars. No random/time/per-instance state — the [Fact] and [StaFact] agree on the same marker for the
+    /// same prompt. Distinct prompts yield distinct markers (the four real prompts are pairwise-distinct).
+    /// </summary>
+    public static string Marker(string systemPrompt)
+    {
+        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(systemPrompt ?? string.Empty));
+        return "k" + Convert.ToHexString(hash, 0, 4).ToLowerInvariant(); // 8 hex chars, lower-cased.
     }
 }
 
