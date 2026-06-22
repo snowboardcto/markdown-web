@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using TheMarkdownWeb.Agent;
 using TheMarkdownWeb.Rendering;
@@ -25,8 +26,9 @@ public partial class MainWindow : Window
     private readonly MarkdownFetcher _fetcher = new(SharedHttpClient);
     private readonly IUrlLauncher _launcher = new SystemBrowserLauncher();
 
-    // The reader's local agent (BYO-key). 4.1 selects the constant Basic persona (pass-through); the 4.2
-    // chip will replace the () => Persona.Basic selector. Composed once for the window's lifetime.
+    // The reader's local agent (BYO-key). The 4.2 selector drives the gateway: the persona Func is now
+    // () => _selection.Current (replacing the 4.1 constant () => Persona.Basic). Composed once for the
+    // window's lifetime.
     private readonly ISecretStore _secretStore = new DpapiSecretStore();
     private readonly PersonalizationGateway _gateway;
 
@@ -35,14 +37,24 @@ public partial class MainWindow : Window
     private readonly NavigationController _controller;
     private readonly ContentHostController _contentHost;
 
+    // Story 4.2: the personality selection state + the re-render-in-place coordinator (held RAW markdown,
+    // no re-fetch, last-wins). A selection change re-runs the held markdown through the gateway.
+    private readonly PersonalitySelectionViewModel _selection = new();
+    private readonly PersonalityRerenderCoordinator _rerender;
+
+    // Suppresses the ComboBox.SelectionChanged that fires while wiring the initial selection in the ctor
+    // (we must not trigger a re-render before any page has loaded).
+    private bool _suppressSelectionChanged;
+
     public MainWindow()
     {
         InitializeComponent();
 
-        // Compose the agent: AnthropicLlmClient (reader's key, TLS) -> PersonalityEngine -> gateway.
+        // Compose the agent: AnthropicLlmClient (reader's key, TLS) -> PersonalityEngine -> gateway. The
+        // 4.2 selector drives the persona: () => _selection.Current (the gateway reads it per resolve).
         var llmClient = new AnthropicLlmClient(SharedHttpClient, _secretStore);
         var engine = new PersonalityEngine(llmClient, _secretStore);
-        _gateway = new PersonalizationGateway(engine, () => Persona.Basic);
+        _gateway = new PersonalizationGateway(engine, () => _selection.Current);
 
         _addressBar = new AddressBarViewModel(_fetcher, _launcher);
 
@@ -54,6 +66,12 @@ public partial class MainWindow : Window
             new SystemImageLoader(),
             DispatchLinkAsync);
 
+        // The re-render-in-place coordinator shares the SAME render-sink the controller uses, so a
+        // personality switch re-renders the HELD raw markdown into the SAME host (no re-fetch).
+        _rerender = new PersonalityRerenderCoordinator(
+            _gateway,
+            (markdown, pageUrl) => _contentHost.ShowMarkdown(markdown, pageUrl));
+
         // The controller fetches the /api/negotiate/<slug> endpoint (AC9) and renders into the host.
         _controller = new NavigationController(
             FetchEndpointAsync,
@@ -64,6 +82,55 @@ public partial class MainWindow : Window
         _viewModel = new ShellViewModel(_controller);
         DataContext = _viewModel;
         AddressBar.DataContext = _addressBar;
+
+        // Wire the personality selector to the selection state (default = Basic; first run is the
+        // faithful basic render). ItemsSource = the seed registry; SelectedItem = the current selection.
+        _suppressSelectionChanged = true;
+        PersonalitySelector.ItemsSource = _selection.Options;
+        PersonalitySelector.SelectedItem = _selection.Current;
+        _suppressSelectionChanged = false;
+    }
+
+    /// <summary>
+    /// The toolbar selector changed: drive the selection state, then re-render the current page IN PLACE
+    /// using the held RAW markdown (Story 4.2 AC2/AC3) — NO re-fetch. On <c>NeedsKey</c> surface the
+    /// key-entry dialog and re-render on save; on Cancel/blank keep the chosen persona + the held
+    /// original rendered (Q-Revert). Total — never throws into the UI.
+    /// </summary>
+    private async void PersonalitySelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressSelectionChanged)
+        {
+            return;
+        }
+
+        if (PersonalitySelector.SelectedItem is not Persona picked)
+        {
+            return;
+        }
+
+        _selection.Select(picked);
+
+        await _rerender.RerenderAsync().ConfigureAwait(true);
+
+        if (_rerender.LastOutcome == PersonalizationOutcome.NeedsKey)
+        {
+            PromptForApiKeyAndRerender();
+        }
+    }
+
+    /// <summary>
+    /// Surfaces the BYO-key entry dialog (AC4). On a successful save the page re-renders with the new key;
+    /// on Cancel/blank the chosen persona is KEPT and the held original stays rendered (Q-Revert).
+    /// </summary>
+    private void PromptForApiKeyAndRerender()
+    {
+        var dialog = new ApiKeyEntryDialog(new ApiKeyPromptViewModel(_secretStore)) { Owner = this };
+        bool? result = dialog.ShowDialog();
+        if (result == true && dialog.Saved)
+        {
+            _ = _rerender.RerenderAsync();
+        }
     }
 
     /// <summary>
@@ -85,8 +152,15 @@ public partial class MainWindow : Window
             return fetched;
         }
 
+        // Story 4.2: hold the RAW (pre-transform) markdown + url so a later personality switch can
+        // re-personalize FROM SOURCE without re-fetching (and Basic->Cozy->Basic stays byte-identical).
+        // SetCurrentPage also bumps the coordinator's generation, invalidating any in-flight re-render
+        // (a fresh navigation supersedes a pending switch).
+        string raw = fetched.Markdown ?? string.Empty;
+        _rerender.SetCurrentPage(raw, pageUrl);
+
         string resolved = await _gateway
-            .ResolveMarkdownAsync(fetched.Markdown ?? string.Empty, pageUrl, ct)
+            .ResolveMarkdownAsync(raw, pageUrl, ct)
             .ConfigureAwait(true);
 
         return FetchResult.Success(resolved);

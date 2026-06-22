@@ -13,11 +13,14 @@
                 Padding="6,4">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <!-- Navigation buttons: Back / Forward / Reload, left-aligned. -->
+                    <!-- col 0: Navigation buttons: Back / Forward / Reload, left-aligned. -->
                     <ColumnDefinition Width="Auto" />
-                    <!-- Reserved space for the Story 3.2 address bar (and the Epic 4
-                         personality selector). Intentionally EMPTY at this story — do not build. -->
+                    <!-- col 1: the Story 3.2 address bar (keeps Width="*" fill). -->
                     <ColumnDefinition Width="*" />
+                    <!-- col 2: the Story 4.2 personality selector (Q-Placement: a NEW Auto column to
+                         the RIGHT of the address bar, so the address bar keeps filling and the nav
+                         StackPanel is undisturbed). -->
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0"
@@ -99,6 +102,23 @@
                                    AutomationProperties.Name="Loads .md pages only" />
                     </Grid>
                 </Border>
+
+                <!-- Grid.Column 2 (Width="Auto") — the Story 4.2 personality selector. Labeled +
+                     keyboard-reachable (UX-DR9): AutomationProperties.Name="Personality", Focusable,
+                     tab stop. Tab order: PersonalitySelector(4) after AddressInput(3), before
+                     ContentScroll(5). Items + selection are set in code-behind from the selection VM
+                     (ItemsSource = Options, SelectedItem two-way = Current); DisplayMemberPath shows
+                     each persona's DisplayName. -->
+                <ComboBox x:Name="PersonalitySelector"
+                          Grid.Column="2"
+                          TabIndex="4"
+                          Focusable="True"
+                          Margin="6,0,0,0"
+                          MinWidth="120"
+                          VerticalAlignment="Center"
+                          AutomationProperties.Name="Personality"
+                          DisplayMemberPath="DisplayName"
+                          SelectionChanged="PersonalitySelector_SelectionChanged" />
             </Grid>
         </Border>
 
@@ -108,10 +128,11 @@
         <Border x:Name="ContentHost">
             <!-- Story 3.6 (AC4): ContentScroll is keyboard-reachable so a keyboard user can reach +
                  scroll the rendered content (FlowDocumentScrollViewer is NOT a tab stop by default).
-                 TabIndex 4 keeps the Back(0)/Forward(1)/Reload(2)/AddressInput(3) sequence intact. -->
+                 Story 4.2 (Q-Token-Tab): TabIndex bumped 4 -> 5 so the personality selector sits at 4 —
+                 the walk is Back(0)/Forward(1)/Reload(2)/AddressInput(3)/PersonalitySelector(4)/ContentScroll(5). -->
             <FlowDocumentScrollViewer x:Name="ContentScroll"
                                       Focusable="True"
-                                      TabIndex="4"
+                                      TabIndex="5"
                                       IsToolBarVisible="False"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Auto" />
