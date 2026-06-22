@@ -52,7 +52,12 @@ import copyVaultMedia from './src/lib/copy-vault-media.mjs';
 // the very end of the pipeline, after our plugins, so without this the raw media
 // would still be opaque `raw` string nodes our element-visitor can't see). It is
 // idempotent: Astro's later `rehypeRaw` finds no `raw` nodes left to parse.
+// Story 5.1 — Living Link (AC3): set the production canonical origin so Astro.site
+// is defined and Page.astro can build the absolute canonical URL for each page.
+// This is the ONLY astro.config.mjs change for 5.1 — the markdown pipeline,
+// integrations, and all rehype/Shiki config are left exactly as-is.
 export default defineConfig({
+  site: 'https://themarkdownweb.com',
   markdown: {
     gfm: true,
     remarkPlugins: [remarkGfm],

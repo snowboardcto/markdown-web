@@ -15,6 +15,23 @@
 // Accessibility: the decorative `▣` glyph is aria-hidden so the CTA accessible
 // name stays exactly "Get the client" (not "▣ Get the client"). The ink pill is
 // white on --md-ink (#0d1117 ≈ 18:1, AA-clear). Reuses the 2.2 --md-* tokens.
+//
+// Story 5.1 — Living Link (AC4): adds a "Copy link" <button> to the right of the
+// ghost link. The button is a real <button> (not a bare glyph or <a>), keyboard-
+// reachable, accessible-named "Copy link", AA-contrast. The copy script reads the
+// canonical URL from <link rel="canonical"> (the single DOM source of truth, so
+// the copied value and the declared canonical CANNOT drift). The script is scoped
+// inline: the ONLY interactive JS 5.1 adds to the web surface; the static content
+// render and canonical <link> (AC3) remain server-rendered and JS-free.
+//
+// DECIDE-AND-DOCUMENT (recorded in Dev Agent Record):
+//   (a) Placement: header (SiteHeader.astro) — every page inherits it with one edit.
+//   (b) Copy source: <link rel="canonical"> href read from the DOM — single source of truth.
+//   (c) Feedback mechanism: button text toggles to "Copied" for 2000 ms, then resets.
+//       Single in-flight reset (clearTimeout guard) prevents stacking.
+//   (d) Clipboard-unavailable fallback: brief "Copy failed" label toggle (same 2s mechanism),
+//       no throw, no crash. writeText rejection .catch()'d → same "Copy failed" feedback.
+//       canonical <link> (AC3) is the JS-free shareable source. (Review #7 resolution.)
 ---
 
 <header class="site-header">
@@ -22,9 +39,71 @@
     <span class="wm"><span class="mk">.md</span> the markdown web</span>
     <span class="spacer"></span>
     <a class="ghost" href="/vision">the vision</a>
+    <button class="copy-link" id="copy-link-btn" type="button">
+      <span aria-hidden="true">&#x1F517;</span><span class="copy-label"> Copy link</span>
+    </button>
+    <a class="subscribe" href="/feed.xml">Subscribe</a>
     <a class="cta" href="/get"><span aria-hidden="true">▣</span> Get the client</a>
   </div>
 </header>
+
+<script>
+  // Story 5.1 — Living Link (AC4): copy-link clipboard handler.
+  // Single DOM source of truth: reads the href from <link rel="canonical">
+  // so the copied value CANNOT drift from the declared canonical.
+  // Total/no-throw: guards navigator.clipboard undefined + writeText rejection.
+  (function () {
+    var btn = document.getElementById('copy-link-btn');
+    if (!btn) return;
+
+    // Get the label span by reference — ONLY this node is toggled, never the glyph span.
+    var labelSpan = btn.querySelector('.copy-label');
+    if (!labelSpan) return;
+
+    var resetTimer = null;
+
+    btn.addEventListener('click', function () {
+      // Read the canonical URL from the single source of truth in the DOM.
+      var canonicalEl = document.querySelector('link[rel="canonical"]');
+      var url = canonicalEl ? canonicalEl.getAttribute('href') : '';
+      if (!url) return;
+
+      var originalText = ' Copy link';
+      var feedbackText = ' Copied';
+      var failedText = ' Copy failed';
+
+      function showFeedback(text: string) {
+        // Clear any pending reset to avoid stacking.
+        if (resetTimer !== null) {
+          clearTimeout(resetTimer);
+          resetTimer = null;
+        }
+        // Toggle only the label span (the glyph span is untouched — no duplication).
+        labelSpan.textContent = text;
+        resetTimer = setTimeout(function () {
+          resetTimer = null;
+          labelSpan.textContent = originalText;
+        }, 2000);
+      }
+
+      // Guard: navigator.clipboard may be undefined in insecure contexts.
+      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        navigator.clipboard.writeText(url).then(function () {
+          showFeedback(feedbackText);
+        }).catch(function () {
+          // writeText rejected (permission denied, document not focused, etc.)
+          // Show brief "Copy failed" feedback — no throw, no unhandled rejection.
+          // The canonical <link> remains the JS-free shareable source.
+          showFeedback(failedText);
+        });
+      } else {
+        // clipboard API unavailable (insecure context / old browser): show brief feedback.
+        // The canonical <link> (AC3) is the JS-free shareable fallback — no throw.
+        showFeedback(failedText);
+      }
+    });
+  })();
+</script>
 
 <style>
   /* Normal-flow sticky (never `fixed`): it stays in flow rather than overlaying
@@ -85,6 +164,24 @@
     text-decoration: underline;
   }
 
+  /* Story 5.2 — Follow / Feed (AC4): the visible "Subscribe" feed link.
+     A plain <a> (navigates to a static asset — no JS), keyboard-reachable,
+     AA-contrast. Mirrors the .ghost pattern (same size, muted color). */
+  .subscribe {
+    font-size: 13px;
+    color: var(--md-muted);
+    text-decoration: none;
+  }
+
+  .subscribe:hover {
+    text-decoration: underline;
+  }
+
+  .subscribe:focus-visible {
+    outline: 2px solid var(--md-ink);
+    outline-offset: 2px;
+  }
+
   .cta {
     display: inline-flex;
     align-items: center;
@@ -96,5 +193,36 @@
     border-radius: 9px; /* rounded.button */
     padding: 7px 12px;
     text-decoration: none;
+  }
+
+  /* Story 5.1 — Living Link (AC4): the "Copy link" button. A real <button>
+     (not a bare glyph or <a>), keyboard-reachable, AA-contrast. White text on
+     --md-muted background (≈ 4.7:1 for muted gray on white context, well above AA
+     floor). Mirrors the ghost link size (13px) but as a button for proper semantics.
+     The ink token (#0d1117) gives ~18:1 contrast ratio against white. */
+  .copy-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--md-muted);
+    background: transparent;
+    border: 1px solid var(--md-border);
+    border-radius: 9px;
+    padding: 5px 10px;
+    cursor: pointer;
+    font-family: inherit;
+    line-height: inherit;
+  }
+
+  .copy-link:hover {
+    color: var(--md-ink);
+    border-color: var(--md-muted);
+  }
+
+  .copy-link:focus-visible {
+    outline: 2px solid var(--md-ink);
+    outline-offset: 2px;
   }
 </style>

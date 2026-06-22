@@ -25,6 +25,10 @@ public partial class MainWindow : Window
 
     private readonly MarkdownFetcher _fetcher = new(SharedHttpClient);
     private readonly IUrlLauncher _launcher = new SystemBrowserLauncher();
+    // Story 5.1 — Living Link (AC5): the injected clipboard seam (mirrors IUrlLauncher pattern).
+    // SystemClipboard wraps WPF Clipboard.SetText behind a try/catch (total, never crashes the app).
+    // Tests inject a FakeClipboard to assert the share URL without touching the real OS clipboard.
+    private readonly IClipboard _clipboard = new SystemClipboard();
 
     // The reader's local agent (BYO-key). The 4.2 selector drives the gateway: the persona Func is now
     // () => _selection.Current (replacing the 4.1 constant () => Persona.Basic). Composed once for the
@@ -255,6 +259,38 @@ public partial class MainWindow : Window
     private void ForwardButton_Click(object sender, RoutedEventArgs e) => _viewModel.OnForward();
 
     private void ReloadButton_Click(object sender, RoutedEventArgs e) => _viewModel.OnReload();
+
+    /// <summary>
+    /// Story 5.1 — Living Link (AC5): copies the current page's canonical shareable URL to the clipboard.
+    /// Delegates to <see cref="ExecuteCopyLink"/> (the extracted testable logic) which can be asserted
+    /// in CI via an injected <see cref="IClipboard"/> fake without wiring a full window handler.
+    /// </summary>
+    private void ShareLinkButton_Click(object sender, RoutedEventArgs e)
+        => ExecuteCopyLink(_clipboard, _controller.Current);
+
+    /// <summary>
+    /// Extracted copy-link logic: reads <paramref name="current"/> (from <c>NavigationController.Current</c>),
+    /// passes it through <see cref="ShareLinkBuilder.ToShareUrl"/>, and writes to <paramref name="clipboard"/>.
+    /// When <paramref name="current"/> is <c>null</c> (no page loaded) this is a safe no-op (clipboard
+    /// untouched, no throw). Total — never throws (ShareLinkBuilder and IClipboard implementations are total).
+    /// Public visibility allows App.Tests to assert the REAL extracted method via the IClipboard fake.
+    /// </summary>
+    public static void ExecuteCopyLink(IClipboard clipboard, Uri? current)
+    {
+        if (current is null)
+        {
+            // No page loaded — safe no-op; clipboard untouched.
+            return;
+        }
+
+        string? shareUrl = ShareLinkBuilder.ToShareUrl(current);
+        if (string.IsNullOrEmpty(shareUrl))
+        {
+            return;
+        }
+
+        clipboard.SetText(shareUrl);
+    }
 
     private async void AddressInput_KeyDown(object sender, KeyEventArgs e)
     {

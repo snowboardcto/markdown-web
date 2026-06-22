@@ -25,6 +25,10 @@
                          Translate persona is selected; collapsed otherwise so it does not clutter the
                          toolbar for the other personas). -->
                     <ColumnDefinition Width="Auto" />
+                    <!-- col 4: the Story 5.1 share/copy-link button (Q-Placement: a NEW Auto column
+                         to the RIGHT of the language picker, so the address bar keeps Width="*" fill
+                         and the nav StackPanel is undisturbed). TabIndex=6; ContentScroll bumped 6→7. -->
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0"
@@ -130,7 +134,7 @@
                      OUTER control a non-tab-stop — focus goes to its inner textbox — which would fail the
                      keyboard-reachability assertion; the non-editable picker is a clean tab stop like the
                      PersonalitySelector). Tab order: LanguagePicker(5) after PersonalitySelector(4), before
-                     ContentScroll(6). Shown only when the Translate persona is selected (code-behind toggles
+                     ShareLinkButton(6). Shown only when the Translate persona is selected (code-behind toggles
                      Visibility). -->
                 <ComboBox x:Name="LanguagePicker"
                           Grid.Column="3"
@@ -143,6 +147,25 @@
                           AutomationProperties.Name="Target language"
                           ToolTip="Target language"
                           SelectionChanged="LanguagePicker_SelectionChanged" />
+
+                <!-- Grid.Column 4 (Width="Auto") — the Story 5.1 "Copy link" share button (Q-Placement:
+                     a NEW Auto column to the right of the language picker; the address bar Width="*"
+                     fill and nav StackPanel are undisturbed). Labeled + keyboard-reachable (UX-DR9):
+                     AutomationProperties.Name="Copy link", Focusable, a tab stop.
+                     Tab order: ShareLinkButton(6) after LanguagePicker(5), before ContentScroll(7).
+                     ContentScroll bumped from 6 → 7 to accommodate this new entry.
+                     DECIDE-AND-DOCUMENT: TabIndex=6; ContentScroll bumped 6→7. -->
+                <Button x:Name="ShareLinkButton"
+                        Grid.Column="4"
+                        TabIndex="6"
+                        Focusable="True"
+                        Content="&#x1F517; Copy link"
+                        AutomationProperties.Name="Copy link"
+                        ToolTip="Copy link to this page"
+                        Margin="6,0,0,0"
+                        Padding="6,2"
+                        VerticalAlignment="Center"
+                        Click="ShareLinkButton_Click" />
             </Grid>
         </Border>
 
@@ -152,12 +175,13 @@
         <Border x:Name="ContentHost">
             <!-- Story 3.6 (AC4): ContentScroll is keyboard-reachable so a keyboard user can reach +
                  scroll the rendered content (FlowDocumentScrollViewer is NOT a tab stop by default).
-                 Story 4.4 (Q-Lang-UX): TabIndex bumped 5 -> 6 so the Translate language picker sits at 5 —
+                 Story 4.4 (Q-Lang-UX): TabIndex bumped 5 -> 6 so the Translate language picker sits at 5.
+                 Story 5.1 (Q-Placement): TabIndex bumped 6 -> 7 so the Share button sits at 6 —
                  the walk is Back(0)/Forward(1)/Reload(2)/AddressInput(3)/PersonalitySelector(4)/
-                 LanguagePicker(5)/ContentScroll(6). -->
+                 LanguagePicker(5)/ShareLinkButton(6)/ContentScroll(7). -->
             <FlowDocumentScrollViewer x:Name="ContentScroll"
                                       Focusable="True"
-                                      TabIndex="6"
+                                      TabIndex="7"
                                       IsToolBarVisible="False"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Auto" />
