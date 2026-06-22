@@ -72,7 +72,7 @@ This splits cleanly into a **web half** (generate the feed) and a **native half*
 
 ## Dev Notes
 
-- **Size:** this is the larger Epic-5 story (web feed gen + a real native feature). If it feels Size M+ during create/dev, the clean split is **5.2a (web feed generation)** and **5.2b (native follow + feed view)** — they're independent (the web feed is a static contract the native half consumes) and verify on different paths. Flag to the user before implementing if decomposition is warranted.
+- **Size (DECIDED — keep whole):** this is the larger Epic-5 story (web feed gen + a real native feature). The user reviewed the Size-M flag and chose to **keep 5.2 as one story** (do NOT split into 5.2a/5.2b). Implement the web half first (the static feed is the contract), then the native half consumes it. The two halves still verify on different paths (web = local Playwright/build; native = windows CI) — implement + verify the web half green before starting the native half, so the native feed-consumption is built against a known-good feed contract.
 - **Dates:** prefer explicit frontmatter `date`/`updated`; fall back to a deterministic source (committed file mtime is NOT reliable in CI — prefer frontmatter or a content-hash-stable ordering). Feed ordering must be deterministic for the test.
 - **Parser placement:** the pure `FeedParser` mirrors `ReadingOrderExtractor` (Story 4.4) — pure, in a no-WPF module, `[Fact]`-tested; the fetch + view + persistence are App (I/O owner). Reuse the stub `HttpMessageHandler` pattern for the fetch tests.
 - **Follow-state is NOT a secret** → plain JSON under `%LOCALAPPDATA%`, not DPAPI (DPAPI is for the API key only).
