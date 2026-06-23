@@ -31,11 +31,9 @@ const FEED_URL = '/feed.xml';
 const FEED_ABSOLUTE_URL = `${CANONICAL_ORIGIN}/feed.xml`;
 
 // The authoritative content-route set (one per content/**/*.md, with
-// sub/index.md index-collapsed to /sub). Matches the 2.5 pinned set exactly,
-// plus the committed 5-2-fixture.md added as the AC2 new-page-surfaces fixture.
+// sub/index.md index-collapsed to /sub). Matches the 2.5 pinned set exactly.
 // Order is the documented code-unit sort (Decision-B from 2.5 / tie-break for AC1).
 const EXPECTED_ROUTES_SORTED = [
-  '/5-2-fixture',
   '/empty',
   '/gear-guide',
   '/h1-only',
@@ -50,7 +48,7 @@ const EXPECTED_ROUTES_SORTED = [
   '/x',
 ] as const;
 
-const EXPECTED_COUNT = EXPECTED_ROUTES_SORTED.length; // 13
+const EXPECTED_COUNT = EXPECTED_ROUTES_SORTED.length; // 12
 
 // Parse XML naively but reliably: extract all <item> blocks from the feed body.
 // We use regex rather than a DOM parser because Playwright runs in Node context.
@@ -353,38 +351,13 @@ test.describe('Story 5.2 AC1 — deterministic ordering (all-equal-date tie-brea
 });
 
 // ── AC2 — New page surfaces after rebuild ─────────────────────────────────────
-test.describe('Story 5.2 AC2 — new page surfaces in the feed after rebuild', () => {
-  /**
-   * This test verifies the core epic outcome: add a .md page → it appears as
-   * a new <item> in /feed.xml after the next build.
-   *
-   * The harness here tests that a known fixture page (5-2-fixture.md) already
-   * committed to content/ appears as an item in the feed. The fixture MUST be
-   * a committed file so the build includes it; if it doesn't yet exist, the
-   * test fails in RED phase (the fixture won't appear until both the file
-   * and the feed.xml.ts endpoint exist).
-   *
-   * NOTE: The fixture file `content/5-2-fixture.md` is expected to be created
-   * as part of the Task 4 implementation. For the RED phase test, this test
-   * ALSO fails because /feed.xml doesn't exist at all.
-   */
-  test('a known fixture page content/5-2-fixture.md appears as an item in the feed', async ({ page }) => {
-    const res = await page.request.get(FEED_URL);
-    expect(res.status(), '/feed.xml must return 200').toBe(200);
-    const feedXml = await res.text();
-    const items = extractItems(feedXml);
-    const fixtureLink = `${CANONICAL_ORIGIN}/5-2-fixture`;
-    const fixtureItem = items.find((item) => item.link === fixtureLink);
-    // This will fail in RED phase (no feed.xml; also the fixture file may not exist).
-    expect(
-      fixtureItem,
-      `feed must contain an item for /5-2-fixture (link: ${fixtureLink}); if this is RED phase, the file or the feed endpoint does not yet exist`,
-    ).toBeTruthy();
-    expect(fixtureItem!.link, 'fixture item link must be the absolute canonical URL').toBe(fixtureLink);
-    expect(fixtureItem!.title, 'fixture item must have a non-empty title').not.toBe('');
-    expect(fixtureItem!.pubDate, 'fixture item must have a pubDate').not.toBe('');
-  });
-});
+// AC2 coverage is provided by the builder-unit surface-delta test in
+// web/tests/5-2-feed-builder.spec.ts ("adding an entry yields exactly +1 <item>
+// with the new entry's canonical guid") and the vault-completeness checks below
+// ("item count equals the content-page count", "every expected route has a
+// corresponding feed item"). The committed fixture page (5-2-fixture.md) has
+// been removed so it does not ship to the live site; AC2 proof is now
+// independent of any committed test page.
 
 // ── AC2 — GUID build-stability (unchanged page must not re-surface) ────────────
 test.describe('Story 5.2 AC2 — guid build-stability (no re-surfacing on rebuild)', () => {

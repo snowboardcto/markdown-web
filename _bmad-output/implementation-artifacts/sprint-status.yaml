@@ -84,4 +84,4 @@ development_status:
   epic-5: done # both stories done & fully verified; web 268/268 green + deployed; native GREEN on windows-latest (run #54); FR-15 + FR-16 closed
   5-1-living-link: done # 8/8 ACs covered; web 268/268 green; native GREEN on windows-latest (run #54, 27994933934, b421be0; 324 tests); review PASS-WITH-ITEMS resolved (2 HIGH+4 MED+2 LOW fixed, 1 deferred); post-merge fixed nav-StackPanel guard scoping; AC trace report written
   5-2-follow-feed: done # 7/7 ACs covered; web 268/268 green (76 story tests: 30 builder + 46 E2E); static RSS 2.0 /feed.xml from vault + autodiscovery <link> + Subscribe chrome link; review PASS-WITH-ITEMS resolved (4 MED+5 LOW; fixture rewritten to legitimate page; byte-equal canonical via new URL; guid=canonical build-stable); AC5 guardrail clean (no backend/store/Function/new dep); AC trace report written
-  epic-5-retrospective: optional
+  epic-5-retrospective: done

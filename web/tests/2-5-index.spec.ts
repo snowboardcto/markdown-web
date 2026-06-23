@@ -31,7 +31,6 @@ import { test, expect, type Page } from '@playwright/test';
 // (`a.id < b.id ? -1 : a.id > b.id ? 1 : 0`) — ICU-independent, identical on
 // dev and CI regardless of host locale data.
 const EXPECTED_ROUTES_SORTED = [
-  '/5-2-fixture',
   '/empty',
   '/gear-guide',
   '/h1-only',
@@ -46,7 +45,7 @@ const EXPECTED_ROUTES_SORTED = [
   '/x',
 ] as const;
 
-const EXPECTED_COUNT = EXPECTED_ROUTES_SORTED.length; // 13
+const EXPECTED_COUNT = EXPECTED_ROUTES_SORTED.length; // 12
 
 /**
  * The slug-derived Title Case label (mirrors the destination page's
