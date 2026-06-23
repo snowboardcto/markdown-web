@@ -92,7 +92,7 @@ development_status:
   6-2-open-any-url: done # FR-20; IsAcceptableUrl + 3-way routing + UX-DR5 copy (.md only -> .md-discoverable)
   6-3-markdown-discovery-service: done # FR-21; ordered cascade (Accept+alt-link -> .md sibling -> llms.txt index), Content-Type/BOM/comment doctype guards (zero false positives), bounded budget+timeout, MaxRedirects=5, honest UA, 403 short-circuit, injected HTTP seam
   6-4-render-discovered-markdown-and-no-markdown-state: done # FR-21 integration + FR-22; dispatch -> gateway/Markdig render + no-markdown/blocked/llms states; generation-token last-wins; AC trace report written
-  epic-6-retrospective: optional
+  epic-6-retrospective: done
 
   # Epic 7 (post-MVP): iOS Reader — deferred, separate architecture fork
   epic-7: backlog
