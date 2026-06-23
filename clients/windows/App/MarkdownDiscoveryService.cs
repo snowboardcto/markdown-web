@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
@@ -35,8 +34,13 @@ public sealed class MarkdownDiscoveryService
     /// <summary>Honest, non-spoofed User-Agent (AC5).</summary>
     public const string UserAgent = "MarkdownLens/0.1 (+https://themarkdownweb.com)";
 
+    /// <summary>
+    /// Default per-request timeout in milliseconds (AC2 §6.3 "~10 s total per probe"). Injected via
+    /// the overloaded constructor so tests can pass a small value without waiting 10 s per test.
+    /// </summary>
+    public const int DefaultProbeTimeoutMs = 10_000;
+
     private const string MarkdownMediaType = "text/markdown";
-    private const int MaxRedirects = 5;
 
     // Regex to extract markdown links from an llms.txt body: [text](https://...) or [text](http://...).
     private static readonly Regex MarkdownLinkExtractor = new(
@@ -44,14 +48,24 @@ public sealed class MarkdownDiscoveryService
         RegexOptions.Compiled);
 
     private readonly HttpClient _http;
+    private readonly int _probeTimeoutMs;
 
     /// <summary>
     /// Constructs the service over an injectable <see cref="HttpClient"/>. The real app passes a shared
     /// client; tests inject a stub handler.
     /// </summary>
     public MarkdownDiscoveryService(HttpClient http)
+        : this(http, DefaultProbeTimeoutMs) { }
+
+    /// <summary>
+    /// Constructs the service over an injectable <see cref="HttpClient"/> with a custom per-probe
+    /// timeout in milliseconds. Intended for tests, which pass a small value (e.g. 50 ms) so timeout
+    /// assertions complete quickly without waiting for the default 10-second budget.
+    /// </summary>
+    public MarkdownDiscoveryService(HttpClient http, int probeTimeoutMs)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
+        _probeTimeoutMs = probeTimeoutMs;
     }
 
     /// <summary>
@@ -92,7 +106,6 @@ public sealed class MarkdownDiscoveryService
         }
 
         int probeCount = 0;
-        DiscoveryResult? blockedResult = null;
 
         // ── Step 1a: GET the page with Accept: text/markdown. ──────────────────────────────────
         if (probeCount >= MaxProbes)
@@ -109,9 +122,10 @@ public sealed class MarkdownDiscoveryService
             return new DiscoveryResult.NoMarkdown(url);
         }
 
+        // 403/401 at ANY step short-circuits immediately to Blocked (AC5/LOW #8).
         if (IsBlocked(step1Response.StatusCode))
         {
-            return new DiscoveryResult.Blocked(url, (int)step1Response.StatusCode);
+            return new DiscoveryResult.Blocked(url, step1Response.StatusCode);
         }
 
         // Check if step 1 directly returned markdown.
@@ -136,12 +150,14 @@ public sealed class MarkdownDiscoveryService
                 {
                     if (IsBlocked(altResponse.StatusCode))
                     {
-                        blockedResult = new DiscoveryResult.Blocked(url, (int)altResponse.StatusCode);
+                        // 403 at any step short-circuits (LOW #8).
+                        return new DiscoveryResult.Blocked(url, altResponse.StatusCode);
                     }
-                    else if (altResponse.IsSuccess &&
-                             MarkdownCandidateValidator.IsValidMarkdown(
-                                 altResponse.StatusCode, altResponse.ContentType, altResponse.Body,
-                                 CandidateKind.PageOrAlternate))
+
+                    if (altResponse.IsSuccess &&
+                        MarkdownCandidateValidator.IsValidMarkdown(
+                            altResponse.StatusCode, altResponse.ContentType, altResponse.Body,
+                            CandidateKind.PageOrAlternate))
                     {
                         return new DiscoveryResult.PageMarkdown(altResponse.Body!, altResponse.FinalUrl ?? alternateLinkUrl);
                     }
@@ -162,12 +178,14 @@ public sealed class MarkdownDiscoveryService
                 {
                     if (IsBlocked(siblingResponse.StatusCode))
                     {
-                        blockedResult ??= new DiscoveryResult.Blocked(url, (int)siblingResponse.StatusCode);
+                        // 403 at any step short-circuits (LOW #8).
+                        return new DiscoveryResult.Blocked(url, siblingResponse.StatusCode);
                     }
-                    else if (siblingResponse.IsSuccess &&
-                             MarkdownCandidateValidator.IsValidMarkdown(
-                                 siblingResponse.StatusCode, siblingResponse.ContentType, siblingResponse.Body,
-                                 CandidateKind.MdSibling))
+
+                    if (siblingResponse.IsSuccess &&
+                        MarkdownCandidateValidator.IsValidMarkdown(
+                            siblingResponse.StatusCode, siblingResponse.ContentType, siblingResponse.Body,
+                            CandidateKind.MdSibling))
                     {
                         return new DiscoveryResult.PageMarkdown(siblingResponse.Body!, siblingResponse.FinalUrl ?? siblingUrl);
                     }
@@ -186,12 +204,14 @@ public sealed class MarkdownDiscoveryService
             {
                 if (IsBlocked(llmsResponse.StatusCode))
                 {
-                    blockedResult ??= new DiscoveryResult.Blocked(url, (int)llmsResponse.StatusCode);
+                    // 403 at any step short-circuits (LOW #8).
+                    return new DiscoveryResult.Blocked(url, llmsResponse.StatusCode);
                 }
-                else if (llmsResponse.IsSuccess &&
-                         MarkdownCandidateValidator.IsValidMarkdown(
-                             llmsResponse.StatusCode, llmsResponse.ContentType, llmsResponse.Body,
-                             CandidateKind.LlmsText))
+
+                if (llmsResponse.IsSuccess &&
+                    MarkdownCandidateValidator.IsValidMarkdown(
+                        llmsResponse.StatusCode, llmsResponse.ContentType, llmsResponse.Body,
+                        CandidateKind.LlmsText))
                 {
                     var links = ExtractMarkdownLinks(llmsResponse.Body!);
                     return new DiscoveryResult.LlmsIndex(llmsResponse.Body!, links, llmsResponse.FinalUrl ?? llmsUrl);
@@ -199,23 +219,56 @@ public sealed class MarkdownDiscoveryService
             }
         }
 
-        // All cascade steps exhausted. If we encountered a block at any step, surface that.
-        if (blockedResult is not null)
-        {
-            return blockedResult;
-        }
-
         return new DiscoveryResult.NoMarkdown(url);
     }
 
     /// <summary>
     /// Issues a single GET with <c>Accept: text/markdown</c> and the honest UA. Returns <c>null</c> on
-    /// network error (never throws). Follows up to <see cref="MaxRedirects"/> redirects using the
-    /// <see cref="HttpClient"/>'s configured redirect policy (default: automatic follow). Applies a
-    /// reasonable per-request timeout via <paramref name="ct"/>.
+    /// network error or timeout (never throws). On a transient network exception or 5xx response, retries
+    /// ONCE before returning null/the failed result (MEDIUM #4). Enforces a per-request timeout via a
+    /// linked <see cref="CancellationTokenSource"/> of <see cref="_probeTimeoutMs"/> milliseconds so no
+    /// single probe can block the cascade beyond the research budget (HIGH #1).
     /// </summary>
     private async Task<ProbeResult?> ProbeAsync(Uri url, CancellationToken ct)
     {
+        // Single retry on transient 5xx or network exception (MEDIUM #4).
+        for (int attempt = 0; attempt <= 1; attempt++)
+        {
+            ProbeResult? result = await ProbeOnceAsync(url, ct).ConfigureAwait(false);
+
+            if (result is null)
+            {
+                // Network exception — retry once, then give up.
+                if (attempt == 0)
+                {
+                    continue;
+                }
+                return null;
+            }
+
+            // 5xx: retry once.
+            if (result.StatusCode >= 500 && result.StatusCode <= 599 && attempt == 0)
+            {
+                continue;
+            }
+
+            return result;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// One raw HTTP GET with the honest UA, per-request timeout, and no retry. Returns <c>null</c> on
+    /// any exception or timeout.
+    /// </summary>
+    private async Task<ProbeResult?> ProbeOnceAsync(Uri url, CancellationToken ct)
+    {
+        // Enforce the per-request timeout by linking a timeout token to the caller's token (HIGH #1).
+        using var probeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        probeCts.CancelAfter(_probeTimeoutMs);
+        CancellationToken probeCt = probeCts.Token;
+
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
@@ -223,13 +276,13 @@ public sealed class MarkdownDiscoveryService
             request.Headers.UserAgent.ParseAdd(UserAgent);
 
             using HttpResponseMessage response =
-                await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
+                await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, probeCt)
                     .ConfigureAwait(false);
 
             string body = string.Empty;
             try
             {
-                body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                body = await response.Content.ReadAsStringAsync(probeCt).ConfigureAwait(false);
             }
             catch
             {
@@ -267,42 +320,47 @@ public sealed class MarkdownDiscoveryService
     private static bool IsBlocked(int statusCode)
         => statusCode == 403 || statusCode == 401;
 
-    private static bool IsBlocked(HttpStatusCode statusCode)
-        => IsBlocked((int)statusCode);
-
     /// <summary>
-    /// Constructs the <c>&lt;path&gt;.md</c> sibling URL. Handles trailing slashes: <c>/docs/intro/</c>
-    /// → <c>/docs/intro/.md</c> is not useful, so we strip a trailing slash before appending. A path
-    /// that already ends in <c>.md</c> returns <c>null</c> (no sibling needed). Returns <c>null</c>
-    /// on any construction error.
+    /// Constructs the <c>&lt;path&gt;.md</c> sibling URL preserving the original percent-encoding of the
+    /// path so that non-ASCII characters and literal <c>%2F</c> sequences are not double-encoded (MEDIUM
+    /// #6). Operates on the already-escaped absolute URI string rather than <c>UriBuilder.Path</c> (which
+    /// re-encodes). Drops query and fragment. Returns <c>null</c> if the path already ends in <c>.md</c>
+    /// or on any construction error.
     /// </summary>
     private static Uri? BuildMdSiblingUrl(Uri url)
     {
         try
         {
-            string path = url.AbsolutePath;
+            // Work from the escaped absolute URI to avoid double-encoding.
+            // UriComponents.Path returns the path portion with its original percent-encoding intact.
+            string escapedPath = url.GetComponents(UriComponents.Path, UriFormat.UriEscaped);
 
             // If the path already ends in .md, there's no sibling to probe.
-            if (path.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+            if (escapedPath.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
             {
                 return null;
             }
 
             // Strip trailing slash before appending .md (e.g. /docs/intro/ → /docs/intro.md).
-            string newPath = path.TrimEnd('/') + ".md";
-            if (string.IsNullOrEmpty(newPath) || newPath == ".md")
+            string newEscapedPath = escapedPath.TrimEnd('/') + ".md";
+            if (string.IsNullOrEmpty(newEscapedPath) || newEscapedPath == ".md")
             {
                 return null;
             }
 
-            var builder = new UriBuilder(url)
-            {
-                Path = newPath,
-                Query = string.Empty,
-                Fragment = string.Empty,
-            };
+            // Build the sibling URL by splicing on SchemeAndServer + the new path, dropping query/fragment.
+            // This is safe because SchemeAndServer is ASCII-only and the path is already escaped.
+            string schemeAndServer = url.GetComponents(
+                UriComponents.SchemeAndServer, UriFormat.UriEscaped);
 
-            return builder.Uri;
+            string siblingUriString = schemeAndServer + "/" + newEscapedPath.TrimStart('/');
+
+            if (Uri.TryCreate(siblingUriString, UriKind.Absolute, out Uri? siblingUri))
+            {
+                return siblingUri;
+            }
+
+            return null;
         }
         catch
         {

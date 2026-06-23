@@ -171,4 +171,58 @@ public class MarkdownCandidateValidatorTests
         });
         Assert.Null(ex);
     }
+
+    // ── MEDIUM #5: BOM-prefix and HTML-comment false-positives ────────────────────────────────────
+
+    [Theory]
+    [InlineData("﻿<!doctype html><html><head></head></html>")]    // BOM + doctype
+    [InlineData("﻿<html lang=\"en\">")]                           // BOM + html tag
+    public void IsValidMarkdown_BomPrefixedHtml_WithTextMarkdown_ReturnsFalse(string body)
+    {
+        // A BOM followed by an HTML marker must still be rejected (not accepted due to BOM offset).
+        Assert.False(MarkdownCandidateValidator.IsValidMarkdown(200, "text/markdown", body, CandidateKind.PageOrAlternate));
+    }
+
+    [Theory]
+    [InlineData("<!-- comment --><html><body>content</body></html>")]    // HTML comment leading
+    [InlineData("<!--\nmultiline\ncomment\n--><html></html>")]           // multiline HTML comment
+    public void IsValidMarkdown_LeadingHtmlComment_WithTextMarkdown_ReturnsFalse(string body)
+    {
+        // A leading HTML comment ("<!--") is an HTML tell and must be rejected.
+        Assert.False(MarkdownCandidateValidator.IsValidMarkdown(200, "text/markdown", body, CandidateKind.PageOrAlternate));
+    }
+
+    [Fact]
+    public void IsValidMarkdown_BomPrefixedMarkdown_Accepted()
+    {
+        // A BOM followed by valid markdown (not HTML) should NOT be rejected.
+        string body = "﻿# A Valid Heading\n\nSome content.";
+        Assert.True(MarkdownCandidateValidator.IsValidMarkdown(200, "text/markdown", body, CandidateKind.PageOrAlternate));
+    }
+
+    // ── LOW #7: llms.txt structure — multiline heading and relative links ─────────────────────────
+
+    [Fact]
+    public void IsValidMarkdown_LlmsText_RelativeLinkOnly_Accepted()
+    {
+        // A relative link (no https?://) in an llms.txt body must be accepted (LOW #7).
+        string body = "Introduction\n\n[About](/about)\n[Docs](/docs/intro)";
+        Assert.True(MarkdownCandidateValidator.IsValidMarkdown(200, "text/markdown", body, CandidateKind.LlmsText));
+    }
+
+    [Fact]
+    public void IsValidMarkdown_LlmsText_NonLeadingHeading_Accepted()
+    {
+        // A # heading that is NOT on the very first line must be accepted with multiline mode (LOW #7).
+        string body = "Introduction paragraph\n\n# Heading\n\nSome content.";
+        Assert.True(MarkdownCandidateValidator.IsValidMarkdown(200, "text/markdown", body, CandidateKind.LlmsText));
+    }
+
+    [Fact]
+    public void IsValidMarkdown_LlmsText_RelativeLinkWithNonLeadingHeading_Accepted()
+    {
+        // Combines: non-leading # heading AND relative link — both scenarios together.
+        string body = "Preamble text.\n\n# Resources\n\n[Page One](/docs/one)\n[Page Two](/docs/two)";
+        Assert.True(MarkdownCandidateValidator.IsValidMarkdown(200, "text/markdown", body, CandidateKind.LlmsText));
+    }
 }

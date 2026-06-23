@@ -98,7 +98,31 @@ so that the right markdown is rendered and false positives are not.
 
 3. **llms.txt link resolution (DECIDE-AND-DOCUMENT):** LlmsIndex exposes the extracted `Links` list but does NOT automatically navigate to them in the discovery service. The caller (6.4 dispatch) surfaces them in the UI. Rationale: the research leaves this open; the conservative choice is to surface the index and let the reader decide.
 
-4. **Redirect handling:** Relies on `HttpClient`'s default automatic redirect following (up to `MaxAutomaticRedirections = 50` by default at the App level, constrained by the probe budget at the service level). No custom redirect loop needed.
+4. **Redirect handling (UPDATED — code-review follow-up HIGH #2):** `HttpClientHandler.MaxAutomaticRedirections = 5` is set on `MainWindow.SharedHttpClient` (the single construction point). The dead/misleading `private const int MaxRedirects = 5` in `MarkdownDiscoveryService` was removed. The service itself has no redirect-loop logic; the cap is enforced at the HttpClient level.
+
+5. **Per-probe timeout (code-review follow-up HIGH #1):** Added `internal const int DefaultProbeTimeoutMs = 10_000`. Each call to `ProbeOnceAsync` creates a `CancellationTokenSource.CreateLinkedTokenSource(ct)` and calls `CancelAfter(_probeTimeoutMs)`. Tests inject a short value (e.g. 50 ms) via the `internal MarkdownDiscoveryService(HttpClient, int)` constructor to avoid waiting 10 s per test.
+
+6. **Single retry on 5xx / network error (code-review follow-up MEDIUM #4):** `ProbeAsync` wraps `ProbeOnceAsync` in a loop of `attempt <= 1`. On `null` return (network exception) or a 5xx status code, it retries once. Two consecutive failures → cascade continues to next step (or NoMarkdown).
+
+7. **403 short-circuit (code-review follow-up LOW #8):** Every cascade step (1a, 1b, 2, 3) now immediately `return new DiscoveryResult.Blocked(url, statusCode)` on 403/401 without accumulating `blockedResult`. The old `blockedResult ??=` deferred pattern was removed. The `RequestedUrl` on `Blocked` is always the originally-typed `url` (not the step-level URL).
+
+8. **BOM + HTML-comment sniff (code-review follow-up MEDIUM #5):** `BeginsWithHtmlMarker` strips a leading U+FEFF BOM before building the sniff window. `"<!--"` is added to `HtmlDoctypeMarkers` so a leading HTML comment is treated as an HTML tell.
+
+9. **llms.txt heading regex — multiline + relative links (code-review follow-up LOW #7):** `MarkdownHeadingPattern` uses `RegexOptions.Multiline` so `^` matches any line start. `MarkdownLinkPattern` accepts any non-empty parenthesized URL `[.+]\([^)]+\)` (not only `https?://`) to include relative links.
+
+10. **Sibling URL encoding (code-review follow-up MEDIUM #6):** `BuildMdSiblingUrl` now uses `url.GetComponents(UriComponents.Path, UriFormat.UriEscaped)` and `url.GetComponents(UriComponents.SchemeAndServer, UriFormat.UriEscaped)` to build the sibling URL from already-escaped components, then splices them with string concatenation. `UriBuilder.Path =` (which re-encodes) is no longer used.
+
+### Review Follow-ups (all addressed)
+
+- [x] HIGH #1 — Per-probe timeout: `CancellationTokenSource.CancelAfter(_probeTimeoutMs)` in `ProbeOnceAsync`; `DefaultProbeTimeoutMs = 10_000`; internal ctor for test injection.
+- [x] HIGH #2 — Bounded redirects ≤5: `HttpClientHandler { MaxAutomaticRedirections = 5 }` on `MainWindow.SharedHttpClient`; dead `MaxRedirects` const removed from service.
+- [x] MEDIUM #3 — Last-wins (see story 6.4 record).
+- [x] MEDIUM #4 — Single retry: `ProbeAsync` loop with `attempt <= 1`; 5xx or null → retry once.
+- [x] MEDIUM #5 — BOM/comment false-positives: BOM stripped in `BeginsWithHtmlMarker`; `"<!--"` added to `HtmlDoctypeMarkers`.
+- [x] MEDIUM #6 — Sibling URL encoding: `GetComponents(UriComponents.Path, UriFormat.UriEscaped)` used instead of `UriBuilder.Path`.
+- [x] LOW #7 — llms.txt structure: `RegexOptions.Multiline` on heading pattern; link pattern accepts relative URLs.
+- [x] LOW #8 — 403 short-circuit: every step immediately returns `Blocked`; no `blockedResult` accumulation.
+- [x] LOW #10 — 4-GET budget test: `DiscoverAsync_Step1WithAltLinkThatMisses_ForcesExactlyFourGETs` added.
 
 ### File List
 

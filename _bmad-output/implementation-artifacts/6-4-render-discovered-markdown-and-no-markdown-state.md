@@ -77,6 +77,12 @@ so that the Lens feels trustworthy whether or not markdown exists.
 
 4. **WPF `List` type qualification:** `ShowLlmsIndex` uses `new System.Windows.Documents.List()` (fully qualified) to avoid ambiguity with `System.Collections.Generic.List<T>`.
 
+5. **Last-wins for discovery (code-review follow-up MEDIUM #3):** `MainWindow` holds a `private int _discoveryGeneration` monotonic token. `BeginDiscoveryAsync` increments it at entry (`int myGen = ++_discoveryGeneration`), awaits discovery, then checks `if (myGen != _discoveryGeneration) return;` before dispatching. This mirrors `PersonalityRerenderCoordinator`'s generation pattern. The XML doc comment was corrected to describe this actual mechanism (not routing through `NavigationController`).
+
+### Review Follow-ups (all addressed)
+
+- [x] MEDIUM #3 — Last-wins: `_discoveryGeneration` int token in `MainWindow`; `BeginDiscoveryAsync` increments at entry and checks at completion before dispatch. XML doc comment updated to describe actual behavior.
+
 ### File List
 
 - `clients/windows/App/ContentHostController.cs` — UPDATED (ShowNoMarkdown, ShowBlocked, ShowLlmsIndex)

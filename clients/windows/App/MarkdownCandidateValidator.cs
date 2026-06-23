@@ -42,11 +42,15 @@ public static class MarkdownCandidateValidator
     private const string MarkdownMediaType = "text/markdown";
     private const string PlainTextMediaType = "text/plain";
 
+    // U+FEFF — the byte-order mark that may prefix a UTF-8 body.
+    private const char Bom = '\uFEFF';
+
     // Leading bytes that indicate an HTML response (soft-404 / SPA catch-all).
-    // Matched against the first ~512 non-whitespace characters, case-insensitive.
+    // Matched against the first ~512 non-whitespace characters (after BOM strip), case-insensitive.
     private static readonly string[] HtmlDoctypeMarkers =
     {
         "<!doctype html",
+        "<!--",             // leading HTML comment → treat as HTML tell (MEDIUM #5)
         "<html",
         "<head",
         "<?xml",
@@ -55,9 +59,15 @@ public static class MarkdownCandidateValidator
         "<meta",
     };
 
-    // Minimal markdown-structure patterns for /llms.txt: a leading # heading or a markdown link [text](url).
-    private static readonly Regex MarkdownHeadingPattern = new(@"^\s*#", RegexOptions.Compiled);
-    private static readonly Regex MarkdownLinkPattern = new(@"\[.+?\]\(https?://", RegexOptions.Compiled);
+    // Minimal markdown-structure patterns for /llms.txt (LOW #7):
+    //   - heading: RegexOptions.Multiline so "^" matches any line start, not only the string start.
+    //   - link: accepts BOTH absolute (https?://) AND relative (anything in parens) links.
+    private static readonly Regex MarkdownHeadingPattern = new(
+        @"^[ \t]*#",
+        RegexOptions.Compiled | RegexOptions.Multiline);
+    private static readonly Regex MarkdownLinkPattern = new(
+        @"\[.+?\]\([^)]+\)",
+        RegexOptions.Compiled);
 
     /// <summary>
     /// Returns <c>true</c> iff the candidate response passes all validation checks for the given
@@ -157,10 +167,14 @@ public static class MarkdownCandidateValidator
 
     /// <summary>
     /// Scans the first ~512 non-whitespace characters of <paramref name="body"/> for HTML doctype/tag
-    /// markers. Returns <c>true</c> if the body looks like HTML.
+    /// markers. Strips a leading BOM (U+FEFF) before sniffing so BOM-prefixed HTML responses are not
+    /// incorrectly accepted (MEDIUM #5). Returns <c>true</c> if the body looks like HTML.
     /// </summary>
     private static bool BeginsWithHtmlMarker(string body)
     {
+        // Strip a leading BOM (U+FEFF) — common in UTF-8 responses; must not cause a false negative.
+        int startIndex = (body.Length > 0 && body[0] == Bom) ? 1 : 0;
+
         // Build the sniff window from the first ~512 chars AFTER leading whitespace, collapsing any
         // internal run of whitespace to a single space. We must NOT drop internal spaces: a marker
         // like "<!doctype html" contains a space, and stripping all whitespace would turn the body
@@ -168,8 +182,9 @@ public static class MarkdownCandidateValidator
         var sb = new System.Text.StringBuilder(512);
         bool seenNonWhitespace = false;
         bool pendingSpace = false;
-        foreach (char ch in body)
+        for (int i = startIndex; i < body.Length; i++)
         {
+            char ch = body[i];
             if (char.IsWhiteSpace(ch))
             {
                 if (seenNonWhitespace)

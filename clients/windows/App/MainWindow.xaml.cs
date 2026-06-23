@@ -27,9 +27,11 @@ namespace TheMarkdownWeb.App;
 public partial class MainWindow : Window
 {
     // A single shared HttpClient for the lifetime of the window (App owns networking).
-    // MaxAutomaticRedirections default is 50; the discovery service itself enforces its own
-    // bounded redirect policy at the cascade level.
-    private static readonly HttpClient SharedHttpClient = new();
+    // MaxAutomaticRedirections is set to 5 to enforce the AC6 §6.3 bounded-redirect requirement
+    // (HIGH #2). The handler is configured once at construction; the client is shared for its
+    // lifetime so connection pooling remains effective.
+    private static readonly HttpClient SharedHttpClient = new(
+        new HttpClientHandler { MaxAutomaticRedirections = 5 });
 
     private readonly MarkdownFetcher _fetcher = new(SharedHttpClient);
     private readonly IUrlLauncher _launcher = new SystemBrowserLauncher();
@@ -52,6 +54,11 @@ public partial class MainWindow : Window
     // Story 6.3: the markdown discovery service (cascade + validation + UA + probe budget), composed
     // once over SharedHttpClient. App owns networking; Rendering stays pure.
     private readonly MarkdownDiscoveryService _discovery = new(SharedHttpClient);
+
+    // Story 6.4 MEDIUM #3 last-wins for discovery: a monotonic generation token prevents a superseded
+    // discovery from overwriting a newer result (mirrors the rerender coordinator's pattern). Incremented
+    // at the START of every BeginDiscoveryAsync call; the completion checks its captured generation.
+    private int _discoveryGeneration;
 
     // Story 4.2: the personality selection state + the re-render-in-place coordinator (held RAW markdown,
     // no re-fetch, last-wins). A selection change re-runs the held markdown through the gateway.
@@ -355,19 +362,31 @@ public partial class MainWindow : Window
     /// <summary>
     /// Story 6.3/6.4 discovery seam: runs <see cref="MarkdownDiscoveryService.DiscoverAsync"/> for
     /// <paramref name="url"/> and dispatches the result to the appropriate render/state action.
-    /// Total — never throws into the UI. Respects last-wins by routing <c>PageMarkdown</c> through
-    /// <see cref="NavigationController.NavigateToAsync"/> (which carries the generation token and
-    /// cancels a superseded fetch) for the full history + re-entrancy benefit.
+    /// Total — never throws into the UI.
     ///
-    /// For non-<c>PageMarkdown</c> outcomes (<c>NoMarkdown</c>, <c>Blocked</c>, <c>LlmsIndex</c>) the
-    /// result is dispatched directly to the content host — these do not push to history because there is
-    /// no real page to navigate back to.
+    /// Last-wins re-entrancy (MEDIUM #3): a monotonic <c>_discoveryGeneration</c> token is incremented
+    /// at the start of every call. When the awaited discovery resumes, the captured generation is compared
+    /// against the current one — a stale (superseded) discovery drops its result without rendering, so
+    /// a newer address-bar submission always wins over a slower pending discovery. This mirrors the
+    /// <see cref="PersonalityRerenderCoordinator"/>'s generation pattern.
+    ///
+    /// Non-<c>PageMarkdown</c> outcomes (<c>NoMarkdown</c>, <c>Blocked</c>, <c>LlmsIndex</c>) are
+    /// dispatched directly to the content host — they do not push to history because there is no real
+    /// page to navigate back to.
     /// </summary>
     private async Task BeginDiscoveryAsync(Uri url)
     {
+        int myGen = ++_discoveryGeneration;
+
         try
         {
             DiscoveryResult result = await _discovery.DiscoverAsync(url).ConfigureAwait(true);
+
+            // Last-wins: if a newer discovery started while we were awaiting, drop this result.
+            if (myGen != _discoveryGeneration)
+            {
+                return;
+            }
 
             DiscoveryOutcomeDispatcher.Dispatch(
                 result,
