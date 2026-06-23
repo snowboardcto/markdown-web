@@ -2,7 +2,7 @@
 title: The Markdown Web
 status: final
 created: 2026-06-21
-updated: 2026-06-21
+updated: 2026-06-23
 ---
 
 # PRD: The Markdown Web
@@ -61,6 +61,9 @@ v0.1 makes the vision real and visible at themarkdownweb.com: markdown rendered 
 - **Content negotiation** — serving the representation (HTML vs raw markdown) appropriate to the requesting consumer from one URL.
 - **Living Link** — a shared `.md` URL that renders for whoever opens it.
 - **Feed** — new `.md` pages from a followed vault, delivered to a reader.
+- **Markdown Lens** — the native client used as a reader for the *wider* markdown-native web: point it at any site and, if that site exposes a markdown representation, render it (per-reader) the same way it renders our own Vault.
+- **Markdown discovery** — the client-side protocol that determines whether a given URL has an available markdown representation and fetches it (see FR-21).
+- **markdown-native web** — the (currently niche, developer/docs-concentrated) set of sites that publish a discoverable markdown representation: `<link rel="alternate" type="text/markdown">`, content negotiation, `.md` siblings, or `llms.txt` adopters.
 
 ## 4. Features
 
@@ -195,10 +198,59 @@ The Vault is served at a custom domain (themarkdownweb.com) over HTTPS. Realizes
 - themarkdownweb.com serves the Vault over HTTPS with a valid certificate.
 - Plain HTTP requests redirect to HTTPS.
 
+### 4.7 The Markdown Lens — reading the wider markdown web *(post-MVP; Epic 6, Windows-first)*
+**Description:** The native client, today, reads our own Vault. The Lens turns it outward: point the client at *any* URL and, if that site publishes a discoverable markdown representation, render it with the same pipeline (and per-reader rendering) used for our Vault. This extends — and partly relaxes — the native client's original `.md`-only address handling (FR-9).
+
+**Positioning (decided 2026-06-23, research-grounded):** the client is **"the native reader for the markdown-native web"** — docs/dev sites, `llms.txt` adopters, and our own Vault. Markdown availability on the open web is **niche, not universal** (research basket: markdown resolved on developer/docs properties; ordinary marketing/news sites returned nothing, some blocked non-browser requests; ~10% of domains expose `llms.txt`, page-level `.md` rarer still). Therefore **"no markdown available" (FR-22) is an expected, first-class outcome**, not a failure — and we never fall back to reformatting arbitrary HTML (keeps the §5 "not a universal AI browser" non-goal intact). Evidence: `_bmad-output/planning-artifacts/research/technical-markdown-discovery-for-arbitrary-websites-research-2026-06-23.md`.
+
+**Functional Requirements:**
+
+#### FR-19: Client default home
+On launch (and on a "home" action), the native client opens `themarkdownweb.com` by default rather than a blank address bar.
+**Consequences (testable):**
+- A freshly launched client shows themarkdownweb.com content, not an empty state.
+
+#### FR-20: Open any URL
+The native client accepts any `http(s)` URL in its address bar, not only `.md` URLs — superseding the `.md`-only restriction of FR-9 / the original address-bar rule. Non-`http(s)` schemes are still declined.
+**Consequences (testable):**
+- Entering `https://example.com/docs/intro` (no `.md`) is accepted and triggers discovery (FR-21), not an immediate decline.
+- A non-`http(s)` scheme (e.g. `ftp:`, `javascript:`) is still declined.
+
+#### FR-21: Markdown discovery
+For an entered URL, the client determines whether a markdown representation exists via an ordered, first-hit-wins cascade with a bounded probe budget, then fetches and renders it:
+1. GET the URL with `Accept: text/markdown` **and** parse the returned HTML `<head>` for `<link rel="alternate" type="text/markdown" href=...>` (content negotiation + autodiscovery in one round-trip);
+2. `.md` sibling probe (`<path>.md`);
+3. `/llms.txt` at the site root — treated as a **site index hint, not the page itself**.
+Each candidate is validated by `Content-Type` and an HTML-doctype byte-sniff to reject soft-404s / HTML-served-as-markdown. The client uses an honest (non-spoofed) User-Agent and treats an explicit bot-block (e.g. 403) as a distinct outcome.
+**Consequences (testable):**
+- A site exposing a markdown alternate or `.md` representation renders as markdown.
+- A `200 text/html` response to a `.md` probe is rejected (no false-positive render).
+- An `llms.txt` hit is surfaced as available markdown resources, not rendered as the page body.
+
+#### FR-22: No-markdown state
+When the cascade finds no valid markdown representation, the client clearly states **"no markdown available"** for that URL. There is **no HTML fallback / no reader-mode** for arbitrary HTML.
+**Consequences (testable):**
+- A site with no discoverable markdown shows the explicit no-markdown state, not a blank page or a crash.
+- A bot-blocked fetch is distinguishable from a genuine no-markdown result (distinct messaging).
+
+**Feature-specific NFRs:**
+- **Reuse, don't rebuild** — discovery feeds the existing Markdig render pipeline + content-negotiation work (FR-14 / Story 2.7); Rendering stays pure (NFR-1, NFR-5).
+- **Politeness & performance** — bounded probe count per URL, sane timeouts, and caching so discovery stays fast and well-behaved.
+
+### 4.8 Reach: additional clients *(post-MVP; Epic 7)*
+**Description:** Extend the native reading experience beyond Windows. Realizes the cross-platform ubiquity intent of FR-13 / NFR-2.
+
+**Functional Requirements:**
+
+#### FR-23: iOS native reader
+An iOS native client renders `.md` pages (Vault + Markdown Lens) for the Reader, honoring the **no-Chromium** constraint (NFR-1) — a native iOS render path, not a bundled webview. *(Deferred; sequenced after Epic 6.)* `[ASSUMPTION: iOS render-stack choice (e.g. SwiftUI-native vs .NET MAUI) is an architecture decision — the WPF FlowDocument renderer does not port directly; see §8.]`
+**Consequences (testable):**
+- An iOS Reader can open and read a `.md` page rendered natively (no Chromium/WebView).
+
 ## 5. Non-Goals (Explicit)
 - **Not a markdown editor/authoring app** — Authors bring their own `.md`.
 - **Not a CMS or page-builder** — no WYSIWYG, no author-side presentation controls (that's the whole point).
-- **Not a universal AI browser** — it renders the Markdown Web, not the entire existing HTML web.
+- **Not a universal AI browser** — it renders the markdown-native web, not the entire existing HTML web. The Markdown Lens (FR-19–22) reads markdown *wherever* a site publishes it, but when none exists it says "no markdown available" (FR-22) — it never reformats or reader-modes arbitrary HTML.
 - **Not an accounts/permissions platform in v1** — no auth, teams, or access control yet.
 - **Not monetized yet** — business model deliberately parked.
 - **Not reinventing commodity plumbing** — markdown hosting and content negotiation are near-commodity patterns (Cloudflare, Vercel, Mintlify); use standard approaches, don't build novel infrastructure. The differentiator is per-reader human-facing rendering, not the pipes.
@@ -220,6 +272,11 @@ MVP includes **both clients** (naethyn: "we need both"). To keep the build sane,
 ### 6.2 Out of Scope for MVP *(committed, sequenced — not cut)*
 - Sharing / Feed: FR-15, FR-16 — *after both clients are solid.*
 - Accounts / multi-user, monetization.
+
+### 6.3 Post-MVP Roadmap *(beyond the v1 boundary)*
+- **Delivered:** Sharing / Feed (FR-15, FR-16) — **Epic 5, shipped** (Living Link + static RSS Feed).
+- **Epic 6 — The Markdown Lens (Windows-first):** FR-19, FR-20, FR-21, FR-22. Lead with a thin discovery spike (validate the FR-21 cascade against real sites via a real `HttpClient`) before the UX work, per the 2026-06-23 research.
+- **Epic 7 — iOS reader:** FR-23. Separate architecture fork (the WPF FlowDocument renderer does not port directly).
 
 ## 7. Success Metrics
 
@@ -243,7 +300,11 @@ MVP includes **both clients** (naethyn: "we need both"). To keep the build sane,
 5. **Identity & discovery** — how readers find each other's Vaults (pairs with Sharing).
 6. **Author incentive** — why authors publish `.md` and surrender presentation control.
 7. **Timing risk (watch)** — the moat is non-technical and *time-sensitive*; an incumbent (Comet/Dia/Atlas/A2UI) could ship "render this `.md` for you." HTML-first sequencing delays the differentiating native-client capability — monitor and protect the native-client timeline.
+8. **iOS render stack (Epic 7)** — the WPF FlowDocument renderer does not port to iOS; choose a non-Chromium native path (SwiftUI-native vs .NET MAUI vs shared-core-with-native-render). *(Architecture decision.)*
+9. **Markdown discovery robustness (Epic 6, mostly resolved by 2026-06-23 research)** — confirm live behavior of the `Accept: text/markdown` branch with a real `HttpClient` (the research tool couldn't send custom headers), and the bot-block/CDN handling for non-browser fetches, in the discovery spike.
 
 ## 9. Assumptions Index
 - §4.3 FR-13 — Native client form factor is undecided; requirement is cross-platform ubiquity with **no Chromium dependency** (hard constraint, confirmed).
 - §8.2 — Markdown flavor = GFM; YAML frontmatter treated as metadata. *(Default — confirm.)*
+- §4.8 FR-23 — iOS render-stack choice (SwiftUI-native vs .NET MAUI vs shared-core) is an open architecture decision; requirement is a native, no-Chromium iOS reader. *(Confirm at Epic 7.)*
+- §4.7 FR-20 — Supersedes the original `.md`-only address-bar rule (FR-9 / UX-DR5 "non-`.md` declined"); UX-DR5 must be revised when Epic 6 is cut. *(Logged.)*
