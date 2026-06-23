@@ -613,24 +613,47 @@ public class MarkdownDiscoveryServiceTests
         // URL whose path contains a space encoded as %20.
         // The sibling must append .md once; the %20 must NOT be re-encoded as %2520.
         var pageUrl = new Uri("https://example.com/docs/my%20page");
-        // After Uri construction, the path from GetComponents should be "docs/my%20page".
-        // We verify the sibling URL the handler actually receives ends in "my%20page.md"
-        // rather than double-encoding such as "my%2520page.md".
-        string expectedSiblingUrl = "https://example.com/docs/my%20page.md";
-
-        var handler = new MultiResponseHandler(new Dictionary<string, (HttpStatusCode, string, string)>
+        // The sibling must append .md once; the %20 must NOT be re-encoded as %2520.
+        // .NET may render the request URI with the space either decoded ("my page") or as "%20",
+        // so we match the sibling tolerantly via a DelegatingTestHandler rather than an exact
+        // dictionary key (Uri.ToString() decodes %20, which would never match the real request).
+        var requestedUrls = new List<string>();
+        var delegatingHandler = new DelegatingTestHandler((request, ct) =>
         {
-            [pageUrl.ToString()] = (HttpStatusCode.OK, "text/html", "<html><head></head><body></body></html>"),
-            [expectedSiblingUrl] = (HttpStatusCode.OK, "text/markdown", ValidMarkdown),
+            string url = request.RequestUri?.ToString() ?? string.Empty;
+            requestedUrls.Add(url);
+            bool isSibling = url.EndsWith(".md", StringComparison.OrdinalIgnoreCase)
+                && (url.Contains("my%20page", StringComparison.OrdinalIgnoreCase)
+                    || url.Contains("my page", StringComparison.OrdinalIgnoreCase));
+            if (isSibling)
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(ValidMarkdown, Encoding.UTF8, "text/markdown"),
+                });
+            }
+            // The page itself (step 1) returns HTML with no alternate link → cascade to sibling.
+            if (url.EndsWith("my%20page", StringComparison.OrdinalIgnoreCase)
+                || url.EndsWith("my page", StringComparison.OrdinalIgnoreCase))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("<html><head></head><body></body></html>", Encoding.UTF8, "text/html"),
+                });
+            }
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)
+            {
+                Content = new StringContent(string.Empty, Encoding.UTF8, "text/plain"),
+            });
         });
-        var service = new MarkdownDiscoveryService(new HttpClient(handler));
+        var service = new MarkdownDiscoveryService(new HttpClient(delegatingHandler));
 
         DiscoveryResult result = await service.DiscoverAsync(pageUrl).ConfigureAwait(false);
 
         var pm = Assert.IsType<DiscoveryResult.PageMarkdown>(result);
         Assert.Equal(ValidMarkdown, pm.Markdown);
         // Verify the sibling URL requested does not contain double-encoding (%2520).
-        Assert.DoesNotContain(handler.RequestedUrls, u => u.Contains("%2520"));
+        Assert.DoesNotContain(requestedUrls, u => u.Contains("%2520"));
     }
 
     // ── LOW #10: 4-GET budget: step1 HTML with alt-link (alt misses) + step2 + step3 ──────────────
