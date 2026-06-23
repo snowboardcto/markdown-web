@@ -27,7 +27,11 @@
                     <ColumnDefinition Width="Auto" />
                     <!-- col 4: the Story 5.1 share/copy-link button (Q-Placement: a NEW Auto column
                          to the RIGHT of the language picker, so the address bar keeps Width="*" fill
-                         and the nav StackPanel is undisturbed). TabIndex=6; ContentScroll bumped 6→7. -->
+                         and the nav StackPanel is undisturbed). TabIndex=6. -->
+                    <ColumnDefinition Width="Auto" />
+                    <!-- col 5: the Story 6.1 Home button (Q-Placement: a NEW Auto column to the RIGHT
+                         of the share button, so the nav StackPanel in col 0 is undisturbed and the
+                         three nav-guard tests stay at exactly 3). TabIndex=7; ContentScroll bumped 7→8. -->
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
@@ -100,14 +104,15 @@
                                  AutomationProperties.Name="Address"
                                  KeyDown="AddressInput_KeyDown" />
 
-                        <!-- (c) ".md only" tag — text is EXACTLY ".md only" (ordinal). -->
+                        <!-- (c) ".md-discoverable" tag — updated for Story 6.2 UX-DR5 revision:
+                             the address bar now accepts any markdown-discoverable http(s) URL. -->
                         <TextBlock x:Name="MdOnlyTag"
                                    Grid.Column="2"
-                                   Text=".md only"
+                                   Text=".md-discoverable"
                                    VerticalAlignment="Center"
                                    Margin="6,0,0,0"
                                    Foreground="#666666"
-                                   AutomationProperties.Name="Loads .md pages only" />
+                                   AutomationProperties.Name="Reads markdown-discoverable URLs" />
                     </Grid>
                 </Border>
 
@@ -152,9 +157,8 @@
                      a NEW Auto column to the right of the language picker; the address bar Width="*"
                      fill and nav StackPanel are undisturbed). Labeled + keyboard-reachable (UX-DR9):
                      AutomationProperties.Name="Copy link", Focusable, a tab stop.
-                     Tab order: ShareLinkButton(6) after LanguagePicker(5), before ContentScroll(7).
-                     ContentScroll bumped from 6 → 7 to accommodate this new entry.
-                     DECIDE-AND-DOCUMENT: TabIndex=6; ContentScroll bumped 6→7. -->
+                     Tab order: ShareLinkButton(6) after LanguagePicker(5), before HomeButton(7).
+                     DECIDE-AND-DOCUMENT: TabIndex=6; HomeButton sits at 7; ContentScroll bumped 7→8. -->
                 <Button x:Name="ShareLinkButton"
                         Grid.Column="4"
                         TabIndex="6"
@@ -166,6 +170,25 @@
                         Padding="6,2"
                         VerticalAlignment="Center"
                         Click="ShareLinkButton_Click" />
+
+                <!-- Grid.Column 5 (Width="Auto") — the Story 6.1 Home button (Q-Placement: a NEW Auto
+                     column to the RIGHT of the share button; the nav StackPanel in col 0 is undisturbed
+                     so the three nav-count guards stay at exactly 3). Labeled + keyboard-reachable:
+                     AutomationProperties.Name="Home", Focusable, a tab stop.
+                     Tab order: HomeButton(7) after ShareLinkButton(6), before ContentScroll(8).
+                     ContentScroll bumped from 7 → 8. -->
+                <Button x:Name="HomeButton"
+                        Grid.Column="5"
+                        TabIndex="7"
+                        Focusable="True"
+                        Content="&#x2302;"
+                        AutomationProperties.Name="Home"
+                        ToolTip="Home"
+                        Margin="6,0,0,0"
+                        MinWidth="32"
+                        Padding="6,2"
+                        VerticalAlignment="Center"
+                        Click="HomeButton_Click" />
             </Grid>
         </Border>
 
@@ -176,12 +199,13 @@
             <!-- Story 3.6 (AC4): ContentScroll is keyboard-reachable so a keyboard user can reach +
                  scroll the rendered content (FlowDocumentScrollViewer is NOT a tab stop by default).
                  Story 4.4 (Q-Lang-UX): TabIndex bumped 5 -> 6 so the Translate language picker sits at 5.
-                 Story 5.1 (Q-Placement): TabIndex bumped 6 -> 7 so the Share button sits at 6 —
+                 Story 5.1 (Q-Placement): TabIndex bumped 6 -> 7 so the Share button sits at 6.
+                 Story 6.1 (Q-Placement): TabIndex bumped 7 -> 8 so the Home button sits at 7 —
                  the walk is Back(0)/Forward(1)/Reload(2)/AddressInput(3)/PersonalitySelector(4)/
-                 LanguagePicker(5)/ShareLinkButton(6)/ContentScroll(7). -->
+                 LanguagePicker(5)/ShareLinkButton(6)/HomeButton(7)/ContentScroll(8). -->
             <FlowDocumentScrollViewer x:Name="ContentScroll"
                                       Focusable="True"
-                                      TabIndex="7"
+                                      TabIndex="8"
                                       IsToolBarVisible="False"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Auto" />

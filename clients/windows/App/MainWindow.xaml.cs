@@ -10,6 +10,12 @@ using TheMarkdownWeb.Rendering;
 
 namespace TheMarkdownWeb.App;
 
+// Epic 6 "Markdown Lens" additions:
+// - 6.1: HomeNavigator.HomeUrl + launch navigation (Loaded event) + HomeButton_Click.
+// - 6.2: IsAcceptableUrl three-way routing in AddressInput_KeyDown + BeginDiscoveryAsync seam.
+// - 6.3: MarkdownDiscoveryService composed once over SharedHttpClient.
+// - 6.4: discovery → gateway → render/state dispatch in BeginDiscoveryAsync.
+
 /// <summary>
 /// Interaction logic for MainWindow.xaml — the shell window. Story 3.5 wires the real navigation:
 /// the fetcher → <see cref="NavigationController"/> (history + endpoint mapping) → a
@@ -21,6 +27,8 @@ namespace TheMarkdownWeb.App;
 public partial class MainWindow : Window
 {
     // A single shared HttpClient for the lifetime of the window (App owns networking).
+    // MaxAutomaticRedirections default is 50; the discovery service itself enforces its own
+    // bounded redirect policy at the cascade level.
     private static readonly HttpClient SharedHttpClient = new();
 
     private readonly MarkdownFetcher _fetcher = new(SharedHttpClient);
@@ -40,6 +48,10 @@ public partial class MainWindow : Window
     private readonly AddressBarViewModel _addressBar;
     private readonly NavigationController _controller;
     private readonly ContentHostController _contentHost;
+
+    // Story 6.3: the markdown discovery service (cascade + validation + UA + probe budget), composed
+    // once over SharedHttpClient. App owns networking; Rendering stays pure.
+    private readonly MarkdownDiscoveryService _discovery = new(SharedHttpClient);
 
     // Story 4.2: the personality selection state + the re-render-in-place coordinator (held RAW markdown,
     // no re-fetch, last-wins). A selection change re-runs the held markdown through the gateway.
@@ -119,6 +131,13 @@ public partial class MainWindow : Window
         // It stays collapsed until the Translate persona is selected.
         LanguagePicker.ItemsSource = CommonLanguages;
         _suppressSelectionChanged = false;
+
+        // Story 6.1 (AC2): kick off the home navigation once the window is ready. Using the Loaded
+        // event avoids navigating before the window is composed. Fire-and-forget — the constructor
+        // stays synchronous; FetchEndpointAsync + NavigationController are both total.
+        // Address bar is pre-populated with the home URL so the bar reflects it from the start.
+        _addressBar.AddressText = HomeNavigator.HomeUrl.ToString();
+        Loaded += (_, _) => _ = HomeNavigator.NavigateHomeAsync(_controller);
     }
 
     /// <summary>
@@ -261,6 +280,14 @@ public partial class MainWindow : Window
     private void ReloadButton_Click(object sender, RoutedEventArgs e) => _viewModel.OnReload();
 
     /// <summary>
+    /// Story 6.1 — Home (AC3): navigates to <see cref="HomeNavigator.HomeUrl"/> via the SAME
+    /// <see cref="NavigationController.NavigateToAsync"/> path as the launch navigation. Home is a real
+    /// push into history (not a Back). Total — the controller is non-throwing.
+    /// </summary>
+    private void HomeButton_Click(object sender, RoutedEventArgs e)
+        => _ = HomeNavigator.NavigateHomeAsync(_controller);
+
+    /// <summary>
     /// Story 5.1 — Living Link (AC5): copies the current page's canonical shareable URL to the clipboard.
     /// Delegates to <see cref="ExecuteCopyLink"/> (the extracted testable logic) which can be asserted
     /// in CI via an injected <see cref="IClipboard"/> fake without wiring a full window handler.
@@ -302,16 +329,92 @@ public partial class MainWindow : Window
         e.Handled = true;
 
         string input = _addressBar.AddressText;
+
         if (AddressBarValidation.IsLoadableMarkdownUrl(input) &&
             Uri.TryCreate(input.Trim(), UriKind.Absolute, out Uri? pageUrl) && pageUrl is not null)
         {
-            // A loadable .md URL navigates through the controller (push + endpoint-fetch + render).
+            // (a) A loadable .md URL — fast path: navigate through the existing controller
+            //     (push + endpoint-fetch + render). Unchanged from Story 3.5.
             await _controller.NavigateToAsync(pageUrl);
+        }
+        else if (AddressBarValidation.IsAcceptableUrl(input) &&
+                 Uri.TryCreate(input.Trim(), UriKind.Absolute, out Uri? discoveryUrl) && discoveryUrl is not null)
+        {
+            // (b) Story 6.2/6.3/6.4: acceptable http(s) but not a .md URL — proceed to markdown
+            //     discovery rather than decline. Routes through BeginDiscoveryAsync.
+            await BeginDiscoveryAsync(discoveryUrl);
         }
         else
         {
-            // Non-.md input: keep the 3.2 decline UX (NotMarkdown + offer system browser), no fetch.
+            // (c) Non-http(s) scheme or unparseable: the 3.2 decline UX (NotMarkdown + offer
+            //     system browser for http(s), no offer for ftp:/javascript:/file:). Unchanged.
             await _addressBar.SubmitAsync();
+        }
+    }
+
+    /// <summary>
+    /// Story 6.3/6.4 discovery seam: runs <see cref="MarkdownDiscoveryService.DiscoverAsync"/> for
+    /// <paramref name="url"/> and dispatches the result to the appropriate render/state action.
+    /// Total — never throws into the UI. Respects last-wins by routing <c>PageMarkdown</c> through
+    /// <see cref="NavigationController.NavigateToAsync"/> (which carries the generation token and
+    /// cancels a superseded fetch) for the full history + re-entrancy benefit.
+    ///
+    /// For non-<c>PageMarkdown</c> outcomes (<c>NoMarkdown</c>, <c>Blocked</c>, <c>LlmsIndex</c>) the
+    /// result is dispatched directly to the content host — these do not push to history because there is
+    /// no real page to navigate back to.
+    /// </summary>
+    private async Task BeginDiscoveryAsync(Uri url)
+    {
+        try
+        {
+            DiscoveryResult result = await _discovery.DiscoverAsync(url).ConfigureAwait(true);
+
+            DiscoveryOutcomeDispatcher.Dispatch(
+                result,
+                onPageMarkdown: (markdown, sourceUrl) =>
+                {
+                    // Route discovered markdown through the SAME personalization + render path
+                    // FetchEndpointAsync uses, so per-reader persona applies. Hold the raw markdown
+                    // for 4.2 re-render parity; stop any in-progress audio.
+                    _rerender.SetCurrentPage(markdown, sourceUrl);
+                    _heldRaw = markdown;
+                    _audio.Stop();
+
+                    // Personalize and render (fire-and-forget on the UI thread; gateway is total).
+                    _ = RenderDiscoveredMarkdownAsync(markdown, sourceUrl);
+                },
+                onLlmsIndex: index => _contentHost.ShowLlmsIndex(index),
+                onNoMarkdown: requestedUrl => _contentHost.ShowNoMarkdown(requestedUrl),
+                onBlocked: (requestedUrl, statusCode) => _contentHost.ShowBlocked(requestedUrl),
+                onInvalid: () => _contentHost.ShowNoMarkdown(url));
+        }
+        catch
+        {
+            // Total — the discovery service is contracted not to throw, but be defensive.
+            _contentHost.ShowNoMarkdown(url);
+        }
+    }
+
+    /// <summary>
+    /// Applies the reader's persona to <paramref name="rawMarkdown"/> via the personalization gateway
+    /// and renders the result into the content host. Mirrors <see cref="FetchEndpointAsync"/>'s pattern
+    /// exactly so per-reader rendering applies to discovered markdown just as it does to Vault pages.
+    /// Never throws — the gateway is total.
+    /// </summary>
+    private async Task RenderDiscoveredMarkdownAsync(string rawMarkdown, Uri sourceUrl)
+    {
+        try
+        {
+            string resolved = await _gateway
+                .ResolveMarkdownAsync(rawMarkdown, sourceUrl, CancellationToken.None)
+                .ConfigureAwait(true);
+
+            _contentHost.ShowMarkdown(resolved, sourceUrl);
+        }
+        catch
+        {
+            // Total — fall back to showing the raw markdown without personalization.
+            _contentHost.ShowMarkdown(rawMarkdown, sourceUrl);
         }
     }
 }

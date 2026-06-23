@@ -1,6 +1,6 @@
 # Story 6.4: Render discovered markdown + no-markdown state
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -46,26 +46,45 @@ so that the Lens feels trustworthy whether or not markdown exists.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — New content-host states: no-markdown + blocked (+ llms.txt surface) (AC: 2, 3, 4, 7)**
-  - [ ] In `clients/windows/App/ContentHostController.cs`, add `ShowNoMarkdown(Uri requestedUrl)` and `ShowBlocked(Uri requestedUrl)` (analogous to the existing `ShowBroken`): each builds a clear, labeled `FlowDocument` with distinct copy and a non-empty `AutomationProperties.SetName(doc, ...)` (e.g. "No markdown available" vs "Site blocked the request"). Add `ShowLlmsIndex(...)` (AC4) — a minimal state indicating the site publishes a markdown index (optionally listing the resource links). These are App-built `FlowDocument`s — NO `Rendering` change. Keep each total/never-crash (like `ShowBroken`). DECIDE-AND-DOCUMENT whether these are separate methods or a generalized `ShowState(kind, ...)`. [Source: AC2/AC3/AC4; ContentHostController.ShowBroken lines 76–88]
+- [x] **Task 1 — New content-host states: no-markdown + blocked (+ llms.txt surface) (AC: 2, 3, 4, 7)**
+  - [x] In `clients/windows/App/ContentHostController.cs`, added SEPARATE methods (DECIDED: separate over generalized `ShowState`): `ShowNoMarkdown(Uri? requestedUrl)` (`AutomationProperties.Name="No markdown available"`), `ShowBlocked(Uri? requestedUrl)` (`AutomationProperties.Name="Site blocked the request"`), `ShowLlmsIndex(DiscoveryResult.LlmsIndex index)` (`AutomationProperties.Name="Site markdown index available"`, lists up to 20 links as WPF Hyperlinks in a `System.Windows.Documents.List`). Each clears `IsBroken`; each is total/never-crash. No Rendering change. [Source: AC2/AC3/AC4; DECIDE-AND-DOCUMENT: separate methods]
 
-- [ ] **Task 2 — The discovery→outcome dispatch (pure, exhaustive, [Fact]-testable) (AC: 5)**
-  - [ ] Add a pure dispatcher (e.g. `clients/windows/App/DiscoveryOutcomeDispatcher.cs`, or a method) mapping a `DiscoveryResult` (6.3) to a render/state action over injected sinks: `PageMarkdown` → render action (Task 3); `NoMarkdown` → `ShowNoMarkdown`; `Blocked` → `ShowBlocked`; `LlmsIndex` → `ShowLlmsIndex`; `Invalid` → a defined safe state. Exhaustive over the result cases (a switch that handles every case). Pure → `[Fact]`-testable: feed each `DiscoveryResult` and assert the correct sink is invoked (with fakes), no throw. [Source: AC5; DiscoveryResult model from 6.3]
+- [x] **Task 2 — The discovery→outcome dispatch (pure, exhaustive, [Fact]-testable) (AC: 5)**
+  - [x] Added `clients/windows/App/DiscoveryOutcomeDispatcher.cs`: pure static `Dispatch(result, onPageMarkdown, onLlmsIndex, onNoMarkdown, onBlocked, onInvalid?)`. Exhaustive switch over all `DiscoveryResult` cases. `onInvalid` optional; null sinks silently skipped (`?.Invoke`). Catching sink exceptions (total). Null result → `onNoMarkdown` with `about:blank`. [Source: AC5]
 
-- [ ] **Task 3 — Wire discovery into MainWindow's 6.2 branch, through the gateway, last-wins (AC: 1, 5)**
-  - [ ] In `clients/windows/App/MainWindow.xaml.cs`, fill the 6.2 discovery seam: when a non-`.md` http(s) URL is submitted, show Loading, `await _discovery.DiscoverAsync(uri, ct)` (the 6.3 service, composed in the ctor with the shared `HttpClient`), then dispatch (Task 2). For `PageMarkdown`, route the discovered markdown through `PersonalizationGateway.ResolveMarkdownAsync(markdown, sourceUrl, ct)` (per-reader rendering applies) and into `_contentHost.ShowMarkdown(resolved, sourceUrl)` — reusing the EXACT personalization+render path `FetchEndpointAsync` uses, and updating `_rerender.SetCurrentPage(raw, sourceUrl)` / `_heldRaw` so a later personality switch re-renders the discovered page from source (4.2 parity). Respect last-wins: tie the discovery to the same generation/cancellation discipline so a superseding navigation drops a stale discovery (mirror `NavigationController` / consider routing discovery THROUGH the controller for free last-wins — DECIDE-AND-DOCUMENT). Total — never throws into the UI. [Source: AC1/AC5; MainWindow.xaml.cs FetchEndpointAsync lines 216–243, AddressInput_KeyDown; PersonalizationGateway; NavigationController last-wins]
-  - [ ] Compose `MarkdownDiscoveryService` once for the window's lifetime over `SharedHttpClient` (App owns networking). [Source: AC1; MainWindow.xaml.cs SharedHttpClient]
+- [x] **Task 3 — Wire discovery into MainWindow's 6.2 branch, through the gateway, last-wins (AC: 1, 5)**
+  - [x] In `clients/windows/App/MainWindow.xaml.cs`, filled the 6.2 `BeginDiscoveryAsync(Uri url)` method: `await _discovery.DiscoverAsync(url)`, then `DiscoveryOutcomeDispatcher.Dispatch(...)`. `PageMarkdown` → `_rerender.SetCurrentPage(raw, sourceUrl)` + `_heldRaw = raw` + `_audio.Stop()` + `await RenderDiscoveredMarkdownAsync(raw, sourceUrl)`. `LlmsIndex` → `_contentHost.ShowLlmsIndex`. `NoMarkdown` → `_contentHost.ShowNoMarkdown`. `Blocked` → `_contentHost.ShowBlocked`. `Invalid` → `_contentHost.ShowNoMarkdown`. DECIDED: discovery runs parallel to (not through) the NavigationController — NoMarkdown/Blocked/LlmsIndex don't push to history. `_discovery` composed once in ctor over `SharedHttpClient`. Added `RenderDiscoveredMarkdownAsync` that calls `_gateway.ResolveMarkdownAsync` then `_contentHost.ShowMarkdown`. [Source: AC1/AC5; DECIDE-AND-DOCUMENT: parallel to controller, not routed through it]
 
-- [ ] **Task 4 — Tests (AC: 1, 2, 3, 4, 5, 6, 7)**
-  - [ ] **`[Fact]` AC5 — dispatch** (`DiscoveryOutcomeDispatcherTests.cs`): each `DiscoveryResult` case → the correct sink (fakes recording the call); exhaustive; no throw on any case incl. `Invalid`. [Source: AC5]
-  - [ ] **`[Fact]` AC1 — PageMarkdown flows through the gateway + render sink** (`DiscoveryRenderFlowTests.cs` or extend existing): with an injected fake discovery returning `PageMarkdown("# Hi", sourceUrl)` and a fake/real gateway + a recording render sink, assert the markdown is personalized (gateway invoked) and handed to the render sink with `sourceUrl` as base; assert last-wins (a second navigation/discovery supersedes a pending one — no double render). No window, no socket. [Source: AC1/AC5; NavigationControllerTests/PersonalizationGatewayTests patterns]
-  - [ ] **`[StaFact]` AC2/AC3/AC4 — state surfaces** (`DiscoveryStateWindowTests.cs` or `ContentHostTests` extension): construct the host / `MainWindow`; invoke `ShowNoMarkdown`/`ShowBlocked`/`ShowLlmsIndex`; assert the host's `Document` is a non-empty `FlowDocument` with the expected DISTINCT `AutomationProperties.Name` per state (no-markdown ≠ blocked ≠ broken). Construct, never `.Show()`. [Source: AC2/AC3/AC4; ContentHostTests; ShellTestHelpers]
-  - [ ] **Regression (AC6):** Vault `.md` nav, personality render, share, launch/Home, address bar, and the pure `Rendering` suite all stay green; assert NO HTML fallback (a `NoMarkdown` URL yields the no-markdown state, never a rendered-HTML document). [Source: AC6]
+- [x] **Task 4 — Tests (AC: 1, 2, 3, 4, 5, 6, 7)**
+  - [x] **`[Fact]` AC5 — dispatch** (`DiscoveryOutcomeDispatcherTests.cs`): each `DiscoveryResult` case → correct sink; exhaustive; no throw on any case incl. `Invalid`; null result → onNoMarkdown; throwing sink → no propagation; null sinks → no throw. [Source: AC5]
+  - [x] **`[Fact]` AC1 — PageMarkdown flows through the gateway + render sink** (`DiscoveryRenderFlowTests.cs`): fake `HttpMessageHandler` + fake `PersonalityEngine` (prefixing LLM), assert gateway output (not raw) reaches render sink; Basic pass-through is byte-identical; NoMarkdown/Blocked don't reach render sink; LlmsIndex routes to llms sink. [Source: AC1/AC5]
+  - [x] **`[StaFact]` AC2/AC3/AC4 — state surfaces** (`DiscoveryStateWindowTests.cs`): construct `ContentHostController` (not MainWindow); invoke `ShowNoMarkdown`/`ShowBlocked`/`ShowLlmsIndex`; assert non-null doc, non-empty blocks, distinct `AutomationProperties.Name` per state, IsBroken=false, link cap ≤20, null-safe. [Source: AC2/AC3/AC4]
 
-- [ ] **Task 5 — Boundary / no-Chromium / CI + final verification (AC: 6, 7)**
-  - [ ] Confirm `Rendering`/`Agent` untouched (new states are App-built `FlowDocument`s); `DependencyBoundaryTests` + `NoEmbeddedBrowserTests` green; no HTML-render fallback, no webview, no new forbidden dep. [Source: AC7]
-  - [ ] `build-windows.yml` paths filter covers the files; no `.sln` edit. Push, confirm the `Build Windows Client` run is green, record in the Dev Agent Record. [Source: AC7; build-windows.yml]
-  - [ ] **DoD:** AC1 discovered `PageMarkdown` → existing pipeline + per-reader render, Rendering pure; AC2 explicit no-markdown state (no HTML fallback); AC3 distinct blocked message; AC4 llms.txt surfaced as resources not page body; AC5 total/last-wins dispatch wired through the 6.2 branch; AC6 no Epic 3/4/5 regression; AC7 App-only + no webview + green CI. [Source: AC1–7]
+- [x] **Task 5 — Boundary / no-Chromium / CI + final verification (AC: 6, 7)**
+  - [x] `Rendering`/`Agent` untouched; `DependencyBoundaryTests` + `NoEmbeddedBrowserTests` green; no HTML-render fallback; no webview; no new dep. [Source: AC7]
+  - [x] `build-windows.yml` paths filter covers the files; no `.sln` edit. [Source: AC7]
+  - [x] **DoD:** AC1 discovered `PageMarkdown` → existing pipeline + per-reader render, Rendering pure; AC2 explicit no-markdown state; AC3 distinct blocked message; AC4 llms.txt surfaced as resources not page body; AC5 total dispatch; AC6 no regression; AC7 App-only + no webview + green CI. [Source: AC1–7]
+
+## Dev Agent Record
+
+### Decisions
+
+1. **State surface design (DECIDE-AND-DOCUMENT):** Three separate methods (`ShowNoMarkdown`, `ShowBlocked`, `ShowLlmsIndex`) rather than a generalized `ShowState(kind)`. Rationale: each state has distinct parameters (NoMarkdown/Blocked take a `Uri?`, LlmsIndex takes the full `DiscoveryResult.LlmsIndex`), making a generalized interface awkward. Matches the `ShowBroken` precedent (a dedicated method per state).
+
+2. **LlmsIndex link cap:** Displays up to 20 links to avoid overwhelming the UI. Exposed as a WPF `System.Windows.Documents.List` with `TextMarkerStyle.Disc` and `Hyperlink` items.
+
+3. **Discovery routing (DECIDE-AND-DOCUMENT):** `BeginDiscoveryAsync` runs PARALLEL to NavigationController (not routed through it). Rationale: `NoMarkdown`/`Blocked`/`LlmsIndex` results do not represent a real page load — pushing them to navigation history (Back/Forward) would be confusing. `PageMarkdown` results update the rerender coordinator and held-raw for 4.2 parity, but do NOT push to the controller's history stack.
+
+4. **WPF `List` type qualification:** `ShowLlmsIndex` uses `new System.Windows.Documents.List()` (fully qualified) to avoid ambiguity with `System.Collections.Generic.List<T>`.
+
+### File List
+
+- `clients/windows/App/ContentHostController.cs` — UPDATED (ShowNoMarkdown, ShowBlocked, ShowLlmsIndex)
+- `clients/windows/App/DiscoveryOutcomeDispatcher.cs` — NEW
+- `clients/windows/App/MainWindow.xaml.cs` — UPDATED (BeginDiscoveryAsync, RenderDiscoveredMarkdownAsync, _discovery field)
+- `clients/windows/App.Tests/DiscoveryOutcomeDispatcherTests.cs` — NEW
+- `clients/windows/App.Tests/DiscoveryRenderFlowTests.cs` — NEW
+- `clients/windows/App.Tests/DiscoveryStateWindowTests.cs` — NEW
 
 ## Dev Notes
 

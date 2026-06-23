@@ -51,6 +51,30 @@ public static class AddressBarValidation
     }
 
     /// <summary>
+    /// Returns <c>true</c> iff <paramref name="input"/>, after trimming surrounding whitespace, is an
+    /// absolute <c>http</c>/<c>https</c> URL. This is the 6.2 broadened acceptance predicate — it accepts
+    /// ANY http(s) URL (including non-<c>.md</c> URLs destined for discovery). Non-<c>http(s)</c> schemes
+    /// (<c>ftp:</c>, <c>javascript:</c>, <c>file:</c>, <c>mailto:</c>) and unparseable/relative inputs
+    /// return <c>false</c>. The existing <see cref="IsLoadableMarkdownUrl"/> is RETAINED unchanged as
+    /// the <c>.md</c> fast-path discriminator. NEVER throws for any <see cref="string"/> input.
+    /// </summary>
+    public static bool IsAcceptableUrl(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return false;
+        }
+
+        if (!Uri.TryCreate(input.Trim(), UriKind.Absolute, out Uri? uri) || uri is null)
+        {
+            return false;
+        }
+
+        return string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Formats the <c>host + path</c> portion of an absolute http(s) URL for display in the address bar
     /// (Story 3-2 AC1). Returns <c>false</c> (with <paramref name="hostPath"/> = empty) for any input that
     /// is not an absolute http(s) URL. Pure — never throws, no I/O.

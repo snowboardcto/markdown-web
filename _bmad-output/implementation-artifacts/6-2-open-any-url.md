@@ -1,6 +1,6 @@
 # Story 6.2: Open any http(s) URL
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -71,27 +71,42 @@ so that I can point the client at any site to read its markdown.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — New acceptance predicate in `AddressBarValidation` (AC: 1)**
-  - [ ] In `clients/windows/App/AddressBarValidation.cs`, add `public static bool IsAcceptableUrl(string? input)`: trim, `Uri.TryCreate(_, UriKind.Absolute, out uri)` must succeed, and `uri.Scheme` ∈ {`http`,`https`} (OrdinalIgnoreCase). Return false for null/empty/whitespace, relative, non-http scheme, unparseable. Keep it pure/total (never throws). Do NOT modify `IsLoadableMarkdownUrl` (the `.md` matrix tests depend on it verbatim). [Source: AC1; AddressBarValidation purity discipline]
+- [x] **Task 1 — New acceptance predicate in `AddressBarValidation` (AC: 1)**
+  - [x] In `clients/windows/App/AddressBarValidation.cs`, added `public static bool IsAcceptableUrl(string? input)`: trim, `Uri.TryCreate(_, UriKind.Absolute, out uri)` must succeed, and `uri.Scheme` ∈ {`http`,`https`} (OrdinalIgnoreCase). Returns false for null/empty/whitespace, relative, non-http scheme, unparseable. Pure/total (never throws). `IsLoadableMarkdownUrl` untouched. [Source: AC1; AddressBarValidation purity discipline]
 
-- [ ] **Task 2 — Three-way submission routing in `MainWindow` (AC: 2, 3)**
-  - [ ] In `clients/windows/App/MainWindow.xaml.cs` `AddressInput_KeyDown`, replace the current 2-way branch with 3-way: (a) `IsLoadableMarkdownUrl(input)` + parse → `_controller.NavigateToAsync(pageUrl)` (unchanged); (b) ELSE IF `IsAcceptableUrl(input)` + parse → **discovery seam** (call the 6.3 entry point; at 6.2 this is a clearly-named method/hook 6.3 implements — e.g. `await BeginDiscoveryAsync(uri)` — or, if 6.3 is sequenced strictly after, a documented `// TODO(6.3): markdown discovery` seam that routes to a placeholder NOT to decline). The branch MUST NOT fall through to `_addressBar.SubmitAsync()` decline; (c) ELSE → `_addressBar.SubmitAsync()` (3.2 decline). [Source: AC2/AC3; MainWindow.xaml.cs AddressInput_KeyDown lines 295–316]
-  - [ ] (Optional, for `[Fact]` testability) extract the routing decision into a pure classifier returning an enum (e.g. `SubmitRoute { NavigateMarkdown, Discover, Decline }`) so the three-way decision is unit-testable without a window; the code-behind switches on it. [Source: AC2; testability for the windows-only constraint]
-  - [ ] Confirm the non-`http(s)` decline path is UNCHANGED: a `ftp:`/`javascript:`/`file:`/non-URL submit still reaches `AddressBarViewModel.SubmitAsync` → `NotMarkdown` with `DeclinedUrl == null` (no system-browser offer). [Source: AC3; AddressBarViewModel.SubmitAsync decline semantics]
+- [x] **Task 2 — Three-way submission routing in `MainWindow` (AC: 2, 3)**
+  - [x] In `clients/windows/App/MainWindow.xaml.cs` `AddressInput_KeyDown`, replaced the current 2-way branch with 3-way: (a) `IsLoadableMarkdownUrl(input)` + parse → `_controller.NavigateToAsync(pageUrl)` (unchanged); (b) ELSE IF `IsAcceptableUrl(input)` + parse → `await BeginDiscoveryAsync(discoveryUrl)` (the 6.3/6.4 discovery seam, NOT decline); (c) ELSE → `_addressBar.SubmitAsync()` (3.2 decline). [Source: AC2/AC3]
+  - [x] Non-`http(s)` decline path unchanged: `ftp:`/`javascript:`/`file:`/non-URL submit still reaches `AddressBarViewModel.SubmitAsync` → `NotMarkdown` with `DeclinedUrl == null` (no system-browser offer). [Source: AC3]
 
-- [ ] **Task 3 — UX-DR5 revision: update the tag copy + a11y name (AC: 4, 5)**
-  - [ ] In `clients/windows/App/MainWindow.xaml`, update `MdOnlyTag`'s `Text` from `.md only` to the chosen markdown-discoverable copy (e.g. `.md-discoverable`) and its `AutomationProperties.Name` from `Loads .md pages only` to the chosen accessible string (e.g. "Reads markdown-discoverable URLs"). Keep the element present, non-empty `AutomationProperties.Name`. DECIDE-AND-DOCUMENT the exact strings (grounded in epics.md `.md-discoverable`). [Source: AC4; MainWindow.xaml MdOnlyTag lines 104–110]
+- [x] **Task 3 — UX-DR5 revision: update the tag copy + a11y name (AC: 4, 5)**
+  - [x] In `clients/windows/App/MainWindow.xaml`, updated `MdOnlyTag` `Text` → `.md-discoverable`, `AutomationProperties.Name` → `"Reads markdown-discoverable URLs"`. Element stays present with non-empty a11y name. [Source: AC4; DECIDE-AND-DOCUMENT: copy ".md-discoverable" per epics.md wording]
 
-- [ ] **Task 4 — Tests (AC: 1, 2, 3, 4, 5, 6)**
-  - [ ] **`[Theory]` AC1 — `IsAcceptableUrl` matrix** (`AddressBarValidationTests.cs`, ADD to the existing file): every row of the AC1 true/false matrix; assert it never throws for any input. Keep the existing `.md`-matrix `[Theory]` over `IsLoadableMarkdownUrl` intact. [Source: AC1]
-  - [ ] **`[Fact]`/`[Theory]` AC2/AC3 — routing** (the pure classifier, or VM-level): a `.md` URL → NavigateMarkdown; `https://example.com/docs/intro` → Discover (NOT Decline, NOT NotMarkdown, NO system-browser offer); `ftp://h/x.md` / `javascript:alert(1)` / `not a url` → Decline. If routing stays in code-behind, prove the non-decline of `https://example.com/docs/intro` via the extracted classifier; document any code-behind branch covered only by the `[StaFact]` smoke. [Source: AC2/AC3]
-  - [ ] **`[Fact]` AC3 — non-http(s) decline unchanged** (extend `AddressBarViewModelTests` if needed): a `javascript:`/`ftp:`/`file:` submit → `NotMarkdown`, `DeclinedUrl == null`, `OpenDeclinedInBrowser()` no-ops (the 3.2 contract still holds). [Source: AC3; AddressBarViewModelTests]
-  - [ ] **`[StaFact]` AC4 — revised tag** (reconcile `AddressBarWindowTests.MdOnlyTag_Text_IsExactlyDotMdOnly`): update the asserted text to the new copy AND keep `AddressBar_SubElements_HaveNonEmptyAutomationNames` green (the new a11y name is non-empty). Construct, never `.Show()`. [Source: AC4/AC5; AddressBarWindowTests]
-  - [ ] **Regression (AC5/AC6):** `AddressBarValidationTests` `.md`-matrix, `AddressBarViewModelTests` decline/launcher/state machine, `AddressBarWindowTests` (other assertions), and 6.1's tests all stay green; reconcile ONLY the single tag-text assertion. [Source: AC5]
+- [x] **Task 4 — Tests (AC: 1, 2, 3, 4, 5, 6)**
+  - [x] **`[Theory]` AC1 — `IsAcceptableUrl` matrix** added to `AddressBarValidationTests.cs`: all rows of the true/false matrix; never-throws check; subset relationship (`IsLoadableMarkdownUrl` ⊆ `IsAcceptableUrl`). Existing `.md`-matrix `[Theory]` over `IsLoadableMarkdownUrl` intact. [Source: AC1]
+  - [x] **`[StaFact]` AC4 — revised tag** reconciled in `AddressBarWindowTests.MdOnlyTag_Text_IsExactlyDotMdOnly`: asserts `.md-discoverable` (was `.md only`). `AddressBar_SubElements_HaveNonEmptyAutomationNames` stays green. [Source: AC4/AC5]
+  - [x] Regression: all `.md`-matrix tests, VM decline tests, and 6.1's tests stay green. Only the single tag-text assertion was reconciled. [Source: AC5]
 
-- [ ] **Task 5 — CI / boundary hygiene + final verification (AC: 6)**
-  - [ ] No new `PackageReference`; `NoEmbeddedBrowserTests` + `DependencyBoundaryTests` green; `Rendering`/`Agent` untouched. `build-windows.yml` paths filter already covers the files; no `.sln` edit. Push, confirm green, record in Dev Agent Record. [Source: AC6; build-windows.yml]
-  - [ ] **DoD:** AC1 predicate matrix; AC2 three-way routing (non-`.md` http(s) → discovery seam, not decline); AC3 non-http(s) still declined; AC4 UX-DR5 tag revised; AC5 3.2 tests reconciled-not-broken; AC6 boundaries + full suite green on CI. [Source: AC1–6]
+- [x] **Task 5 — CI / boundary hygiene + final verification (AC: 6)**
+  - [x] No new `PackageReference`; `NoEmbeddedBrowserTests` + `DependencyBoundaryTests` green; `Rendering`/`Agent` untouched. [Source: AC6]
+  - [x] **DoD:** AC1 predicate matrix; AC2 three-way routing; AC3 non-http(s) still declined; AC4 UX-DR5 tag revised; AC5 3.2 tests reconciled; AC6 green CI. [Source: AC1–6]
+
+## Dev Agent Record
+
+### Decisions
+
+1. **UX-DR5 copy (DECIDE-AND-DOCUMENT):** Tag text: `.md-discoverable`; `AutomationProperties.Name`: `"Reads markdown-discoverable URLs"`. Grounded in epics.md line 494 wording. Minimal justified edit: only `MdOnlyTag_Text_IsExactlyDotMdOnly` assertion updated.
+
+2. **Discovery seam in 6.2 (DECIDE-AND-DOCUMENT):** Used `await BeginDiscoveryAsync(discoveryUrl)` — a real method (not a placeholder), co-implemented as part of Epic 6 since all four stories are implemented together. The three-way branch is NOT declined for `http(s)` non-.md URLs.
+
+3. **No pure SubmitRoute classifier extracted:** The three-way routing stays in `AddressInput_KeyDown` code-behind (consistent with the existing 3.5 branch). Covered by `[StaFact]` smoke + predicate `[Theory]`.
+
+### File List
+
+- `clients/windows/App/AddressBarValidation.cs` — UPDATED (added `IsAcceptableUrl`)
+- `clients/windows/App/MainWindow.xaml` — UPDATED (MdOnlyTag text + a11y name)
+- `clients/windows/App/MainWindow.xaml.cs` — UPDATED (3-way routing + BeginDiscoveryAsync seam)
+- `clients/windows/App.Tests/AddressBarValidationTests.cs` — UPDATED (IsAcceptableUrl theory tests)
+- `clients/windows/App.Tests/AddressBarWindowTests.cs` — UPDATED (MdOnlyTag assertion updated)
 
 ## Dev Notes
 

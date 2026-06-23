@@ -44,7 +44,9 @@ public class AddressBarWindowTests
             "MdOnlyTag must exist as a visible text element in the address bar.");
     }
 
-    [StaFact] // AC1 — the tag text is EXACTLY ".md only" (ordinal).
+    [StaFact] // AC1 (Story 6.2 UX-DR5 revision) — the tag text is EXACTLY ".md-discoverable" (ordinal).
+    // Story 3.2 originally asserted ".md only"; Story 6.2 supersedes UX-DR5 and updates the copy.
+    // The minimal justified edit: update the asserted string to the new copy.
     public void MdOnlyTag_Text_IsExactlyDotMdOnly()
     {
         AppMainWindow window = ShellTestHelpers.CreateWindow();
@@ -56,7 +58,7 @@ public class AddressBarWindowTests
             _ => null,
         };
 
-        Assert.Equal(".md only", text);
+        Assert.Equal(".md-discoverable", text);
     }
 
     [StaFact] // AC1 — lock, input, and tag each have a stable, non-empty accessible name.

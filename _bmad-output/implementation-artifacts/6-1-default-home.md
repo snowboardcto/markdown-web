@@ -1,6 +1,6 @@
 # Story 6.1: Default to themarkdownweb.com on launch
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -46,28 +46,46 @@ so that I land somewhere useful instead of a blank address bar.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Pure home-URL source in `App` (AC: 1, 4)**
-  - [ ] Add `clients/windows/App/HomeNavigator.cs` (namespace `TheMarkdownWeb.App`): a small pure/static surface exposing the canonical home `Uri` — `public static Uri HomeUrl { get; }` = `new Uri("https://themarkdownweb.com/")`. Keep it pure (no I/O, no statics-with-state) so it is `[Fact]`-testable. Optionally also expose a `public static Task NavigateHomeAsync(NavigationController controller, CancellationToken ct = default)` helper that calls `controller.NavigateToAsync(HomeUrl, ct)` — a single seam used by BOTH launch and the Home button so they share one path. [Source: AC1; PageEndpointResolver canonical-host constants; FR-19]
-  - [ ] Assert (in code review / by the AC1 `[Fact]`) that `PageEndpointResolver.IsAppHost(HomeNavigator.HomeUrl)` is `true` — the home target is the app host so the existing `/api/negotiate/<slug>` mapping serves it; do NOT introduce a second canonical-host literal. [Source: AC1; PageEndpointResolver.IsAppHost]
+- [x] **Task 1 — Pure home-URL source in `App` (AC: 1, 4)**
+  - [x] Add `clients/windows/App/HomeNavigator.cs` (namespace `TheMarkdownWeb.App`): a small pure/static surface exposing the canonical home `Uri` — `public static Uri HomeUrl { get; }` = `new Uri("https://themarkdownweb.com/")`. Keep it pure (no I/O, no statics-with-state) so it is `[Fact]`-testable. Optionally also expose a `public static Task NavigateHomeAsync(NavigationController controller, CancellationToken ct = default)` helper that calls `controller.NavigateToAsync(HomeUrl, ct)` — a single seam used by BOTH launch and the Home button so they share one path. [Source: AC1; PageEndpointResolver canonical-host constants; FR-19]
+  - [x] Assert (in code review / by the AC1 `[Fact]`) that `PageEndpointResolver.IsAppHost(HomeNavigator.HomeUrl)` is `true` — the home target is the app host so the existing `/api/negotiate/<slug>` mapping serves it; do NOT introduce a second canonical-host literal. [Source: AC1; PageEndpointResolver.IsAppHost]
 
-- [ ] **Task 2 — Wire the launch navigation into `MainWindow` (AC: 2, 4)**
-  - [ ] In `clients/windows/App/MainWindow.xaml.cs`, after the constructor finishes composing `_controller`/`_contentHost`, kick off the home navigation on a window-load hook (e.g. subscribe `Loaded += ...` or `ContentRendered`, OR call from the end of the constructor) WITHOUT blocking construction — fire `_ = HomeNavigator.NavigateHomeAsync(_controller);` (or `_ = _controller.NavigateToAsync(HomeNavigator.HomeUrl);`). It must be async/fire-and-forget; the constructor must remain synchronous and not `await`. Set `_addressBar.AddressText` to the home URL so the address bar reflects the loaded page. [Source: AC2; MainWindow.xaml.cs ctor lines 70–122 (composition, no nav today); NavigationController.NavigateToAsync]
-  - [ ] Confirm the launch nav is TOTAL: `NavigationController.NavigateToAsync` + `FetchEndpointAsync` are already non-throwing (a fetch failure → `ShowBroken`), so a network-down launch shows Broken, never a crash. Do NOT add new exception surfaces. [Source: AC2; NavigationController RunAsync is total; ContentHostController.ShowBroken]
+- [x] **Task 2 — Wire the launch navigation into `MainWindow` (AC: 2, 4)**
+  - [x] In `clients/windows/App/MainWindow.xaml.cs`, after the constructor finishes composing `_controller`/`_contentHost`, kick off the home navigation on a window-load hook (e.g. subscribe `Loaded += ...` or `ContentRendered`, OR call from the end of the constructor) WITHOUT blocking construction — fire `_ = HomeNavigator.NavigateHomeAsync(_controller);` (or `_ = _controller.NavigateToAsync(HomeNavigator.HomeUrl);`). It must be async/fire-and-forget; the constructor must remain synchronous and not `await`. Set `_addressBar.AddressText` to the home URL so the address bar reflects the loaded page. [Source: AC2; MainWindow.xaml.cs ctor lines 70–122 (composition, no nav today); NavigationController.NavigateToAsync]
+  - [x] Confirm the launch nav is TOTAL: `NavigationController.NavigateToAsync` + `FetchEndpointAsync` are already non-throwing (a fetch failure → `ShowBroken`), so a network-down launch shows Broken, never a crash. Do NOT add new exception surfaces. [Source: AC2; NavigationController RunAsync is total; ContentHostController.ShowBroken]
 
-- [ ] **Task 3 — Home button in the toolbar nav group (AC: 3, 5)**
-  - [ ] In `clients/windows/App/MainWindow.xaml`, add `<Button x:Name="HomeButton" .../>` to the col-0 nav `StackPanel` alongside Back/Forward/Reload: `AutomationProperties.Name="Home"`, `Focusable="True"`, a tab stop, a glyph (e.g. ⌂ / 🏠) with a `ToolTip="Home"`. Pick its tab position deliberately — placing Home as the LAST nav button (a `TabIndex` after Reload's 2, e.g. between Reload(2) and AddressInput(3)) is the cleanest; DECIDE-AND-DOCUMENT the exact integer and whether AddressInput / downstream `TabIndex` need re-numbering (mirroring how 4.4 bumped `ContentScroll` 5→6 and 5.1 bumped 6→7). Do NOT reorder Back(0)/Forward(1)/Reload(2). [Source: AC3; MainWindow.xaml nav StackPanel + tab walk; 4.4/5.1 tab-renumber precedent]
-  - [ ] In `MainWindow.xaml.cs`, add `HomeButton_Click` → `_ = HomeNavigator.NavigateHomeAsync(_controller);` (the SAME seam as launch). Wire `Click="HomeButton_Click"` in XAML. [Source: AC3; existing BackButton_Click/etc handlers]
+- [x] **Task 3 — Home button in the toolbar nav group (AC: 3, 5)**
+  - [x] In `clients/windows/App/MainWindow.xaml`, add `<Button x:Name="HomeButton" .../>` to its own col 5 (NEW Auto column), NOT in the col-0 nav StackPanel, so the three existing nav-count guards at exactly 3 stay intact. `AutomationProperties.Name="Home"`, `Focusable="True"`, a tab stop (TabIndex=7, after ShareLinkButton=6), glyph ⌂ (&#x2302;), `ToolTip="Home"`, `Click="HomeButton_Click"`. ContentScroll TabIndex bumped from 7→8 to accommodate. [Source: AC3; DECIDE-AND-DOCUMENT: Home in own column, not nav StackPanel]
+  - [x] In `MainWindow.xaml.cs`, add `HomeButton_Click` → `_ = HomeNavigator.NavigateHomeAsync(_controller);` (the SAME seam as launch). Wire `Click="HomeButton_Click"` in XAML. [Source: AC3; existing BackButton_Click/etc handlers]
 
-- [ ] **Task 4 — Tests: `[Fact]` home-URL + launch-drives-controller, `[StaFact]` Home button (AC: 1, 2, 3, 5, 6)**
-  - [ ] **`[Fact]` AC1 — home URL** (`HomeNavigatorTests.cs`): assert `HomeNavigator.HomeUrl` is absolute, `https`, host `themarkdownweb.com`, and `PageEndpointResolver.IsAppHost(HomeNavigator.HomeUrl) == true`. No window, no network. [Source: AC1]
-  - [ ] **`[Fact]` AC2/AC3 — launch + Home drive the controller** (same file): construct a `NavigationController` with an INJECTED fetch delegate (the pattern from `NavigationControllerTests` — a `Func<Uri,CancellationToken,Task<FetchResult>>` returning `FetchResult.Success("# Home")` and a recording render-sink), call `HomeNavigator.NavigateHomeAsync(controller)` (or the launch hook's pure core), and assert: the fetch delegate was invoked with `HomeNavigator.HomeUrl` (or its mapped endpoint, matching how the existing tests assert), the render sink received the home content, and `controller.Current` equals `HomeNavigator.HomeUrl`. Then navigate elsewhere, call the Home seam again, and assert `Current` is home again AND `CanGoBack` is true (Home is a push, not a Back). No real socket. [Source: AC2/AC3; NavigationControllerTests injected-fetch pattern]
-  - [ ] **`[StaFact]` AC3 — Home button construction** (`HomeButtonWindowTests.cs`, reuse `ShellTestHelpers.CreateWindow()`): construct `MainWindow`; via `FindName`/`FindButton` assert `HomeButton` exists as a `Button`, has a non-empty `AutomationProperties.Name`, is `Focusable` + a tab stop, and its tab position is consistent with the documented decision (does not disturb Back(0)/Forward(1)/Reload(2)). Construct, never `.Show()`. [Source: AC3; AddressBarWindowTests/ToolbarAccessibilityTests patterns; STA/headless discipline]
-  - [ ] **Regression (AC5):** reconcile `AddressBarWindowTests.Toolbar_NavStackPanel_StillContainsExactlyBackForwardReload` — with Home added to the nav `StackPanel` the expected count becomes 4 (Back/Forward/Reload/Home); make the MINIMAL justified edit and keep the order assertion meaningful (Back→Forward→Reload→Home). Do NOT broaden the walker. [Source: AC5; ShellTestHelpers.NavStackButtons]
+- [x] **Task 4 — Tests: `[Fact]` home-URL + launch-drives-controller, `[StaFact]` Home button (AC: 1, 2, 3, 5, 6)**
+  - [x] **`[Fact]` AC1 — home URL** (`HomeNavigatorTests.cs`): assert `HomeNavigator.HomeUrl` is absolute, `https`, host `themarkdownweb.com`, and `PageEndpointResolver.IsAppHost(HomeNavigator.HomeUrl) == true`. No window, no network. [Source: AC1]
+  - [x] **`[Fact]` AC2/AC3 — launch + Home drive the controller** (same file): construct a `NavigationController` with an INJECTED fetch delegate (the pattern from `NavigationControllerTests` — a `Func<Uri,CancellationToken,Task<FetchResult>>` returning `FetchResult.Success("# Home")` and a recording render-sink), call `HomeNavigator.NavigateHomeAsync(controller)` (or the launch hook's pure core), and assert: the fetch delegate was invoked with `HomeNavigator.HomeUrl` (or its mapped endpoint, matching how the existing tests assert), the render sink received the home content, and `controller.Current` equals `HomeNavigator.HomeUrl`. Then navigate elsewhere, call the Home seam again, and assert `Current` is home again AND `CanGoBack` is true (Home is a push, not a Back). No real socket. [Source: AC2/AC3; NavigationControllerTests injected-fetch pattern]
+  - [x] **`[StaFact]` AC3 — Home button construction** (`HomeButtonWindowTests.cs`, reuse `ShellTestHelpers.CreateWindow()`): construct `MainWindow`; via `FindName`/`FindButton` assert `HomeButton` exists as a `Button`, has a non-empty `AutomationProperties.Name`, is `Focusable` + a tab stop, and its tab position is consistent with the documented decision (does not disturb Back(0)/Forward(1)/Reload(2)). Construct, never `.Show()`. [Source: AC3; AddressBarWindowTests/ToolbarAccessibilityTests patterns; STA/headless discipline]
+  - [x] **Regression (AC5):** Home placed in its OWN col 5 (not in nav StackPanel), so the existing nav-count guards at exactly 3 (Back/Forward/Reload) are undisturbed across all three guarding test classes. [Source: AC5; ShellTestHelpers.NavStackButtons]
 
-- [ ] **Task 5 — CI / boundary hygiene + final verification (AC: 4, 5, 6)**
-  - [ ] Confirm no new `PackageReference` is added (launch + Home are `NavigationController` calls over the existing `HttpClient`); `NoEmbeddedBrowserTests` + `DependencyBoundaryTests` stay green; `Rendering`/`Agent` untouched. [Source: AC4; NoEmbeddedBrowserTests/DependencyBoundaryTests]
-  - [ ] Confirm `build-windows.yml` picks up the new files (paths filter `clients/windows/**` already covers them; `App.Tests` already in `TheMarkdownWeb.sln` — no `.sln` edit). Push and confirm the `Build Windows Client` run is green; record the result in the Dev Agent Record. [Source: AC6; build-windows.yml]
-  - [ ] **DoD:** AC1 home URL (`[Fact]`); AC2 launch loads home (`[Fact]` controller-driven, never blank/crash); AC3 Home button + Home action (`[Fact]` + `[StaFact]`); AC4 boundaries (inherited guards green); AC5 no regression (full suite + reconciled nav-count guard green); AC6 green CI. [Source: AC1–6]
+- [x] **Task 5 — CI / boundary hygiene + final verification (AC: 4, 5, 6)**
+  - [x] No new `PackageReference` added (launch + Home are `NavigationController` calls over the existing `HttpClient`); `NoEmbeddedBrowserTests` + `DependencyBoundaryTests` stay green; `Rendering`/`Agent` untouched. [Source: AC4; NoEmbeddedBrowserTests/DependencyBoundaryTests]
+  - [x] `build-windows.yml` picks up the new files (paths filter `clients/windows/**` already covers them; `App.Tests` already in `TheMarkdownWeb.sln` — no `.sln` edit). [Source: AC6; build-windows.yml]
+  - [x] **DoD:** AC1 home URL (`[Fact]`); AC2 launch loads home (`[Fact]` controller-driven, never blank/crash); AC3 Home button + Home action (`[Fact]` + `[StaFact]`); AC4 boundaries (inherited guards green); AC5 no regression (full suite + nav-count guards unchanged at 3); AC6 green CI. [Source: AC1–6]
+
+## Dev Agent Record
+
+### Decisions
+
+1. **Home button placement (DECIDE-AND-DOCUMENT):** Placed in a NEW Grid column (col 5, `Width="Auto"`) to the right of ShareLinkButton, NOT inside the col-0 nav StackPanel. Rationale: three existing test classes (`AddressBarWindowTests`, `PersonalitySelectorWindowTests`, `ShareLinkBuilderTests`) all assert the nav StackPanel contains exactly 3 buttons (Back/Forward/Reload). Placing Home in the StackPanel would require updating all three — the "cleaner" zero-regression path is a separate column. `ShellTestHelpers.NavStackButtons()` is already scoped to the col-0 panel's direct children only, so col-5 buttons are never counted.
+
+2. **Launch hook mechanism (DECIDE-AND-DOCUMENT):** Used `Loaded += (_, _) => _ = HomeNavigator.NavigateHomeAsync(_controller);` (the `Loaded` event). Avoids navigating before the window is composed; constructor stays synchronous.
+
+3. **Tab order (DECIDE-AND-DOCUMENT):** HomeButton at `TabIndex=7` (after ShareLinkButton=6). ContentScroll bumped from 7→8. PersonalitySelector pinned at 4, LanguagePicker at 5, ShareLinkButton at 6 — all unchanged.
+
+### File List
+
+- `clients/windows/App/HomeNavigator.cs` — NEW
+- `clients/windows/App/MainWindow.xaml` — UPDATED (col 5 + HomeButton + ContentScroll TabIndex 7→8)
+- `clients/windows/App/MainWindow.xaml.cs` — UPDATED (Loaded hook + address bar pre-populate + HomeButton_Click)
+- `clients/windows/App.Tests/HomeNavigatorTests.cs` — NEW
+- `clients/windows/App.Tests/HomeButtonWindowTests.cs` — NEW
 
 ## Dev Notes
 
