@@ -115,6 +115,14 @@ The reader picks an AI personality; their local agent re-renders the page their 
 Share a Living Link that renders for whoever opens it; follow a vault's Feed. Deferred per PRD MVP scope.
 **FRs covered:** FR-15, FR-16.
 
+### Epic 6 (post-MVP): The Markdown Lens (Windows)
+Turn the native client outward: default to themarkdownweb.com, open any http(s) URL (not just .md), and discover + render markdown from the wider markdown-native web — saying "no markdown available" when none exists. Positioning: the native reader for the markdown-native web (niche, not universal). Windows-first.
+**FRs covered:** FR-19, FR-20, FR-21, FR-22.
+
+### Epic 7 (post-MVP): iOS Reader
+Extend the native reading experience to iOS — a native, no-Chromium render path. Deferred; separate architecture fork from the WPF FlowDocument renderer.
+**FRs covered:** FR-23.
+
 ---
 
 ## Epic 1: Walking Skeleton — IaC + CI/CD live on Azure
@@ -451,3 +459,83 @@ So that I can keep up with authors I value.
 **Given** I follow a vault
 **When** the author adds a new `.md` page
 **Then** that page surfaces to me as part of the vault's feed.
+
+## Epic 6 (post-MVP): The Markdown Lens (Windows)
+
+Turn the native Windows client outward — from a reader of *our* Vault into the native reader for the *markdown-native web*. Default to themarkdownweb.com, accept any http(s) URL, discover an available markdown representation, render it through the existing Markdig pipeline, and say "no markdown available" when none exists. Grounded in `_bmad-output/planning-artifacts/research/technical-markdown-discovery-for-arbitrary-websites-research-2026-06-23.md`.
+
+Constraints: native client, NO Chromium/WebView (NFR-1); Rendering stays pure (NFR-5); reuse Markdig render + content-negotiation (FR-14). **All stories are .NET/WPF — verified on windows-latest CI (build-windows.yml), not locally.** Sequence: 6.1 → 6.2 → 6.3 → 6.4 (6.3 is the load-bearing discovery story and folds in the discovery spike).
+
+### Story 6.1: Default to themarkdownweb.com on launch (FR-19)
+
+As a reader,
+I want the client to open themarkdownweb.com when it starts (and on a Home action),
+So that I land somewhere useful instead of a blank address bar.
+
+**Acceptance Criteria:**
+
+**Given** a freshly launched client
+**When** the window opens
+**Then** it loads and displays themarkdownweb.com content (not an empty state)
+**And** a Home affordance returns to themarkdownweb.com from any page.
+
+### Story 6.2: Open any http(s) URL (FR-20)
+
+As a reader,
+I want to type any http(s) URL into the address bar, not just .md URLs,
+So that I can point the client at any site to read its markdown.
+
+**Acceptance Criteria:**
+
+**Given** the address bar
+**When** I enter an http(s) URL that does not end in .md
+**Then** the client accepts it and proceeds to markdown discovery (Story 6.3) instead of declining
+**And** a non-http(s) scheme (ftp:, javascript:, file:) is still declined
+**And** UX-DR5's ".md only" rule is revised to ".md-discoverable" (the ".md only" tag/behavior is updated accordingly) without breaking existing address-bar tests.
+
+### Story 6.3: Markdown discovery service (FR-21)
+
+As a reader,
+I want the client to reliably find a URL's markdown representation,
+So that the right markdown is rendered and false positives are not.
+
+**Acceptance Criteria:**
+
+**Given** an http(s) URL
+**When** discovery runs
+**Then** it tries, first-hit-wins within a bounded probe budget: (1) GET with `Accept: text/markdown` and parse `<head>` for `<link rel="alternate" type="text/markdown">`; (2) `.md` sibling (`<path>.md`); (3) `/llms.txt` as a site-index hint (not the page body)
+**And** every candidate is validated by Content-Type and an HTML-doctype byte-sniff, rejecting soft-404s and HTML-served-as-markdown (zero false positives)
+**And** the service is pure/total over inputs, uses an honest non-spoofed User-Agent, distinguishes a bot-block (e.g. 403) from a genuine miss, and is covered by deterministic unit tests with a fake HTTP handler (plus a gated/manual live-probe test against the research basket).
+
+### Story 6.4: Render discovered markdown + no-markdown state (FR-21 integration, FR-22)
+
+As a reader,
+I want discovered markdown rendered like any Vault page, and a clear message when there is none,
+So that the Lens feels trustworthy whether or not markdown exists.
+
+**Acceptance Criteria:**
+
+**Given** a URL with discoverable markdown
+**When** I open it
+**Then** the fetched markdown is rendered through the existing Markdig pipeline (per-reader rendering applies as usual; Rendering stays pure)
+**And given** a URL with no discoverable markdown
+**Then** the client shows an explicit "no markdown available" state (no HTML fallback / no reader-mode)
+**And** a bot-blocked fetch shows a distinct message from a genuine no-markdown result
+**And** existing Epic 3/4/5 client behavior and tests are not regressed.
+
+## Epic 7 (post-MVP): iOS Reader
+
+Extend the native reading experience to iOS. Separate architecture fork — the WPF FlowDocument renderer does not port directly; the iOS render-stack choice (SwiftUI-native vs .NET MAUI vs shared-core-with-native-render) is an open architecture decision. Deferred until Epic 6 ships. Stories to be elaborated at epic start.
+
+### Story 7.1: iOS native reader (FR-23)
+
+As a reader on iOS,
+I want to open and read a .md page rendered natively,
+So that I get the Markdown Web experience on my phone without a bundled browser.
+
+**Acceptance Criteria:**
+
+**Given** an iOS device
+**When** I open a .md page (Vault or via the Markdown Lens)
+**Then** it renders natively with no Chromium/WebView (NFR-1 honored)
+**And** the render stack decision is recorded before implementation.
