@@ -46,3 +46,20 @@ jobs:
 
       - name: Test
         run: dotnet test "$env:SOLUTION" -c Release --no-build --verbosity normal
+
+      - name: Publish (win-x64, self-contained single-file)
+        run: >
+          dotnet publish clients/windows/App/TheMarkdownWeb.App.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -o publish/win-x64
+
+      - name: Upload runnable client artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TheMarkdownWeb-win-x64
+          path: publish/win-x64
+          if-no-files-found: error
+
