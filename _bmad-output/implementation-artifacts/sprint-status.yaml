@@ -86,12 +86,12 @@ development_status:
   5-2-follow-feed: done # 7/7 ACs covered; web 268/268 green (76 story tests: 30 builder + 46 E2E); static RSS 2.0 /feed.xml from vault + autodiscovery <link> + Subscribe chrome link; review PASS-WITH-ITEMS resolved (4 MED+5 LOW; fixture rewritten to legitimate page; byte-equal canonical via new URL; guid=canonical build-stable); AC5 guardrail clean (no backend/store/Function/new dep); AC trace report written
   epic-5-retrospective: done
 
-  # Epic 6 (post-MVP): The Markdown Lens (Windows) — native, verified on windows-latest CI
-  epic-6: backlog
-  6-1-default-home: backlog
-  6-2-open-any-url: backlog
-  6-3-markdown-discovery-service: backlog
-  6-4-render-discovered-markdown-and-no-markdown-state: backlog
+  # Epic 6 (post-MVP): The Markdown Lens (Windows) — native, GREEN on windows-latest CI (run e7d9301, 485 tests)
+  epic-6: done # FR-19..22; native verified on windows-latest (build clean, 485 tests); review PASS-WITH-ITEMS resolved (2 HIGH+4 MED+3 LOW); 5 CI rounds (CS1010, xUnit2014, HTML-sniff logic bug, timeout/redirect/etc, test URI-normalization); reader for the markdown-native web
+  6-1-default-home: done # FR-19; Home nav on launch + Home button (own column, nav guards stay 3)
+  6-2-open-any-url: done # FR-20; IsAcceptableUrl + 3-way routing + UX-DR5 copy (.md only -> .md-discoverable)
+  6-3-markdown-discovery-service: done # FR-21; ordered cascade (Accept+alt-link -> .md sibling -> llms.txt index), Content-Type/BOM/comment doctype guards (zero false positives), bounded budget+timeout, MaxRedirects=5, honest UA, 403 short-circuit, injected HTTP seam
+  6-4-render-discovered-markdown-and-no-markdown-state: done # FR-21 integration + FR-22; dispatch -> gateway/Markdig render + no-markdown/blocked/llms states; generation-token last-wins; AC trace report written
   epic-6-retrospective: optional
 
   # Epic 7 (post-MVP): iOS Reader — deferred, separate architecture fork

@@ -88,6 +88,90 @@ public sealed class ContentHostController
     }
 
     /// <summary>
+    /// Shows an explicit "no markdown available" state (Story 6.4 AC2). Distinct from
+    /// <see cref="ShowBroken"/> in copy and accessible name. Never a blank page; never crashes.
+    /// </summary>
+    public void ShowNoMarkdown(Uri? requestedUrl)
+    {
+        IsBroken = false;
+
+        var paragraph = new Paragraph(new Run("No markdown available for this URL."))
+        {
+            Tag = "no-markdown",
+            FontWeight = FontWeights.SemiBold,
+        };
+        var doc = new FlowDocument(paragraph);
+        AutomationProperties.SetName(doc, "No markdown available");
+        _host.Document = doc;
+    }
+
+    /// <summary>
+    /// Shows a "site blocked the request" state (Story 6.4 AC3). Distinct from both
+    /// <see cref="ShowBroken"/> and <see cref="ShowNoMarkdown"/>. Never a blank page; never crashes.
+    /// </summary>
+    public void ShowBlocked(Uri? requestedUrl)
+    {
+        IsBroken = false;
+
+        var paragraph = new Paragraph(new Run("This site blocked the request."))
+        {
+            Tag = "blocked",
+            FontWeight = FontWeights.SemiBold,
+        };
+        var doc = new FlowDocument(paragraph);
+        AutomationProperties.SetName(doc, "Site blocked the request");
+        _host.Document = doc;
+    }
+
+    /// <summary>
+    /// Shows the "site publishes a markdown index" state for an <c>LlmsIndex</c> result
+    /// (Story 6.4 AC4). Surfaces it as available resources — NOT rendered as the page body.
+    /// </summary>
+    public void ShowLlmsIndex(DiscoveryResult.LlmsIndex index)
+    {
+        IsBroken = false;
+
+        var doc = new FlowDocument();
+        AutomationProperties.SetName(doc, "Site markdown index available");
+
+        var heading = new Paragraph(new Run("This site publishes a markdown index (/llms.txt)."))
+        {
+            Tag = "llms-index-heading",
+            FontWeight = FontWeights.Bold,
+        };
+        doc.Blocks.Add(heading);
+
+        if (index?.Links is { Count: > 0 } links)
+        {
+            var list = new System.Windows.Documents.List();
+            list.MarkerStyle = TextMarkerStyle.Disc;
+            int shown = 0;
+            foreach (Uri link in links)
+            {
+                if (shown >= 20) // cap display to 20 links for readability
+                {
+                    break;
+                }
+
+                var hyperlink = new Hyperlink(new Run(link.ToString()))
+                {
+                    NavigateUri = link,
+                };
+                var item = new ListItem(new Paragraph(hyperlink));
+                list.ListItems.Add(item);
+                shown++;
+            }
+
+            if (list.ListItems.Count > 0)
+            {
+                doc.Blocks.Add(list);
+            }
+        }
+
+        _host.Document = doc;
+    }
+
+    /// <summary>
     /// Locates the heading <see cref="Block"/> whose github-style anchor slug matches
     /// <paramref name="fragment"/> (sans <c>#</c>), or <c>null</c> if none matches (AC5). Total.
     /// </summary>
