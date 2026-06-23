@@ -113,9 +113,9 @@ public class HomeNavigatorTests
     }
 
     [Fact]
-    public void NavigateHomeAsync_NullController_ThrowsArgumentNullException()
+    public async Task NavigateHomeAsync_NullController_ThrowsArgumentNullException()
     {
-        Assert.Throws<ArgumentNullException>(() =>
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
             HomeNavigator.NavigateHomeAsync(null!));
     }
 
