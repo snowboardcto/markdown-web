@@ -40,6 +40,34 @@ internal static class ShellTestHelpers
     /// such as a ToolBar) and returns the ordered list of <see cref="Button"/> children found within it,
     /// in logical/visual child order. Used to assert Back -> Forward -> Reload positional order.
     /// </summary>
+    /// <summary>
+    /// The <see cref="Button"/> children of the navigation StackPanel that DIRECTLY contains
+    /// <paramref name="anchor"/> (the Back/Forward/Reload group in toolbar column 0). Scoped to that
+    /// single StackPanel only — buttons added to OTHER toolbar columns (e.g. the Story 5.1 "Copy link"
+    /// share button) are intentionally NOT counted. Use this for the "nav StackPanel still contains
+    /// exactly Back/Forward/Reload" regression guards, which must stay stable as later stories add
+    /// non-nav toolbar affordances.
+    /// </summary>
+    internal static IReadOnlyList<Button> NavStackButtons(Button anchor)
+    {
+        var result = new List<Button>();
+        DependencyObject? parent = LogicalTreeHelper.GetParent(anchor) ?? VisualTreeHelper.GetParent(anchor);
+        if (parent is null)
+        {
+            return result;
+        }
+
+        foreach (object child in LogicalTreeHelper.GetChildren(parent))
+        {
+            if (child is Button button)
+            {
+                result.Add(button);
+            }
+        }
+
+        return result;
+    }
+
     internal static IReadOnlyList<Button> ButtonsInToolbarOrder(Button anchor)
     {
         DependencyObject? container = FindToolbarContainer(anchor);

@@ -128,7 +128,7 @@ public class PersonalitySelectorWindowTests
         AppMainWindow window = ShellTestHelpers.CreateWindow();
         Button back = RequireButton(window, ShellTestHelpers.BackButtonName);
 
-        var ordered = ShellTestHelpers.ButtonsInToolbarOrder(back);
+        var ordered = ShellTestHelpers.NavStackButtons(back);
         Assert.Equal(3, ordered.Count);
     }
 

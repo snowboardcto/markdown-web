@@ -104,7 +104,7 @@ public class AddressBarWindowTests
         AppMainWindow window = ShellTestHelpers.CreateWindow();
         Button back = RequireButton(window, ShellTestHelpers.BackButtonName);
 
-        var ordered = ShellTestHelpers.ButtonsInToolbarOrder(back);
+        var ordered = ShellTestHelpers.NavStackButtons(back);
 
         // The nav-button walker is column-0-scoped; a Go affordance (if any) must NOT join the nav StackPanel.
         Assert.Equal(3, ordered.Count);

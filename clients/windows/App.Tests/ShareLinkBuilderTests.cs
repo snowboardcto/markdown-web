@@ -444,8 +444,9 @@ public class ShareLinkBuilderTests
             "If it was renamed, update ShellTestHelpers.BackButtonName to match.");
 
         // The Q-Placement pattern puts the Share button in a NEW column, NOT in the nav StackPanel.
-        // The nav stack must still have exactly 3 buttons (Back/Forward/Reload).
-        var ordered = ShellTestHelpers.ButtonsInToolbarOrder(back!);
+        // The nav stack must still have exactly 3 buttons (Back/Forward/Reload). NavStackButtons is
+        // scoped to Back's StackPanel, so the Copy link button in column 4 is correctly excluded.
+        var ordered = ShellTestHelpers.NavStackButtons(back!);
         Assert.Equal(3, ordered.Count);
     }
 }
