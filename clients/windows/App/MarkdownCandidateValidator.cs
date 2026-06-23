@@ -161,17 +161,39 @@ public static class MarkdownCandidateValidator
     /// </summary>
     private static bool BeginsWithHtmlMarker(string body)
     {
-        // Collect up to 512 non-whitespace chars from the start of the body.
+        // Build the sniff window from the first ~512 chars AFTER leading whitespace, collapsing any
+        // internal run of whitespace to a single space. We must NOT drop internal spaces: a marker
+        // like "<!doctype html" contains a space, and stripping all whitespace would turn the body
+        // "<!DOCTYPE HTML PUBLIC ..." into "<!DOCTYPEHTMLPUBLIC..." which no marker would match.
         var sb = new System.Text.StringBuilder(512);
+        bool seenNonWhitespace = false;
+        bool pendingSpace = false;
         foreach (char ch in body)
         {
-            if (!char.IsWhiteSpace(ch))
+            if (char.IsWhiteSpace(ch))
             {
-                sb.Append(ch);
+                if (seenNonWhitespace)
+                {
+                    pendingSpace = true; // collapse internal whitespace; emit at most one space
+                }
+                continue; // skip leading whitespace entirely
+            }
+
+            if (pendingSpace)
+            {
+                sb.Append(' ');
+                pendingSpace = false;
                 if (sb.Length >= 512)
                 {
                     break;
                 }
+            }
+
+            seenNonWhitespace = true;
+            sb.Append(ch);
+            if (sb.Length >= 512)
+            {
+                break;
             }
         }
 
